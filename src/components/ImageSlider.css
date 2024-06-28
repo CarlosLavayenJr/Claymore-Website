@@ -1,0 +1,37 @@
+/* src/components/ImageSlider.css */
+
+.image-slider {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .slider-image {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: slide 5s linear infinite;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+  }
+  
+  @keyframes slide {
+    0% {
+      transform: translateX(100%);
+      opacity: 1;
+    }
+    50% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+  }
+  
