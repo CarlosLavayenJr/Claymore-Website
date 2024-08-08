@@ -1,0 +1,25 @@
+/* src/pages/Schedule.css */
+
+.schedule-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .schedule-container h1 {
+    font-size: 2.5em;
+    color: #282c34;
+  }
+  
+  .schedule-container p {
+    font-size: 1.2em;
+    margin-bottom: 20px;
+  }
+  
+  .rbc-calendar {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  

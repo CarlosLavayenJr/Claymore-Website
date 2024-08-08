@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import logo from '../assets/logo.png'; // Import the logo image
-import './Header.css'; // Import the CSS file for styling
+import logo from '../assets/logo.png';
+import './Header.css';
 
-const Header = () => {
+const Header = ({ isAuthenticated, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleNavbar = () => {
@@ -25,6 +25,11 @@ const Header = () => {
           <li className="nav-item"><Link to="/team" onClick={toggleNavbar}>Team</Link></li>
           <li className="nav-item"><Link to="/schedule" onClick={toggleNavbar}>Schedule</Link></li>
           <li className="nav-item"><Link to="/contact" onClick={toggleNavbar}>Contact</Link></li>
+          {isAuthenticated ? (
+            <li className="nav-item"><button className="auth-button" onClick={onLogout}>Logout</button></li>
+          ) : (
+            <li className="nav-item"><Link to="/login" className="auth-button" onClick={toggleNavbar}>Login</Link></li>
+          )}
         </ul>
       </nav>
     </header>

@@ -30,6 +30,13 @@
     transform: scale(1.05);
   }
   
+  .player-image {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  
   .player-number {
     font-size: 2em;
     font-weight: bold;
