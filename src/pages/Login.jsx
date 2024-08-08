@@ -1,5 +1,6 @@
+// src/pages/Login.js
 import React, { useState } from 'react';
-import './Login.css';  // Optional: create a CSS file for styling
+import './Login.css';
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState('');
@@ -8,7 +9,7 @@ const Login = ({ onLogin }) => {
   const handleLogin = (e) => {
     e.preventDefault();
     // Replace with actual authentication logic
-    if (username === 'admin' && password === 'password123') {
+    if (username === 'Claymore' && password === 'Jordi7') {
       onLogin(true);
     } else {
       alert('Invalid credentials');
@@ -17,21 +18,27 @@ const Login = ({ onLogin }) => {
 
   return (
     <div className="login-container">
-      <form onSubmit={handleLogin}>
+      <form onSubmit={handleLogin} className="login-form">
         <h2>Admin Login</h2>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit">Login</button>
+        <div className="input-group">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="login-input"
+          />
+        </div>
+        <div className="input-group">
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="login-input"
+          />
+        </div>
+        <button type="submit" className="login-button">Login</button>
       </form>
     </div>
   );
