@@ -1,0 +1,56 @@
+/* src/pages/Team.css */
+
+.team-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .roster-cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  
+  .player-card {
+    background-color: #f2f2f2;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    width: 200px;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+  }
+  
+  .player-card:hover {
+    transform: scale(1.05);
+  }
+  
+  .player-number {
+    font-size: 2em;
+    font-weight: bold;
+    color: #282c34;
+  }
+  
+  .player-name {
+    font-size: 1.5em;
+    margin-top: 10px;
+    color: #282c34;
+  }
+  
+  .player-position {
+    font-size: 1.2em;
+    margin-top: 5px;
+    color: #fc94f5;
+  }
+  
+  .player-bio {
+    margin-top: 10px;
+    font-size: 1em;
+    color: #666;
+  }
+  

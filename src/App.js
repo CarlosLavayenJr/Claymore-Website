@@ -5,7 +5,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import About from './pages/About';
-import Team from './pages/Team';
+import Team from './pages/Team'; // Ensure this import is present
 import Schedule from './pages/Schedule';
 import Contact from './pages/Contact';
 import './App.css'; // Import the CSS file for styling the layout
@@ -19,7 +19,7 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
-            <Route path="/team" element={<Team />} />
+            <Route path="/team" element={<Team />} /> {/* Make sure this route exists */}
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/contact" element={<Contact />} />
           </Routes>
