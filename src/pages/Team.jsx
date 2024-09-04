@@ -36,7 +36,7 @@ const rosterData = [
 ];
 
 const Team = () => {
-  const [roster, setRoster] = useState(rosterData);
+  const [roster] = useState(rosterData); // Removed unused setRoster
 
   return (
     <div className="team-container">
@@ -47,8 +47,8 @@ const Team = () => {
 
       <h2>Team Roster</h2>
       <div className="roster-cards">
-        {roster.map((player, index) => (
-          <div className="player-card" key={index}>
+        {roster.map((player) => (
+          <div className="player-card" key={player.number}> {/* Use player number as key */}
             <img src={player.image} alt={player.name} className="player-image" />
             <div className="player-number">{player.number}</div>
             <div className="player-name">{player.name}</div>
@@ -60,4 +60,5 @@ const Team = () => {
     </div>
   );
 };
+
 export default Team;

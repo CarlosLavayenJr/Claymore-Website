@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaFacebook, FaInstagram, FaEnvelope } from 'react-icons/fa';
+import { FaFacebook, FaInstagram,} from 'react-icons/fa';
 import contactImage from '../assets/state finals.jpg'; // Replace with the actual path to your image
 import './Contact.css'; // Ensure your CSS file is linked properly
 

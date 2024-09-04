@@ -1,4 +1,3 @@
-// src/App.js
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Header from './components/Header';
@@ -12,10 +11,6 @@ import './App.css';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  const handleLogin = (status) => {
-    setIsAuthenticated(status);
-  };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
