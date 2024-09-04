@@ -3,14 +3,14 @@ import './Team.css'; // Import the CSS file for styling
 import placeholderImage from '../assets/silhouette.jpg'; // Import the silhouette image
 
 const rosterData = [
-  { number: 1, name: 'Player 1', position: 'Forward', bio: 'Player 1 is a strong leader on and off the field.', image: placeholderImage },
-  { number: 2, name: 'Player 2', position: 'Forward', bio: 'Player 2 has an exceptional ability to read the game.', image: placeholderImage },
-  { number: 3, name: 'Player 3', position: 'Forward', bio: 'Player 3 is known for their speed and agility.', image: placeholderImage },
-  { number: 4, name: 'Player 4', position: 'Forward', bio: 'Player 4 brings years of experience to the team.', image: placeholderImage },
-  { number: 5, name: 'Player 5', position: 'Forward', bio: 'Player 5 is a powerhouse in the scrum.', image: placeholderImage },
-  { number: 6, name: 'Player 6', position: 'Forward', bio: 'Player 6 is a versatile player who excels in multiple positions.', image: placeholderImage },
-  { number: 7, name: 'Player 7', position: 'Forward', bio: 'Player 7 has an unstoppable drive on the field.', image: placeholderImage },
-  { number: 8, name: 'Player 8', position: 'Forward', bio: 'Player 8 is a reliable player with great ball-handling skills.', image: placeholderImage },
+  { number: 1, name: 'Carlos Lavayen', position: 'Prop', bio: '5 year Claymore veteran hailing from Guyaquil, Ecuador.', image: placeholderImage },
+  { number: 2, name: 'Alexander Cavanaugh', position: 'Fly-Half', bio: '5 year Claymore Veteran and club captain.', image: placeholderImage },
+  { number: 3, name: 'Key Cooper', position: 'Scrum-half', bio: 'Hailing from England, you can count on key to be at every ruck.', image: placeholderImage },
+  { number: 4, name: 'Freddy Rojas', position: 'Prop', bio: 'Bringing some Brazilian flair to the game, our wrecking ball that is Freddy.', image: placeholderImage },
+  { number: 5, name: 'Tyler Cooper', position: 'Forward', bio: 'Few players can be considered a switch blade. But that nickname is right at home with Ty.', image: placeholderImage },
+  { number: 6, name: 'Nabil Arabi El Eter', position: 'Center', bio: '.', image: placeholderImage },
+  { number: 7, name: 'Darian Majia', position: 'Prop', bio: '5 yards from the try line? You know who its going to.', image: placeholderImage },
+  { number: 8, name: 'Ben Story', position: 'Lock', bio: 'One minute hes on the field commanding the younger players to settle down and focus up. The next hes the reason everyone is crying of laughter at the bar. Ben brings Maturity and someone to lean on to the club.', image: placeholderImage },
   { number: 9, name: 'Player 9', position: 'Forward', bio: 'Player 9 is always ready to support their teammates.', image: placeholderImage },
   { number: 10, name: 'Player 10', position: 'Back', bio: 'Player 10 is a strategic thinker and key playmaker.', image: placeholderImage },
   { number: 11, name: 'Player 11', position: 'Back', bio: 'Player 11 is quick on their feet and a formidable opponent.', image: placeholderImage },
