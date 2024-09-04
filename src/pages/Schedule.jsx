@@ -1,24 +1,42 @@
 import React, { useState } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
+import { Tooltip } from 'react-tooltip'; // Import Tooltip
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-tooltip/dist/react-tooltip.css'; // Import tooltip CSS
 import './Schedule.css';
 
 const localizer = momentLocalizer(moment);
 
-const Schedule = ({ isAuthenticated }) => {
-  const [events, setEvents] = useState([]);
+const Schedule = () => {
+  const [events, setEvents] = useState([
+    { title: 'Sample Rugby Game with a Long Description', start: new Date(), end: new Date() }
+  ]);
 
+  // Function to add new events (fixtures)
   const handleSelectSlot = ({ start, end }) => {
-    if (isAuthenticated) {
-      const title = window.prompt('New Fixture Name');
-      if (title) {
-        setEvents([...events, { start, end, title }]);
-      }
-    } else {
-      alert('You must be logged in to add fixtures.');
+    const title = window.prompt('New Fixture Name');
+    if (title) {
+      setEvents([...events, { title, start, end }]);
     }
   };
+
+  // Function to delete an event when clicked
+  const handleSelectEvent = (eventToDelete) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${eventToDelete.title}"?`);
+    if (confirmDelete) {
+      setEvents(events.filter(event => event !== eventToDelete));
+    }
+  };
+
+  const EventComponent = ({ event }) => (
+    <div>
+      <span data-tooltip-id="event-tooltip" data-tooltip-content={event.title}>
+        {event.title.length > 20 ? `${event.title.substring(0, 17)}...` : event.title}
+      </span>
+      <Tooltip id="event-tooltip" place="top" effect="solid" />
+    </div>
+  );
 
   return (
     <div className="schedule-container">
@@ -29,9 +47,13 @@ const Schedule = ({ isAuthenticated }) => {
         events={events}
         startAccessor="start"
         endAccessor="end"
-        selectable={isAuthenticated}
-        onSelectSlot={handleSelectSlot}
+        selectable
+        onSelectSlot={handleSelectSlot} // Allow date editing by selecting slots
+        onSelectEvent={handleSelectEvent} // Handle event deletion
         style={{ height: 500, margin: '50px 0' }}
+        components={{
+          event: EventComponent, // Use the custom event component
+        }}
       />
     </div>
   );

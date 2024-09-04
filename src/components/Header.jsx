@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import logo from '../assets/logo.png';
 import './Header.css';
 
-const Header = ({ isAuthenticated, onLogout }) => {
+const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleNavbar = () => {
@@ -25,11 +25,6 @@ const Header = ({ isAuthenticated, onLogout }) => {
           <li className="nav-item"><Link to="/team" onClick={toggleNavbar}>Team</Link></li>
           <li className="nav-item"><Link to="/schedule" onClick={toggleNavbar}>Schedule</Link></li>
           <li className="nav-item"><Link to="/contact" onClick={toggleNavbar}>Contact</Link></li>
-          {isAuthenticated ? (
-            <li className="nav-item"><button className="auth-button" onClick={onLogout}>Logout</button></li>
-          ) : (
-            <li className="nav-item"><Link to="/login" className="auth-button" onClick={toggleNavbar}>Login</Link></li>
-          )}
         </ul>
       </nav>
     </header>

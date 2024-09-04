@@ -18,7 +18,7 @@
 }
 
 .nav-logo {
-  height: 50px; /* Adjust the height as needed */
+  height: 50px;
 }
 
 .nav-toggle {
@@ -27,7 +27,11 @@
   color: white;
   font-size: 24px;
   cursor: pointer;
-  display: none;
+  position: absolute;
+  right: 20px; /* Always keep it aligned to the right */
+  top: 20px;
+  z-index: 10;
+  display: none; /* Hide by default */
 }
 
 .nav-list {
@@ -48,38 +52,36 @@
   text-decoration: none;
   padding: 10px 15px;
   position: relative;
+  z-index: 1;
 }
 
-.auth-button { /* Specific style for login and logout buttons */
-  padding: 10px 20px;
-  background-color: #fc94f5; /* Claymore color */
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  color: white;
-  text-decoration: none;
-}
-
-.auth-button:hover {
-  background-color: #e782e1;
-}
-
-/* Media query for smaller screens */
+/* Mobile Menu */
 @media (max-width: 768px) {
   .nav-toggle {
-    display: block;
+    display: block; /* Show only in mobile view */
   }
 
   .nav-list {
     display: none;
     flex-direction: column;
-    gap: 10px;
     width: 100%;
     text-align: center;
     padding-top: 10px;
+    background-color: #282c34;
+    position: absolute;
+    top: 70px; /* Adjust based on the height of your header */
+    left: 0;
+    right: 0;
   }
 
   .nav-list-open {
     display: flex;
+  }
+}
+
+/* Hide the nav-list in desktop view if the screen width is larger than 768px */
+@media (min-width: 769px) {
+  .nav-list {
+    display: flex !important;
   }
 }

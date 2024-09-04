@@ -48,3 +48,14 @@ html, body {
 .footer-links a:hover {
   text-decoration: underline;
 }
+
+@font-face {
+  font-family: 'Viking';
+  src: url('/src/assets/fonts/VIKING-N.TTF') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Viking', 'Times New Roman', serif;
+}

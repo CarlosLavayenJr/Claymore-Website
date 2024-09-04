@@ -8,7 +8,6 @@ import About from './pages/About';
 import Team from './pages/Team'; 
 import Schedule from './pages/Schedule';
 import Contact from './pages/Contact';
-import Login from './pages/Login'; 
 import './App.css'; 
 
 const App = () => {
@@ -33,7 +32,6 @@ const App = () => {
             <Route path="/team" element={<Team isAuthenticated={isAuthenticated} />} />
             <Route path="/schedule" element={<Schedule isAuthenticated={isAuthenticated} />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
           </Routes>
         </div>
         <Footer />

@@ -35,29 +35,8 @@ const rosterData = [
   { number: 30, name: 'Player 30', position: 'Forward', bio: 'Player 30 is a dedicated team player with strong leadership qualities.', image: placeholderImage },
 ];
 
-const Team = ({ isAuthenticated }) => {
+const Team = () => {
   const [roster, setRoster] = useState(rosterData);
-
-  const handleInputChange = (index, field, value) => {
-    const updatedRoster = [...roster];
-    updatedRoster[index][field] = value;
-    setRoster(updatedRoster);
-  };
-
-  const handleImageChange = (index, event) => {
-    const file = event.target.files[0];
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      const updatedRoster = [...roster];
-      updatedRoster[index].image = reader.result; // Store the image as a base64 string
-      setRoster(updatedRoster);
-    };
-
-    if (file) {
-      reader.readAsDataURL(file);
-    }
-  };
 
   return (
     <div className="team-container">
@@ -71,40 +50,14 @@ const Team = ({ isAuthenticated }) => {
         {roster.map((player, index) => (
           <div className="player-card" key={index}>
             <img src={player.image} alt={player.name} className="player-image" />
-            {isAuthenticated && (
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageChange(index, e)}
-                className="image-input"
-              />
-            )}
             <div className="player-number">{player.number}</div>
-            {isAuthenticated ? (
-              <input
-                type="text"
-                value={player.name}
-                onChange={(e) => handleInputChange(index, 'name', e.target.value)}
-                className="editable-input"
-              />
-            ) : (
-              <div className="player-name">{player.name}</div>
-            )}
+            <div className="player-name">{player.name}</div>
             <div className="player-position">{player.position}</div>
-            {isAuthenticated ? (
-              <textarea
-                value={player.bio}
-                onChange={(e) => handleInputChange(index, 'bio', e.target.value)}
-                className="editable-textarea"
-              />
-            ) : (
-              <div className="player-bio">{player.bio}</div>
-            )}
+            <div className="player-bio">{player.bio}</div>
           </div>
         ))}
       </div>
     </div>
   );
 };
-
 export default Team;
