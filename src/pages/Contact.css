@@ -1,0 +1,37 @@
+.contact-container {
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .contact-image img {
+    width: 100%;
+    max-width: 800px; /* Increased max width for a larger image */
+    margin-top: 20px;
+  }
+  
+  .contact-info {
+    margin-top: 20px; /* Adds some space between the image and the contact links */
+  }
+  
+  .contact-icons {
+    display: flex;
+    justify-content: center;
+    gap: 40px; /* Increased gap between the icons for more spacing */
+    margin-top: 20px; /* Adds more space above the icons */
+  }
+  
+  .contact-icons a {
+    text-decoration: none; /* Removes the underline */
+    color: inherit; /* Ensures the icons retain their original color */
+  }
+  
+  .contact-icon {
+    font-size: 3em; /* Increased size of the icons */
+    margin-right: 10px;
+    color: black; /* Set your preferred color */
+  }
+  
+  .contact-icon:hover {
+    color: #fc94f5; /* Change color on hover (Claymores color, for example) */
+  }
+  
