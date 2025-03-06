@@ -1,84 +1,99 @@
-'use client';
+"use client"
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { FaBars, FaTimes } from 'react-icons/fa';
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { Menu } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
-const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const NavLink = ({ href, children }) => (
+    <Link href={href} className="relative group px-3 py-2 text-gray-600 hover:text-gray-900 text-lg font-medium">
+      <span className="relative z-10">{children}</span>
+      <span className="absolute inset-0 bg-claymore-blue transform -skew-x-12 origin-left scale-x-0 transition-transform group-hover:scale-x-100"></span>
+    </Link>
+)
+
+export const Navbar = () => {
+  const [isOpen, setIsOpen] = useState(false)
 
   const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
+    setIsOpen(!isOpen)
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "unset"
+    }
+  }, [isOpen])
 
   return (
-    <nav className="bg-gray-800 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo/Brand */}
-          <div className="flex-shrink-0">
-            <Link href="/" className="text-xl font-bold">
-              Claymores Rugby
-            </Link>
-          </div>
+      <>
+        <nav className="bg-white shadow-2xl w-full fixed top-0 text-gray-700 z-30 px-40">
+          <div className="px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              {/* Logo/Brand */}
+              <div className="flex-shrink-0">
+                <Link href="/" className="text-xl font-bold">
+                  Claymores Rugby
+                </Link>
+              </div>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
-              <Link href="/" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                Home
-              </Link>
-              <Link href="/about" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                About
-              </Link>
-              <Link href="/team" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                Team
-              </Link>
-              <Link href="/fixtures" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                Fixtures
-              </Link>
-              <Link href="/contact" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                Contact
-              </Link>
+              {/* Desktop Menu */}
+              <div className="hidden md:flex items-center space-x-1">
+                <NavLink href="/">Home</NavLink>
+                <NavLink href="/about">About</NavLink>
+                <NavLink href="/team">Team</NavLink>
+                <NavLink href="/fixtures">Fixtures</NavLink>
+                <NavLink href="/contact">Contact</NavLink>
+              </div>
+
+              {/* Mobile menu button */}
+              <div className="md:hidden">
+                <Button
+                    onClick={toggleMenu}
+                    variant="ghost"
+                    size="icon"
+                    className="text-white hover:bg-gray-700 relative z-40"
+                >
+                  <Menu className="h-6 w-6" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </div>
             </div>
           </div>
+        </nav>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden">
-            <button
-              onClick={toggleMenu}
-              className="inline-flex items-center justify-center p-2 rounded-md hover:bg-gray-700 focus:outline-none"
-            >
-              {isOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
-            </button>
-          </div>
-        </div>
-      </div>
+        {/* Blur overlay */}
+        {isOpen && (
+            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20" onClick={toggleMenu} aria-hidden="true"></div>
+        )}
 
-      {/* Mobile Menu */}
-      {isOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link href="/" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              Home
-            </Link>
-            <Link href="/about" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              About
-            </Link>
-            <Link href="/team" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              Team
-            </Link>
-            <Link href="/fixtures" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              Fixtures
-            </Link>
-            <Link href="/contact" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              Contact
-            </Link>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
-};
+        {/* Mobile Menu Dropdown */}
+        {isOpen && (
+            <div className="md:hidden fixed top-16 right-0 w-48 bg-white shadow-lg z-30">
+              <div className="py-1">
+                <Link href="/" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                  Home
+                </Link>
+                <Link href="/about" className="block text-gray-700hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                  About
+                </Link>
+                <Link href="/team" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                  Team
+                </Link>
+                <Link href="/fixtures" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                  Fixtures
+                </Link>
+                <Link href="/contact" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                  Contact
+                </Link>
+              </div>
+            </div>
+        )}
+      </>
+  )
+}
 
-export default Navbar;
+export default Navbar
+
