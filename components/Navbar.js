@@ -31,8 +31,8 @@ const Navbar = () => {
               <Link href="/about" className="hover:bg-gray-700 px-3 py-2 rounded-md">
                 About
               </Link>
-              <Link href="/teams" className="hover:bg-gray-700 px-3 py-2 rounded-md">
-                Teams
+              <Link href="/team" className="hover:bg-gray-700 px-3 py-2 rounded-md">
+                Team
               </Link>
               <Link href="/fixtures" className="hover:bg-gray-700 px-3 py-2 rounded-md">
                 Fixtures
@@ -65,8 +65,8 @@ const Navbar = () => {
             <Link href="/about" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
               About
             </Link>
-            <Link href="/teams" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
-              Teams
+            <Link href="/team" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
+              Team
             </Link>
             <Link href="/fixtures" className="block hover:bg-gray-700 px-3 py-2 rounded-md">
               Fixtures
