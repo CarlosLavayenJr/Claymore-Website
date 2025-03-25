@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const NavLink = ({ href, children }) => (
-    <Link href={href} className="relative group px-3 py-2 text-gray-600 hover:text-gray-900 text-lg font-medium">
+    <Link href={href} className="relative group px-3 py-2 text-gray-600 hover:text-gray-900 text-lg font-claymore">
       <span className="relative z-10">{children}</span>
       <span className="absolute inset-0 bg-claymore-blue transform -skew-x-12 origin-left scale-x-0 transition-transform group-hover:scale-x-100"></span>
     </Link>
@@ -29,13 +30,20 @@ export const Navbar = () => {
 
   return (
       <>
-        <nav className="bg-white shadow-2xl w-full fixed top-0 text-gray-700 z-30 px-40">
-          <div className="px-4 sm:px-6 lg:px-8">
+        <nav className="bg-white shadow-2xl w-full fixed top-0 text-gray-700 z-30">
+          <div className="px-4 sm:px-6 lg:px-32">
             <div className="flex items-center justify-between h-16">
               {/* Logo/Brand */}
-              <div className="flex-shrink-0">
-                <Link href="/" className="text-xl font-bold">
-                  Claymores Rugby
+              <div className="flex-shrink-0 mr-auto">
+                <Link href="/" className="flex items-center">
+                  <Image
+                      src="/assets/logo.png"
+                      alt="Claymores Rugby Logo"
+                      width={150}
+                      height={40}
+                      className="h-10 w-auto"
+                      priority
+                  />
                 </Link>
               </div>
 
@@ -54,7 +62,7 @@ export const Navbar = () => {
                     onClick={toggleMenu}
                     variant="ghost"
                     size="icon"
-                    className="text-white hover:bg-gray-700 relative z-40"
+                    className="text-gray-700 hover:bg-gray-100 relative z-40"
                 >
                   <Menu className="h-6 w-6" />
                   <span className="sr-only">Open menu</span>
@@ -76,7 +84,7 @@ export const Navbar = () => {
                 <Link href="/" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
                   Home
                 </Link>
-                <Link href="/about" className="block text-gray-700hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
+                <Link href="/about" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
                   About
                 </Link>
                 <Link href="/team" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>
@@ -96,4 +104,3 @@ export const Navbar = () => {
 }
 
 export default Navbar
-
