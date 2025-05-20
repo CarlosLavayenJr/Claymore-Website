@@ -21,7 +21,7 @@ module.exports = {
 				claymore: ['Claymore', 'sans-serif'],
 			},
 			colors: {
-				'claymore-blue': '#7dc3e1',
+				'claymore-blue': '#78c3ef',
 				border: "hsl(var(--border))",
 				input: "hsl(var(--input))",
 				ring: "hsl(var(--ring))",
