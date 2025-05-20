@@ -304,7 +304,7 @@ export const playersData = [
         height: "6'1\"",
         weight: "230 lbs",
         age: 26,
-        imageUrl: "/placeholder.svg?height=400&width=400",
+        imageUrl: "/team/NicolasCook.jpg",
         description: "A mobile forward with excellent work rate and defensive capabilities.",
     },
     {

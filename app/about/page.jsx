@@ -83,7 +83,7 @@ export default function AboutUs() {
         <div className="flex flex-col min-h-screen">
             {/* Hero Section */}
             <section className="relative w-full h-[50vh] overflow-hidden">
-                <Image src="/triumphant-team.png" alt="Team Banner" fill className="object-cover" priority />
+                <Image src="/homepage/bg1.jpg" alt="Team Banner" fill className="object-cover" priority />
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-center text-white p-6 max-w-4xl">
                         <h1 className="text-4xl md:text-5xl font-claymore mb-4">A club built by players, for players</h1>
