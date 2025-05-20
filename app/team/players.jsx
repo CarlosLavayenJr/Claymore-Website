@@ -11,6 +11,17 @@ export const playersData = [
         description: "A powerful forward known for strength in the scrum and lineout ability. Has been with the team for 5 seasons and is a natural leader on the field.",
     },
     {
+        id: 2,
+        name: "Alexander Augspurg",
+        position: "Back",
+        number: 2,
+        height: "5'11\"",
+        weight: "198 lbs",
+        age: 25,
+        imageUrl: "/placeholder.svg?height=400&width=400",
+        description: "A creative fly-half with exceptional kicking skills and game management. Vision and decision-making have been crucial to the team's success.",
+    },
+    {
         id: 3,
         name: "Alexander Cavanaugh",
         position: "Forward",
