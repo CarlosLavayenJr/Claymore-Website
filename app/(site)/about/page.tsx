@@ -152,37 +152,37 @@ export default function AboutUs() {
                     </p>
                 </section>
 
-                {/* Timeline Section */}
-                <section className="mb-16 py-8">
-                    <h2 className="text-3xl font-claymore mb-12 text-center">Our Journey</h2>
-                    <div className="relative max-w-4xl mx-auto" ref={timelineRef}>
-                        <div className="absolute left-[80px] top-0 bottom-0 w-[2px] bg-primary/20"></div>
-                        {timelineItems.map((item, index) => (
-                            <div
-                                key={index}
-                                className={`relative mb-16 transition-all duration-500 ${index <= activeTimelineItem ? "opacity-100" : "opacity-40"
-                                    }`}
-                            >
-                                <div className="flex items-start">
-                                    <div className="min-w-[80px] z-10 flex-shrink-0">
-                                        <div
-                                            className={`inline-block text-xl font-bold py-2 px-3 rounded-lg ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"
-                                                } transition-colors duration-300`}
-                                        >
-                                            {item.year}
-                                        </div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="text-center">
-                                            <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                                            <p className="text-muted-foreground max-w-xl mx-auto">{item.description}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+                {/*/!* Timeline Section *!/*/}
+                {/*<section className="mb-16 py-8">*/}
+                {/*    <h2 className="text-3xl font-claymore mb-12 text-center">Our Journey</h2>*/}
+                {/*    <div className="relative max-w-4xl mx-auto" ref={timelineRef}>*/}
+                {/*        <div className="absolute left-[80px] top-0 bottom-0 w-[2px] bg-primary/20"></div>*/}
+                {/*        {timelineItems.map((item, index) => (*/}
+                {/*            <div*/}
+                {/*                key={index}*/}
+                {/*                className={`relative mb-16 transition-all duration-500 ${index <= activeTimelineItem ? "opacity-100" : "opacity-40"*/}
+                {/*                    }`}*/}
+                {/*            >*/}
+                {/*                <div className="flex items-start">*/}
+                {/*                    <div className="min-w-[80px] z-10 flex-shrink-0">*/}
+                {/*                        <div*/}
+                {/*                            className={`inline-block text-xl font-bold py-2 px-3 rounded-lg ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"*/}
+                {/*                                } transition-colors duration-300`}*/}
+                {/*                        >*/}
+                {/*                            {item.year}*/}
+                {/*                        </div>*/}
+                {/*                    </div>*/}
+                {/*                    <div className="flex-1">*/}
+                {/*                        <div className="text-center">*/}
+                {/*                            <h3 className="text-xl font-bold mb-3">{item.title}</h3>*/}
+                {/*                            <p className="text-muted-foreground max-w-xl mx-auto">{item.description}</p>*/}
+                {/*                        </div>*/}
+                {/*                    </div>*/}
+                {/*                </div>*/}
+                {/*            </div>*/}
+                {/*        ))}*/}
+                {/*    </div>*/}
+                {/*</section>*/}
 
                 {/* Call to Action */}
                 <section className="py-16 text-center">
