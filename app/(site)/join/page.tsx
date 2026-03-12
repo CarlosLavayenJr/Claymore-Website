@@ -101,7 +101,7 @@ export default function JoinPage() {
 
             </div>
 
-            <TeamPhotoStrip limit={4} />
+            <TeamPhotoStrip count={4} />
 
             <div className="container mx-auto px-4 py-16 max-w-4xl">
 
