@@ -4,23 +4,19 @@ export interface SanityPlayer {
     _id: string
     name: string
     position: string
-    number: number
     height: string
     weight: string
-    age: number
     imageUrl: string | null
     description: string
 }
 
 export const playersQuery = groq`
-  *[_type == "player"] | order(number asc) {
+  *[_type == "player"] | order(name asc) {
     _id,
     name,
     position,
-    number,
     height,
     weight,
-    age,
     "imageUrl": image.asset->url,
     description
   }

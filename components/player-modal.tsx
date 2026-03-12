@@ -32,20 +32,12 @@ export default function PlayerModal({ player, onClose }: PlayerModalProps) {
                 <CardContent>
                     <div className="grid grid-cols-2 gap-2 mb-4">
                         <div>
-                            <p className="text-sm text-muted-foreground">Number</p>
-                            <p className="font-medium">{player.number}</p>
-                        </div>
-                        <div>
                             <p className="text-sm text-muted-foreground">Height</p>
                             <p className="font-medium">{player.height}</p>
                         </div>
                         <div>
                             <p className="text-sm text-muted-foreground">Weight</p>
                             <p className="font-medium">{player.weight}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Age</p>
-                            <p className="font-medium">{player.age}</p>
                         </div>
                     </div>
 

@@ -24,11 +24,6 @@ export const player = defineType({
             validation: (rule) => rule.required(),
         }),
         defineField({
-            name: 'number',
-            title: 'Jersey Number',
-            type: 'number',
-        }),
-        defineField({
             name: 'height',
             title: 'Height',
             type: 'string',
@@ -37,11 +32,6 @@ export const player = defineType({
             name: 'weight',
             title: 'Weight',
             type: 'string',
-        }),
-        defineField({
-            name: 'age',
-            title: 'Age',
-            type: 'number',
         }),
         defineField({
             name: 'image',
