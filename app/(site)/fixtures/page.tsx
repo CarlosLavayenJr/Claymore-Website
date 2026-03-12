@@ -21,7 +21,7 @@ export default function Fixtures() {
             </p>
             <div className="w-full aspect-video">
                 <iframe
-                    src="https://calendar.google.com/calendar/embed?src=centrolfloridaclaymores%40gmail.com&ctz=America%2FNew_York"
+                    src="https://calendar.google.com/calendar/embed?src=claymoresrfc%40gmail.com&ctz=America%2FNew_York"
                     width="1368"
                     height="832"
                     title="Central Florida Claymores RFC 2025 Match Schedule — Orlando Rugby"

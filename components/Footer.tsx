@@ -8,19 +8,21 @@ const Footer = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div>
                         <h3 className="text-lg font-claymore mb-4">Contact Us</h3>
-                        <p>Claymores Rugby Club</p>
-                        <p>123 Rugby Street</p>
-                        <p>City, Country</p>
-                        <p>Email: info@claymoresrugby.com</p>
+                        <p>Central Florida Claymores RFC</p>
+                        <p>Orlando, FL</p>
+                        <p>Email: claymoresrfc@gmail.com</p>
                     </div>
 
                     <div>
                         <h3 className="text-lg font-claymore mb-4">Quick Links</h3>
                         <ul className="space-y-2">
-                            <li><Link href="/membership" className="hover:text-gray-300">Membership</Link></li>
-                            <li><Link href="/news" className="hover:text-gray-300">News</Link></li>
-                            <li><Link href="/shop" className="hover:text-gray-300">Club Shop</Link></li>
-                            <li><Link href="/sponsors" className="hover:text-gray-300">Sponsors</Link></li>
+                            <li><Link href="/" className="hover:text-gray-300">Home</Link></li>
+                            <li><Link href="/about" className="hover:text-gray-300">About</Link></li>
+                            <li><Link href="/team" className="hover:text-gray-300">Team</Link></li>
+                            <li><Link href="/fixtures" className="hover:text-gray-300">Fixtures</Link></li>
+                            <li><Link href="/faq" className="hover:text-gray-300">FAQ</Link></li>
+                            <li><Link href="/contact" className="hover:text-gray-300">Contact</Link></li>
+                            <li><Link href="/join" className="hover:text-gray-300">Join Us</Link></li>
                         </ul>
                     </div>
 
@@ -41,7 +43,7 @@ const Footer = () => {
                 </div>
 
                 <div className="mt-8 pt-8 border-t border-gray-700 text-center">
-                    <p>&copy; {new Date().getFullYear()} Claymores Rugby Club. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved.</p>
                 </div>
             </div>
         </footer>

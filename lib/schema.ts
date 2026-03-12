@@ -24,7 +24,7 @@ export const organizationSchema = {
         { '@type': 'City', name: 'Orlando' },
         { '@type': 'AdministrativeArea', name: 'Central Florida' },
     ],
-    email: 'centrolfloridaclaymores@gmail.com',
+    email: 'claymoresrfc@gmail.com',
     memberOf: [
         {
             '@type': 'SportsOrganization',

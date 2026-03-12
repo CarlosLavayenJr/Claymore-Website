@@ -96,12 +96,10 @@ export default function Contact() {
                     <div className="bg-gray-100 p-6 rounded-lg">
                         <h2 className="text-2xl font-semibold mb-4">Club Information</h2>
                         <div className="space-y-3">
-                            <p><strong>Address:</strong><br />
-                                Claymores Rugby Club<br />
-                                123 Rugby Street<br />
-                                City, Country</p>
-                            <p><strong>Email:</strong> info@claymoresrugby.com</p>
-                            <p><strong>Training Ground:</strong> [Your training ground location]</p>
+                            <p><strong>Club:</strong> Central Florida Claymores RFC</p>
+                            <p><strong>Location:</strong> Orlando, FL</p>
+                            <p><strong>Email:</strong> claymoresrfc@gmail.com</p>
+                            <p><strong>Practice:</strong> Wednesdays — Orlando area</p>
                         </div>
                     </div>
                 </div>

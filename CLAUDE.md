@@ -6,7 +6,7 @@ Every page, every piece of content, and every technical decision should serve th
 
 ## The Club
 **Central Florida Claymores RFC** — Orlando-based rugby club founded in 2018.
-- Contact: centrolfloridaclaymores@gmail.com
+- Contact: claymoresrfc@gmail.com
 - Region: Orlando / Central Florida / Florida Rugby Union
 - Division: D4
 
