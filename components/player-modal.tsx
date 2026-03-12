@@ -3,7 +3,7 @@
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import type { Player } from "@/app/team/players"
+import type { Player } from "@/app/(site)/team/players"
 
 interface PlayerModalProps {
     player: Player

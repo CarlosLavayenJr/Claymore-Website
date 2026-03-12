@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card"
-import type { Player } from "@/app/team/players"
+import type { Player } from "@/app/(site)/team/players"
 
 interface PlayerCardProps {
     player: Player

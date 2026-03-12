@@ -3,7 +3,7 @@
 import { useState } from "react"
 import PlayerCard from "@/components/player-card"
 import PlayerModal from "@/components/player-modal"
-import { playersData, type Player } from "@/app/team/players"
+import { playersData, type Player } from "@/app/(site)/team/players"
 
 export default function TeamPage() {
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
