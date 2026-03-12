@@ -32,3 +32,17 @@ export const postsQuery = groq`
     "coverImageUrl": coverImage.asset->url
   }
 `
+
+export interface SanityTeamPhoto {
+    _id: string
+    url: string
+    aspectRatio: number
+}
+
+export const teamPhotosQuery = groq`
+  *[_type == "sanity.imageAsset" && "team" in opt.media.tags[]->name.current] {
+    _id,
+    url,
+    "aspectRatio": metadata.dimensions.aspectRatio
+  }
+`

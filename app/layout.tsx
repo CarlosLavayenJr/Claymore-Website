@@ -7,7 +7,7 @@ export const metadata: Metadata = {
         default: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
         template: '%s | Central Florida Claymores | Orlando, FL',
     },
-    description: "Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. All skill levels welcome. Join us Wednesdays.",
+    description: "Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. All skill levels welcome. Join us Thursdays.",
     keywords: [
         'Orlando rugby', 'Central Florida rugby', 'rugby club Orlando FL',
         'join rugby Orlando', 'rugby tryouts Orlando', 'Orlando rugby D3',
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
         locale: 'en_US',
         siteName: 'Central Florida Claymores RFC',
         title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
-        description: "Orlando's USA Rugby D3 club. All skill levels welcome. Join us Wednesdays.",
+        description: "Orlando's USA Rugby D3 club. All skill levels welcome. Join us Thursdays.",
         images: [{ url: '/assets/logo.png', width: 800, height: 600, alt: 'Central Florida Claymores RFC — Orlando Rugby Club Logo' }],
     },
     twitter: {

@@ -19,7 +19,7 @@ export default function PlayerModal({ player, onClose }: PlayerModalProps) {
                 </Button>
 
                 <div className="aspect-video overflow-hidden rounded-t-2xl">
-                    <img src={player.imageUrl || "/placeholder.svg"} alt={player.name} className="w-full h-[445px] object-contain" />
+                    <img src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"} alt={player.name} className="w-full h-[445px] object-contain" />
                 </div>
 
                 <CardHeader className="pb-2">

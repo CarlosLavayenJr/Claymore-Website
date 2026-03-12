@@ -3,7 +3,7 @@ import JsonLd from '@/components/json-ld'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby FAQ — Joining the Claymores',
-    description: 'FAQ about joining the Central Florida Claymores RFC in Orlando, FL. Practice schedule, costs, experience needed, USA Rugby D3 season info, and more. Join us Wednesdays.',
+    description: 'FAQ about joining the Central Florida Claymores RFC in Orlando, FL. Practice schedule, costs, experience needed, USA Rugby D3 season info, and more. Join us Thursdays.',
     openGraph: {
         title: 'Orlando Rugby FAQ — Joining the Claymores | Central Florida Claymores',
         description: 'Everything you need to know about joining Orlando rugby with the Central Florida Claymores RFC.',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 const faqs = [
     {
         question: 'How do I join the Central Florida Claymores?',
-        answer: 'Getting started is easy — just show up to one of our Wednesday evening practices in Orlando. No experience necessary. You can also reach out via our contact page and we\'ll get back to you with all the details.',
+        answer: 'Getting started is easy — just show up to one of our Thursday evening, 8–10pm practices in Orlando. No experience necessary. You can also reach out via our contact page and we\'ll get back to you with all the details.',
     },
     {
         question: 'Do I need prior rugby experience to join?',
@@ -22,7 +22,7 @@ const faqs = [
     },
     {
         question: 'Where do the Claymores practice in Orlando?',
-        answer: 'We practice in the Orlando area every Wednesday evening. Contact us for the current training location as it can vary by season.',
+        answer: 'We practice in the Orlando area every Thursday evening, 8–10pm. Contact us for the current training location as it can vary by season.',
     },
     {
         question: 'When is the rugby season in Central Florida?',

@@ -2,13 +2,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
+import TeamPhotoStrip from '@/components/team-photo-strip'
 
 export const metadata: Metadata = {
     title: 'Join a Rugby Club in Orlando, FL — No Experience Needed',
-    description: 'Join the Central Florida Claymores RFC — Orlando\'s USA Rugby D3 club. No experience required. Practices every Wednesday in the Orlando area. All ages 18+ welcome.',
+    description: 'Join the Central Florida Claymores RFC — Orlando\'s USA Rugby D3 club. No experience required. Practices every Thursday in the Orlando area. All ages 18+ welcome.',
     openGraph: {
         title: 'Join a Rugby Club in Orlando, FL | Central Florida Claymores',
-        description: 'No experience needed. Practices every Wednesday in Orlando. All skill levels welcome.',
+        description: 'No experience needed. Practices every Thursday in Orlando. All skill levels welcome.',
         url: '/join',
     },
 }
@@ -20,7 +21,7 @@ const joinFaqs = [
     },
     {
         question: 'What are rugby tryouts like in Orlando?',
-        answer: "There's no formal tryout — just show up to a Wednesday practice. We'll work with you on the basics and get you integrated into the team from day one.",
+        answer: "There's no formal tryout — just show up to a Thursday practice. We'll work with you on the basics and get you integrated into the team from day one.",
     },
     {
         question: 'How fit do I need to be to join Orlando rugby?',
@@ -28,7 +29,7 @@ const joinFaqs = [
     },
     {
         question: 'Can I join the Central Florida Claymores mid-season?',
-        answer: 'Yes. We accept new players year-round. Come to a Wednesday practice and we\'ll sort out the registration details from there.',
+        answer: 'Yes. We accept new players year-round. Come to a Thursday practice and we\'ll sort out the registration details from there.',
     },
     {
         question: 'What gear do I need to start playing rugby in Orlando?',
@@ -59,7 +60,7 @@ export default function JoinPage() {
                         Join Orlando Rugby — No Experience Needed
                     </h1>
                     <p className="text-xl text-gray-300 mb-8">
-                        The Central Florida Claymores RFC welcome players of all skill levels. Come to a Wednesday practice in Orlando and see what rugby is all about.
+                        The Central Florida Claymores RFC welcome players of all skill levels. Come to a Thursday practice in Orlando and see what rugby is all about.
                     </p>
                     <Link
                         href="/contact"
@@ -79,7 +80,7 @@ export default function JoinPage() {
                         {[
                             {
                                 title: 'Show Up',
-                                body: "Come to a Wednesday evening practice at our Orlando training ground. Wear athletic clothes and cleats if you have them — nothing else required.",
+                                body: "Come to a Thursday evening, 8–10pm practice at our Orlando training ground. Wear athletic clothes and cleats if you have them — nothing else required.",
                             },
                             {
                                 title: 'Learn the Basics',
@@ -97,6 +98,12 @@ export default function JoinPage() {
                         ))}
                     </div>
                 </section>
+
+            </div>
+
+            <TeamPhotoStrip limit={4} />
+
+            <div className="container mx-auto px-4 py-16 max-w-4xl">
 
                 {/* Practice schedule */}
                 <section className="mb-16 bg-black text-white rounded-xl p-10 text-center">

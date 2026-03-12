@@ -14,7 +14,7 @@ export default function PlayerCard({ player, onClick }: PlayerCardProps) {
         >
             <div className="aspect-square overflow-hidden">
                 <img
-                    src={player.imageUrl || "/placeholder.svg"}
+                    src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"}
                     alt={player.name}
                     className="w-full h-full object-cover"
                 />
