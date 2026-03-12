@@ -1,27 +1,34 @@
-'use client';
-import { useState } from 'react';
+'use client'
+
+import { useState, ChangeEvent, FormEvent } from 'react'
+
+interface FormData {
+    name: string
+    email: string
+    subject: string
+    message: string
+}
 
 export default function Contact() {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<FormData>({
         name: '',
         email: '',
         subject: '',
         message: ''
-    });
+    })
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        // Add your form submission logic here
-        console.log('Form data:', formData);
-    };
+    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
+        console.log('Form data:', formData)
+    }
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
+    const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target
         setFormData(prevState => ({
             ...prevState,
             [name]: value
-        }));
-    };
+        }))
+    }
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -72,10 +79,10 @@ export default function Contact() {
                                 name="message"
                                 value={formData.message}
                                 onChange={handleChange}
-                                rows="5"
+                                rows={5}
                                 className="w-full p-2 border border-gray-300 rounded"
                                 required
-                            ></textarea>
+                            />
                         </div>
                         <button
                             type="submit"
@@ -100,5 +107,5 @@ export default function Contact() {
                 </div>
             </div>
         </div>
-    );
+    )
 }

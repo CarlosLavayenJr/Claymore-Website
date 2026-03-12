@@ -6,12 +6,24 @@ import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import Link from "next/link"
 
+interface TimelineItem {
+    year: string
+    title: string
+    description: string
+}
+
+interface TeamMember {
+    name: string
+    role: string
+    bio: string
+    image: string
+}
+
 export default function AboutUs() {
     const [activeTimelineItem, setActiveTimelineItem] = useState(0)
-    const timelineRef = useRef(null)
+    const timelineRef = useRef<HTMLDivElement>(null)
 
-    // Timeline data
-    const timelineItems = [
+    const timelineItems: TimelineItem[] = [
         {
             year: "2005",
             title: "The Beginning",
@@ -47,7 +59,27 @@ export default function AboutUs() {
         },
     ]
 
-    // Parallax scroll effect for timeline
+    const teamMembers: TeamMember[] = [
+        {
+            name: "Adam Chivers",
+            role: "Head Coach",
+            bio: "Former Claymore player, Adam has transitioned into a Coaching role as of the 2024 season. Nothing defines a club built by players, for players more than one of your own making the transition to full time coach.",
+            image: "/determined-coach.png",
+        },
+        {
+            name: "Jamie Moncur",
+            role: "Founder & Coach",
+            bio: "Jamie Moncur started his rugby journey with 10 years of school boy rugby in Edinburgh, Scotland, followed by a brief coaching stint in The Netherlands. After moving to the USA, he led the University of St. Thomas Celts RFC to significant success, including reaching the Texas State finals in 2009/2010. After a brief hiatus, he returned to coaching with Orlando Rugby in 2016, and in 2018 founded The Claymores, while continuing to develop his coaching expertise through various certifications.\n",
+            image: "/assets/coach.jpeg",
+        },
+        {
+            name: "Alexander Cavanaugh",
+            role: "President",
+            bio: "A former Mizzou standout, Alex has been a cornerstone of the Claymore's success both on and off the field. As captain, he led the team to a D4 state final and numerous victories. Beyond his playing achievements, Alex has been instrumental in building the club's foundation and establishing structures that will benefit the organization long after he hangs up his boots.",
+            image: "/assets/alex.jpg",
+        },
+    ]
+
     useEffect(() => {
         const handleScroll = () => {
             if (!timelineRef.current) return
@@ -58,23 +90,18 @@ export default function AboutUs() {
             const timelineEnd = timelineRect.bottom
             const windowHeight = window.innerHeight
 
-            // If timeline is visible at all
             if (timelineEnd > 0 && timelineStart < windowHeight) {
-                // Calculate what percentage of the timeline is visible
                 const visiblePercentage = Math.min(
                     1,
                     Math.max(0, (windowHeight - timelineStart) / (windowHeight + timelineRect.height)),
                 )
-
-                // Set the active item based on how far the user has scrolled
                 const newActiveItem = Math.min(Math.floor(visiblePercentage * itemsCount), itemsCount - 1)
-
                 setActiveTimelineItem(Math.max(0, newActiveItem))
             }
         }
 
         window.addEventListener("scroll", handleScroll)
-        handleScroll() // Initial check
+        handleScroll()
 
         return () => window.removeEventListener("scroll", handleScroll)
     }, [timelineItems.length])
@@ -97,28 +124,8 @@ export default function AboutUs() {
                 {/* Team Members */}
                 <section className="mb-16">
                     <h2 className="text-3xl font-claymore mb-10 text-center">Meet Our Club</h2>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {[
-                            {
-                                name: "Adam Chivers",
-                                role: "Head Coach",
-                                bio: "Former Claymore player, Adam has transitioned into a Coaching role as of the 2024 season. Nothing defines a club built by players, for players more than one of your own making the transition to full time coach.",
-                                image: "/determined-coach.png",
-                            },
-                            {
-                                name: "Jamie Moncur",
-                                role: "Founder & Coach",
-                                bio: "Jamie Moncur started his rugby journey with 10 years of school boy rugby in Edinburgh, Scotland, followed by a brief coaching stint in The Netherlands. After moving to the USA, he led the University of St. Thomas Celts RFC to significant success, including reaching the Texas State finals in 2009/2010. After a brief hiatus, he returned to coaching with Orlando Rugby in 2016, and in 2018 founded The Claymores, while continuing to develop his coaching expertise through various certifications.\n",
-                                image: "/assets/coach.jpeg",
-                            },
-                            {
-                                name: "Alexander Cavanaugh",
-                                role: "President",
-                                bio: "A former Mizzou standout, Alex has been a cornerstone of the Claymore's success both on and off the field. As captain, he led the team to a D4 state final and numerous victories. Beyond his playing achievements, Alex has been instrumental in building the club's foundation and establishing structures that will benefit the organization long after he hangs up his boots.",
-                                image: "/assets/alex.jpg",
-                            },
-                        ].map((member, index) => (
+                        {teamMembers.map((member, index) => (
                             <Card key={index}>
                                 <CardContent className="pt-6">
                                     <div className="relative w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden">
@@ -137,46 +144,35 @@ export default function AboutUs() {
                 <section className="mb-16 text-center max-w-3xl mx-auto">
                     <h2 className="text-3xl font-claymore mb-6">Our Start</h2>
                     <p className="text-lg text-muted-foreground">
-                        The Central Florida Claymores RFC began life in 2018 as the newest member to the Florida Rugby Union. The task at hand, to grow a competitive team built by players for players while simultaneously growing the historic sport of rugby.<br/><br/>
+                        The Central Florida Claymores RFC began life in 2018 as the newest member to the Florida Rugby Union. The task at hand, to grow a competitive team built by players for players while simultaneously growing the historic sport of rugby.<br /><br />
 
+                        The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The team has set their expectations to win a state title and advance as far nationally as their spirit and camaraderie will take them<br /><br />
 
-                        The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The team has set their expectations to win a state title and advance as far nationally as their spirit and camaraderie will take them<br/><br/>
-
-                        Despite the struggles all have encountered during the COVID pandemic, the Claymores  brotherhood has continued to grown in strength and experience at a rate that is electrifying. Every Wednesday the Claymores come together from all over the Orlando area to practice and build the foundation of a long lasting, winning culture. On Saturday’s, the Claymore’s take the pitch to show that anything is possible with hard work, commitment, and heart.
+                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grown in strength and experience at a rate that is electrifying. Every Wednesday the Claymores come together from all over the Orlando area to practice and build the foundation of a long lasting, winning culture. On Saturday&apos;s, the Claymore&apos;s take the pitch to show that anything is possible with hard work, commitment, and heart.
                     </p>
                 </section>
 
                 {/* Timeline Section */}
                 <section className="mb-16 py-8">
                     <h2 className="text-3xl font-claymore mb-12 text-center">Our Journey</h2>
-
                     <div className="relative max-w-4xl mx-auto" ref={timelineRef}>
-                        {/* Vertical line */}
                         <div className="absolute left-[80px] top-0 bottom-0 w-[2px] bg-primary/20"></div>
-
                         {timelineItems.map((item, index) => (
                             <div
                                 key={index}
-                                className={`relative mb-16 transition-all duration-500 ${
-                                    index <= activeTimelineItem ? "opacity-100" : "opacity-40"
-                                }`}
+                                className={`relative mb-16 transition-all duration-500 ${index <= activeTimelineItem ? "opacity-100" : "opacity-40"
+                                    }`}
                             >
                                 <div className="flex items-start">
-                                    {/* Year marker - consistently sized and left aligned */}
                                     <div className="min-w-[80px] z-10 flex-shrink-0">
                                         <div
-                                            className={`
-                        inline-block text-xl font-bold py-2 px-3 rounded-lg
-                        ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"}
-                        transition-colors duration-300
-                      `}
+                                            className={`inline-block text-xl font-bold py-2 px-3 rounded-lg ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"
+                                                } transition-colors duration-300`}
                                         >
                                             {item.year}
                                         </div>
                                     </div>
-
-                                    {/* Content - centered with proper spacing */}
-                                    <div className=" flex-1">
+                                    <div className="flex-1">
                                         <div className="text-center">
                                             <h3 className="text-xl font-bold mb-3">{item.title}</h3>
                                             <p className="text-muted-foreground max-w-xl mx-auto">{item.description}</p>

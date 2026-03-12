@@ -1,6 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card"
+import type { Player } from "@/app/team/players"
 
-export default function PlayerCard({ player, onClick }) {
+interface PlayerCardProps {
+    player: Player
+    onClick: () => void
+}
+
+export default function PlayerCard({ player, onClick }: PlayerCardProps) {
     return (
         <Card
             className="overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg"

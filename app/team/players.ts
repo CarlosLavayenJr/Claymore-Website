@@ -1,4 +1,16 @@
-export const playersData = [
+export interface Player {
+    id: number
+    name: string
+    position: string
+    number: number
+    height: string
+    weight: string
+    age: number
+    imageUrl: string
+    description: string
+}
+
+export const playersData: Player[] = [
     {
         id: 1,
         name: "Adam Lenz",
@@ -374,7 +386,7 @@ export const playersData = [
         description: "A dynamic forward with strong ball-carrying abilities.",
     },
     {
-        id: 35,
+        id: 36,
         name: "Casey Kropp",
         position: "Forward",
         number: 35,
@@ -384,4 +396,4 @@ export const playersData = [
         imageUrl: "/team/VictorMorales.jpg",
         description: "Forward? Back? Who knows.",
     }
-];
+]

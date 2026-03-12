@@ -3,8 +3,14 @@
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import type { Player } from "@/app/team/players"
 
-export default function PlayerModal({ player, onClose }) {
+interface PlayerModalProps {
+    player: Player
+    onClose: () => void
+}
+
+export default function PlayerModal({ player, onClose }: PlayerModalProps) {
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <Card className="w-full max-w-md relative">
@@ -12,7 +18,7 @@ export default function PlayerModal({ player, onClose }) {
                     <X className="h-4 w-4" />
                 </Button>
 
-                <div className="aspect-video overflow-hidden rounded-t-2xl ">
+                <div className="aspect-video overflow-hidden rounded-t-2xl">
                     <img src={player.imageUrl || "/placeholder.svg"} alt={player.name} className="w-full h-[445px] object-contain" />
                 </div>
 
@@ -52,4 +58,3 @@ export default function PlayerModal({ player, onClose }) {
         </div>
     )
 }
-
