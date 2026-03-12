@@ -3,7 +3,7 @@ import { playersQuery } from "@/sanity/lib/queries"
 import type { SanityPlayer } from "@/sanity/lib/queries"
 import TeamGrid from "@/components/team-grid"
 
-export const revalidate = 60
+export const revalidate = 0
 
 export default async function TeamPage() {
     const players: SanityPlayer[] = await client.fetch(playersQuery)
