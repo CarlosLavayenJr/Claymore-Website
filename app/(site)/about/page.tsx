@@ -64,7 +64,7 @@ export default function AboutUs() {
             name: "Adam Chivers",
             role: "Head Coach",
             bio: "Former Claymore player, Adam has transitioned into a Coaching role as of the 2024 season. Nothing defines a club built by players, for players more than one of your own making the transition to full time coach.",
-            image: "/determined-coach.png",
+            image: "/adam.png",
         },
         {
             name: "Jamie Moncur",
