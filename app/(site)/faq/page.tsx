@@ -2,11 +2,11 @@ import type { Metadata } from 'next'
 import JsonLd from '@/components/json-ld'
 
 export const metadata: Metadata = {
-    title: 'FAQ — Joining Orlando Rugby',
-    description: 'Frequently asked questions about joining the Central Florida Claymores RFC. Learn about practice schedule, costs, experience requirements, and Orlando rugby in general.',
+    title: 'Orlando Rugby FAQ — Joining the Claymores',
+    description: 'FAQ about joining the Central Florida Claymores RFC in Orlando, FL. Practice schedule, costs, experience needed, USA Rugby D3 season info, and more. Join us Wednesdays.',
     openGraph: {
-        title: 'FAQ — Joining Orlando Rugby | Central Florida Claymores RFC',
-        description: 'Everything you need to know about joining Orlando rugby with the Claymores.',
+        title: 'Orlando Rugby FAQ — Joining the Claymores | Central Florida Claymores',
+        description: 'Everything you need to know about joining Orlando rugby with the Central Florida Claymores RFC.',
         url: '/faq',
     },
 }
@@ -30,7 +30,7 @@ const faqs = [
     },
     {
         question: 'What division do the Claymores compete in?',
-        answer: 'The Central Florida Claymores RFC currently compete in Division 4 of the Florida Rugby Union.',
+        answer: 'The Central Florida Claymores RFC compete in USA Rugby D3 through the Florida Rugby Union.',
     },
     {
         question: 'How much does it cost to join?',
@@ -81,10 +81,10 @@ export default function FAQPage() {
                 <h2 className="text-2xl font-claymore mb-3">Still have questions?</h2>
                 <p className="text-muted-foreground mb-6">We&apos;re happy to help. Reach out and someone from the club will get back to you.</p>
                 <a
-                    href="/contact"
+                    href="/join"
                     className="inline-block bg-black text-white px-8 py-3 rounded-md hover:bg-[#0066b2] transition-colors"
                 >
-                    Contact Us
+                    Join the Claymores
                 </a>
             </div>
         </div>

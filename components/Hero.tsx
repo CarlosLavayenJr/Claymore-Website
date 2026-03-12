@@ -6,7 +6,7 @@ export default function RugbyHero() {
             <div className="relative w-full h-screen">
                 <Image
                     src="/homepage/hdheropic.png"
-                    alt="Central Florida (Orlando) Rugby Club"
+                    alt="Central Florida Claymores RFC — Orlando Rugby Club, USA Rugby D3"
                     className="w-full h-full object-cover"
                     fill
                 />

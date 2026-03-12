@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Fixtures & Schedule',
-    description: 'View upcoming fixtures, match schedule, and results for the Central Florida Claymores RFC. Follow Orlando rugby all season long.',
+    title: '2025 Fixtures & Schedule | Central Florida Claymores',
+    description: '2025 match schedule, upcoming fixtures, and results for the Central Florida Claymores RFC. Follow Orlando rugby all season long. Go Claymores.',
     openGraph: {
-        title: 'Fixtures & Schedule | Central Florida Claymores RFC',
-        description: 'Upcoming fixtures and results for Orlando\'s Claymores RFC.',
+        title: '2025 Fixtures & Schedule | Central Florida Claymores | Orlando, FL',
+        description: '2025 fixtures and results for the Central Florida Claymores RFC — Orlando rugby.',
         url: '/fixtures',
     },
 }
@@ -14,13 +14,17 @@ export default function Fixtures() {
     return (
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-5xl font-claymore text-center my-8">
-                Fixtures
+                2025 Fixtures & Results
             </h1>
+            <p className="text-center text-muted-foreground mb-8">
+                Central Florida Claymores RFC — Orlando, FL | Florida Rugby Union D3
+            </p>
             <div className="w-full aspect-video">
                 <iframe
                     src="https://calendar.google.com/calendar/embed?src=centrolfloridaclaymores%40gmail.com&ctz=America%2FNew_York"
                     width="1368"
                     height="832"
+                    title="Central Florida Claymores RFC 2025 Match Schedule — Orlando Rugby"
                 />
             </div>
             <div className="w-full mt-8 aspect-video">
@@ -30,7 +34,7 @@ export default function Fixtures() {
                 <iframe
                     src="https://xplorer.rugby/central-florida-claymores/"
                     className="w-full h-full border-0"
-                    title="Claymores RFC Fixtures and Results - Orlando Rugby"
+                    title="Central Florida Claymores RFC Match Results — Orlando Rugby"
                     loading="lazy"
                 />
             </div>

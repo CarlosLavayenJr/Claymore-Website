@@ -114,7 +114,7 @@ export default function AboutUs() {
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-center text-white p-6 max-w-4xl">
                         <h1 className="text-4xl md:text-5xl font-claymore mb-4">A club built by players, for players</h1>
-                        <p className="text-xl md:text-2xl">Est. 2018</p>
+                        <p className="text-xl md:text-2xl">Central Florida Claymores RFC — Orlando, FL — Est. 2018</p>
                     </div>
                 </div>
             </section>
@@ -144,11 +144,11 @@ export default function AboutUs() {
                 <section className="mb-16 text-center max-w-3xl mx-auto">
                     <h2 className="text-3xl font-claymore mb-6">Our Start</h2>
                     <p className="text-lg text-muted-foreground">
-                        The Central Florida Claymores RFC began life in 2018 as the newest member to the Florida Rugby Union. The task at hand, to grow a competitive team built by players for players while simultaneously growing the historic sport of rugby.<br /><br />
+                        The Central Florida Claymores RFC began life in 2018 as the newest member of the Florida Rugby Union — Orlando&apos;s entry into USA Rugby D3 competition. The task at hand: grow a competitive rugby club built by players, for players, while simultaneously growing the historic sport of rugby across Central Florida.<br /><br />
 
-                        The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The team has set their expectations to win a state title and advance as far nationally as their spirit and camaraderie will take them<br /><br />
+                        The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The club reached the D3 state final in 2023, cementing the Claymores as one of Central Florida&apos;s most competitive rugby programs. The team&apos;s expectations are clear — win a state title and advance as far nationally as their spirit and camaraderie will take them.<br /><br />
 
-                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grown in strength and experience at a rate that is electrifying. Every Wednesday the Claymores come together from all over the Orlando area to practice and build the foundation of a long lasting, winning culture. On Saturday&apos;s, the Claymore&apos;s take the pitch to show that anything is possible with hard work, commitment, and heart.
+                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grow in strength and experience at a rate that is electrifying. Every Wednesday, players come together from all over the Orlando area to practice and build the foundation of a long-lasting, winning culture. On Saturdays, the Claymores take the pitch to show that anything is possible with hard work, commitment, and heart.
                     </p>
                 </section>
 
@@ -192,7 +192,7 @@ export default function AboutUs() {
                             Join our community of athletes and be part of something special. We welcome players of all skill levels.
                         </p>
                         <Button asChild size="lg" variant="claymore" className="px-8 py-6 text-lg">
-                            <Link href="/contact">Contact Us</Link>
+                            <Link href="/join">Join the Claymores</Link>
                         </Button>
                     </div>
                 </section>

@@ -7,11 +7,11 @@ import TeamGrid from '@/components/team-grid'
 export const revalidate = 0
 
 export const metadata: Metadata = {
-    title: 'Our Roster',
-    description: 'Meet the players of the Central Florida Claymores RFC — Orlando\'s premier rugby club. Forwards, backs, and everyone in between.',
+    title: 'Meet the Team | Central Florida Claymores',
+    description: "Meet the players of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club. Forwards, backs, and everyone in between. Join us Wednesdays.",
     openGraph: {
-        title: 'Our Roster | Central Florida Claymores RFC',
-        description: 'Meet the players of the Central Florida Claymores RFC.',
+        title: 'Meet the Team | Central Florida Claymores | Orlando, FL',
+        description: "The players of Orlando's Central Florida Claymores RFC.",
         url: '/team',
     },
 }
@@ -21,7 +21,8 @@ export default async function TeamPage() {
 
     return (
         <main className="container mx-auto py-8 px-4">
-            <h1 className="text-5xl font-bold mb-8 font-claymore text-center">Meet The Team</h1>
+            <h1 className="text-5xl font-bold mb-2 font-claymore text-center">Meet the Team</h1>
+            <p className="text-center text-muted-foreground mb-8">Central Florida Claymores RFC — Orlando, FL</p>
             {players.length === 0 ? (
                 <p className="text-center text-muted-foreground">No players found. Add some in the Studio.</p>
             ) : (
