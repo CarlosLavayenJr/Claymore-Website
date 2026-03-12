@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -11,15 +12,24 @@ interface PlayerModalProps {
 }
 
 export default function PlayerModal({ player, onClose }: PlayerModalProps) {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [onClose])
+
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md relative">
+        <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={onClose}
+        >
+            <Card className="w-full max-w-md relative" onClick={(e) => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" className="absolute right-2 top-2 z-10" onClick={onClose}>
                     <X className="h-4 w-4" />
                 </Button>
 
-                <div className="aspect-video overflow-hidden rounded-t-2xl">
-                    <img src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"} alt={player.name} className="w-full h-[445px] object-contain" />
+                <div className="w-full h-72 rounded-t-2xl overflow-hidden">
+                    <img src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"} alt={player.name} className="w-full h-full object-cover" style={{ objectPosition: '50% 15%' }} />
                 </div>
 
                 <CardHeader className="pb-2">
