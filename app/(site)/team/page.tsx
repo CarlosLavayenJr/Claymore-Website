@@ -1,9 +1,20 @@
-import { client } from "@/sanity/lib/client"
-import { playersQuery } from "@/sanity/lib/queries"
-import type { SanityPlayer } from "@/sanity/lib/queries"
-import TeamGrid from "@/components/team-grid"
+import type { Metadata } from 'next'
+import { client } from '@/sanity/lib/client'
+import { playersQuery } from '@/sanity/lib/queries'
+import type { SanityPlayer } from '@/sanity/lib/queries'
+import TeamGrid from '@/components/team-grid'
 
 export const revalidate = 0
+
+export const metadata: Metadata = {
+    title: 'Our Roster',
+    description: 'Meet the players of the Central Florida Claymores RFC — Orlando\'s premier rugby club. Forwards, backs, and everyone in between.',
+    openGraph: {
+        title: 'Our Roster | Central Florida Claymores RFC',
+        description: 'Meet the players of the Central Florida Claymores RFC.',
+        url: '/team',
+    },
+}
 
 export default async function TeamPage() {
     const players: SanityPlayer[] = await client.fetch(playersQuery)

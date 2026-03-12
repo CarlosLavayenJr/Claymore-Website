@@ -1,4 +1,14 @@
-import React from 'react';
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+    title: 'Fixtures & Schedule',
+    description: 'View upcoming fixtures, match schedule, and results for the Central Florida Claymores RFC. Follow Orlando rugby all season long.',
+    openGraph: {
+        title: 'Fixtures & Schedule | Central Florida Claymores RFC',
+        description: 'Upcoming fixtures and results for Orlando\'s Claymores RFC.',
+        url: '/fixtures',
+    },
+}
 
 export default function Fixtures() {
     return (
@@ -20,10 +30,10 @@ export default function Fixtures() {
                 <iframe
                     src="https://xplorer.rugby/central-florida-claymores/"
                     className="w-full h-full border-0"
-                    title="Claymores Fixtures and Results"
+                    title="Claymores RFC Fixtures and Results - Orlando Rugby"
                     loading="lazy"
                 />
             </div>
         </div>
-    );
+    )
 }

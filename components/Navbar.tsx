@@ -50,6 +50,7 @@ export const Navbar = () => {
                             <NavLink href="/about">About</NavLink>
                             <NavLink href="/team">Team</NavLink>
                             <NavLink href="/fixtures">Fixtures</NavLink>
+                            <NavLink href="/faq">FAQ</NavLink>
                             <NavLink href="/contact">Contact</NavLink>
                         </div>
 
@@ -79,6 +80,7 @@ export const Navbar = () => {
                         <Link href="/about" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>About</Link>
                         <Link href="/team" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Team</Link>
                         <Link href="/fixtures" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Fixtures</Link>
+                        <Link href="/faq" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>FAQ</Link>
                         <Link href="/contact" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Contact</Link>
                     </div>
                 </div>
