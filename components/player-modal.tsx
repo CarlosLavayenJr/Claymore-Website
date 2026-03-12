@@ -3,10 +3,10 @@
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import type { Player } from "@/app/(site)/team/players"
+import type { SanityPlayer } from "@/sanity/lib/queries"
 
 interface PlayerModalProps {
-    player: Player
+    player: SanityPlayer
     onClose: () => void
 }
 

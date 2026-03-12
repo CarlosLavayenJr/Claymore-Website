@@ -1,8 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card"
-import type { Player } from "@/app/(site)/team/players"
+import type { SanityPlayer } from "@/sanity/lib/queries"
 
 interface PlayerCardProps {
-    player: Player
+    player: SanityPlayer
     onClick: () => void
 }
 

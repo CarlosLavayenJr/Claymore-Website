@@ -1,5 +1,17 @@
 import { groq } from 'next-sanity'
 
+export interface SanityPlayer {
+    _id: string
+    name: string
+    position: string
+    number: number
+    height: string
+    weight: string
+    age: number
+    imageUrl: string | null
+    description: string
+}
+
 export const playersQuery = groq`
   *[_type == "player"] | order(number asc) {
     _id,
