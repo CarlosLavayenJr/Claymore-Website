@@ -1,0 +1,30 @@
+import { Card, CardContent } from "@/components/ui/card"
+import type { SanityPlayer } from "@/sanity/lib/queries"
+
+interface PlayerCardProps {
+    player: SanityPlayer
+    onClick: () => void
+}
+
+export default function PlayerCard({ player, onClick }: PlayerCardProps) {
+    return (
+        <Card
+            className="overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg"
+            onClick={onClick}
+        >
+            <div className="aspect-square overflow-hidden">
+                <img
+                    src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"}
+                    alt={player.name}
+                    className="w-full h-full object-cover"
+                />
+            </div>
+            <CardContent className="p-4">
+                <h3 className="font-bold text-lg truncate">{player.name}</h3>
+                <div className="mt-1 inline-block px-2 py-1 text-xs font-medium rounded-full bg-primary text-primary-foreground">
+                    {player.position}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
