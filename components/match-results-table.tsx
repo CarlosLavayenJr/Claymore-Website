@@ -126,7 +126,7 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
     const getScore = (m: SanityMatch) => {
         if (m.status === 'upcoming') return '—'
         if (m.status === 'cancelled') return 'CANCELLED'
-        if (m.status === 'forfeit_us' || m.status === 'forfeit_them') return 'FORFEIT'
+        if (m.status === 'forfeit_us' || m.status === 'forfeit_them') return `${m.homeScore} – ${m.awayScore}`
         return `${m.homeScore} – ${m.awayScore}`
     }
 

@@ -35,7 +35,9 @@ function isClaymores(name: string): boolean {
 function parseStatus(hasScores: boolean, note: string): MatchStatus {
   if (!hasScores) return 'upcoming'
   if (/forfeit/i.test(note)) {
-    return /claymore/i.test(note) ? 'forfeit_us' : 'forfeit_them'
+    // Match "Claymores forfeit" or "Forfeit by Claymores" — Claymores as the subject
+    const usForfeited = /claymore.{0,15}forfeit|forfeit.{0,10}by.{0,10}claymore/i.test(note)
+    return usForfeited ? 'forfeit_us' : 'forfeit_them'
   }
   return 'played'
 }
@@ -77,21 +79,31 @@ function parseMatches(html: string): ScrapedMatch[] {
     const scores = td.find('font[color="#FF0000"] strong').map((_j, s) => parseInt($(s).text(), 10)).get() as number[]
     const hasScores = scores.length >= 2
 
-    // Note is in the sibling row with class TableRowNoLine — walk up to parent tr then look ahead
+    // Note is in the immediately next sibling tr (only if it contains .TableRowNoLine)
     const parentRow = td.closest('tr')
-    const noteRow = parentRow.nextAll('tr').filter((_j, r) => $(r).find('.TableRowNoLine').length > 0).first()
-    const note = noteRow.find('.TableRowNoLine').text().replace(/\s+/g, ' ').trim()
+    const nextRow = parentRow.next('tr')
+    const note = nextRow.find('.TableRowNoLine').length > 0
+      ? nextRow.find('.TableRowNoLine').text().replace(/\s+/g, ' ').trim()
+      : ''
 
     const status = parseStatus(hasScores, note)
     const isoDate = dateObj.toISOString().split('T')[0]
     const season = deriveSeason(dateObj)
 
-    // Determine if Claymores are home or away; normalise so Claymores are always represented consistently
-    const claymoresHome = isClaymores(homeTeam)
-    const displayHome = claymoresHome ? 'Claymores' : homeTeam
-    const displayAway = claymoresHome ? awayTeam : 'Claymores'
-    const homeScore = hasScores ? (claymoresHome ? scores[0] : scores[1]) : 0
-    const awayScore = hasScores ? (claymoresHome ? scores[1] : scores[0]) : 0
+    // Normalise Claymores team name; home is always first in the HTML so scores are never swapped
+    const displayHome = isClaymores(homeTeam) ? 'Claymores' : homeTeam
+    const displayAway = isClaymores(awayTeam) ? 'Claymores' : awayTeam
+    // Forfeits: winning team gets 20, forfeiting team gets 0
+    let homeScore = hasScores ? scores[0] : 0
+    let awayScore = hasScores ? scores[1] : 0
+    if (status === 'forfeit_us') {
+      // Claymores forfeited — determine which side they're on
+      homeScore = isClaymores(displayHome) ? 0 : 20
+      awayScore = isClaymores(displayAway) ? 0 : 20
+    } else if (status === 'forfeit_them') {
+      homeScore = isClaymores(displayHome) ? 20 : 0
+      awayScore = isClaymores(displayAway) ? 20 : 0
+    }
 
     const id = `scraped-${isoDate}-${slug(displayHome)}-${slug(displayAway)}`
 
@@ -100,9 +112,9 @@ function parseMatches(html: string): ScrapedMatch[] {
       _type: 'match',
       date: isoDate,
       season,
-      homeTeam: claymoresHome ? 'Claymores' : homeTeam,
+      homeTeam: displayHome,
       homeScore,
-      awayTeam: claymoresHome ? awayTeam : 'Claymores',
+      awayTeam: displayAway,
       awayScore,
       status,
       ...(note ? { note } : {}),
