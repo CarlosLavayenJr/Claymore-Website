@@ -2,15 +2,16 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { client } from '@/sanity/lib/client'
 import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
+import MatchCalendar from '@/components/match-calendar'
 
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: '2025 Fixtures & Schedule | Central Florida Claymores RFC',
-    description: '2025 match schedule and upcoming fixtures for the Central Florida Claymores RFC. Follow Orlando rugby all season long.',
+    title: 'Fixtures & Schedule | Central Florida Claymores RFC',
+    description: 'Full match schedule and results for the Central Florida Claymores RFC. Upcoming fixtures and past results for Orlando rugby.',
     openGraph: {
-        title: '2025 Fixtures & Schedule | Central Florida Claymores | Orlando, FL',
-        description: '2025 fixtures for the Central Florida Claymores RFC — Orlando rugby.',
+        title: 'Fixtures & Schedule | Central Florida Claymores | Orlando, FL',
+        description: 'Fixtures and results for the Central Florida Claymores RFC — Orlando rugby.',
         url: '/fixtures',
     },
 }
@@ -39,20 +40,27 @@ export default async function Fixtures() {
             {/* Two-column layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
 
-                {/* Left — Google Calendar */}
+                {/* Left — custom calendar */}
                 <div>
-                    <h2 className="text-2xl font-claymore text-[#111111] mb-4">Match Calendar</h2>
-                    <div className="rounded-xl overflow-hidden border border-[#EAEAEA]" style={{ aspectRatio: '4/3' }}>
-                        <iframe
-                            src="https://calendar.google.com/calendar/embed?src=claymoresrfc%40gmail.com&ctz=America%2FNew_York&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0"
-                            className="w-full h-full border-0"
-                            title="Central Florida Claymores RFC 2025 Match Schedule — Orlando Rugby"
-                        />
+                    <h2 className="text-2xl font-claymore text-[#111111] mb-2">Match Calendar</h2>
+                    {/* Legend */}
+                    <div className="hidden sm:flex items-center gap-5 mb-4 text-xs text-[#555555]">
+                        {[
+                            { dot: 'bg-[#77c3ef]', label: 'Win / Upcoming' },
+                            { dot: 'bg-[#AAAAAA]', label: 'Loss' },
+                            { dot: 'bg-[#fd80b5]', label: 'Draw' },
+                        ].map(({ dot, label }) => (
+                            <span key={label} className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                                {label}
+                            </span>
+                        ))}
                     </div>
+                    <MatchCalendar matches={matches} />
                 </div>
 
-                {/* Right — Upcoming fixtures */}
-                <div>
+                {/* Right — Upcoming fixtures (hidden on mobile, calendar list covers it) */}
+                <div className="hidden sm:block">
                     <h2 className="text-2xl font-claymore text-[#111111] mb-4">Upcoming Matches</h2>
                     {upcoming.length === 0 ? (
                         <div className="border border-[#EAEAEA] rounded-xl p-8 text-center text-[#555555]">

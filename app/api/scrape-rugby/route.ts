@@ -188,12 +188,32 @@ export async function GET(request: Request) {
       }
 
       const html = await res.text()
-      const matches = parseMatches(html)
+      const allMatches = parseMatches(html)
 
-      if (matches.length === 0) {
+      if (allMatches.length === 0) {
         console.warn(`[scrape-rugby] Season ${sid}: no matches found`)
         summary[sid] = { parsed: 0, upserted: 0, failed: 0 }
         continue
+      }
+
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+
+      // Drop matches: past date with no score recorded (regardless of note)
+      const staleIds: string[] = []
+      const matches = allMatches.filter(m => {
+        const isPast = new Date(m.date) < today
+        if (isPast && m.status === 'upcoming') {
+          const existingId = existingByDate.get(m.date)
+          if (existingId) staleIds.push(existingId)
+          return false
+        }
+        return true
+      })
+
+      if (staleIds.length > 0) {
+        console.log(`[scrape-rugby] Season ${sid}: removing ${staleIds.length} ghost match(es)`)
+        await Promise.all(staleIds.map(id => sanity.delete(id)))
       }
 
       const results = await Promise.allSettled(
