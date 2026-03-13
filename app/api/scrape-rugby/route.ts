@@ -146,11 +146,28 @@ export async function GET(request: Request) {
     useCdn: false,
   })
 
-  // Build a date → _id map of all existing Sanity matches to prevent duplicates
+  // Fetch all matches and group by date
   const existing: { _id: string; date: string }[] = await sanity.fetch(
-    `*[_type == "match"]{ _id, date }`
+    `*[_type == "match"] | order(_createdAt asc) { _id, date }`
   )
-  const existingByDate = new Map(existing.map(m => [m.date, m._id]))
+
+  // Deduplicate: for each date keep the FIRST (oldest) doc, delete the rest
+  const seenDates = new Map<string, string>() // date → keeper _id
+  const toDelete: string[] = []
+  for (const m of existing) {
+    if (seenDates.has(m.date)) {
+      toDelete.push(m._id)
+    } else {
+      seenDates.set(m.date, m._id)
+    }
+  }
+  if (toDelete.length > 0) {
+    console.log(`[scrape-rugby] Deleting ${toDelete.length} duplicate match(es)`)
+    await Promise.all(toDelete.map(id => sanity.delete(id)))
+  }
+
+  // existingByDate now has one doc per date (the keeper)
+  const existingByDate = new Map(seenDates)
 
   const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
 
