@@ -2,10 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Info } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Info } from 'lucide-react'
 import type { SanityMatch } from '@/sanity/lib/queries'
 
 function normalizeTeamName(name: string): string {
@@ -14,6 +12,26 @@ function normalizeTeamName(name: string): string {
 
 function isClaymores(name: string): boolean {
     return name.includes('Claymores') || name.includes('IR/Claymores')
+}
+
+type Result = 'W' | 'L' | 'D' | null
+
+function getResult(m: SanityMatch): Result {
+    if (m.status === 'upcoming' || m.status === 'cancelled') return null
+    if (m.status === 'forfeit_us') return 'L'
+    if (m.status === 'forfeit_them') return 'W'
+    const weHome = isClaymores(m.homeTeam)
+    const ours = weHome ? m.homeScore : m.awayScore
+    const theirs = weHome ? m.awayScore : m.homeScore
+    if (ours > theirs) return 'W'
+    if (ours < theirs) return 'L'
+    return 'D'
+}
+
+const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
+    W: 'bg-[#E56A9A] text-white',
+    L: 'bg-[#EAEAEA] text-[#555555]',
+    D: 'bg-[#6FA8C9] text-white',
 }
 
 export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
@@ -49,15 +67,12 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
 
     const stats = useMemo(() => {
         let wins = 0, losses = 0, draws = 0, pf = 0, pa = 0, upcoming = 0, cancelled = 0
-
         filtered.forEach((m) => {
             if (m.status === 'upcoming') { upcoming++; return }
             if (m.status === 'cancelled') { cancelled++; return }
-
             const weHome = isClaymores(m.homeTeam)
             const ourScore = weHome ? m.homeScore : m.awayScore
             const theirScore = weHome ? m.awayScore : m.homeScore
-
             if (m.status === 'forfeit_us') { losses++; pa += 20 }
             else if (m.status === 'forfeit_them') { wins++; pf += 20 }
             else {
@@ -67,121 +82,123 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                 else draws++
             }
         })
-
-        return { wins, losses, draws, pf, pa, diff: pf - pa, played: filtered.length - upcoming - cancelled, upcoming, cancelled }
+        return { wins, losses, draws, pf, pa, diff: pf - pa, played: filtered.length - upcoming - cancelled, upcoming }
     }, [filtered])
 
-    const getRowClass = (m: SanityMatch) => {
-        if (m.status === 'upcoming') return 'text-muted-foreground'
-        if (m.status === 'cancelled') return 'text-muted-foreground italic'
-        if (m.status === 'forfeit_us') return 'text-red-600 dark:text-red-400 italic'
-        if (m.status === 'forfeit_them') return 'text-green-600 dark:text-green-400 italic'
-        const weHome = isClaymores(m.homeTeam)
-        const ours = weHome ? m.homeScore : m.awayScore
-        const theirs = weHome ? m.awayScore : m.homeScore
-        if (ours > theirs) return 'text-green-600 dark:text-green-400 font-bold'
-        if (ours < theirs) return 'text-red-600 dark:text-red-400'
-        return 'text-yellow-600 dark:text-yellow-400'
-    }
-
     const getScore = (m: SanityMatch) => {
-        if (m.status === 'upcoming') return <span className="text-muted-foreground">UPCOMING</span>
-        if (m.status === 'cancelled') return <span className="italic">CANCELLED</span>
-        if (m.status === 'forfeit_us') return <span className="italic">FORFEIT (us)</span>
-        if (m.status === 'forfeit_them') return <span className="italic">FORFEIT (them)</span>
+        if (m.status === 'upcoming') return '—'
+        if (m.status === 'cancelled') return 'CANCELLED'
+        if (m.status === 'forfeit_us' || m.status === 'forfeit_them') return 'FORFEIT'
         return `${m.homeScore} – ${m.awayScore}`
     }
 
-    const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    const formatDate = (d: string) =>
+        new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
     return (
-        <Card className="w-full">
-            <CardHeader>
-                <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <span>Claymores Results</span>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Select value={selectedSeason} onValueChange={setSelectedSeason}>
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue placeholder="Season" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Seasons</SelectItem>
-                                {seasons.map((s) => (
-                                    <SelectItem key={s} value={s.toString()}>{s} Season</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={selectedOpponent} onValueChange={setSelectedOpponent}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Opponent" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Opponents</SelectItem>
-                                {opponents.map((o) => (
-                                    <SelectItem key={o} value={o}>{o}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+        <div className="w-full">
+            {/* Stats strip */}
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-[#EAEAEA] border border-[#EAEAEA] rounded-xl overflow-hidden mb-8">
+                {[
+                    { label: 'Wins', value: stats.wins, accent: 'text-[#E56A9A]' },
+                    { label: 'Losses', value: stats.losses, accent: 'text-[#555555]' },
+                    { label: 'Draws', value: stats.draws, accent: 'text-[#6FA8C9]' },
+                    { label: 'Played', value: stats.played, accent: 'text-[#111111]' },
+                    { label: 'PF', value: stats.pf, accent: 'text-[#111111]' },
+                    { label: 'PA', value: stats.pa, accent: 'text-[#111111]' },
+                    { label: '+/−', value: stats.diff, accent: stats.diff >= 0 ? 'text-[#E56A9A]' : 'text-[#555555]' },
+                ].map(({ label, value, accent }) => (
+                    <div key={label} className="bg-white py-4 text-center">
+                        <div className={`text-2xl font-bold font-claymore ${accent}`}>{value}</div>
+                        <div className="text-xs uppercase tracking-widest text-[#555555] mt-1">{label}</div>
                     </div>
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                {/* Stats bar */}
-                <div className="mb-6 p-4 bg-muted rounded-lg grid grid-cols-4 sm:grid-cols-8 gap-4 text-center">
-                    {[
-                        { label: 'Wins', value: stats.wins, color: 'text-green-600' },
-                        { label: 'Losses', value: stats.losses, color: 'text-red-600' },
-                        { label: 'Draws', value: stats.draws, color: 'text-yellow-600' },
-                        { label: 'Played', value: stats.played, color: '' },
-                        { label: 'PF', value: stats.pf, color: '' },
-                        { label: 'PA', value: stats.pa, color: '' },
-                        { label: '+/-', value: stats.diff, color: stats.diff >= 0 ? 'text-green-600' : 'text-red-600' },
-                        { label: 'Upcoming', value: stats.upcoming, color: 'text-muted-foreground' },
-                    ].map(({ label, value, color }) => (
-                        <div key={label}>
-                            <div className={`text-2xl font-bold ${color}`}>{value}</div>
-                            <div className="text-xs text-muted-foreground">{label}</div>
-                        </div>
-                    ))}
-                </div>
+                ))}
+            </div>
 
-                {/* Table */}
-                <div className="rounded-md border">
-                    <Table>
-                        <TableHeader>
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <Select value={selectedSeason} onValueChange={setSelectedSeason}>
+                    <SelectTrigger className="w-full sm:w-[160px] border-[#EAEAEA] focus:ring-[#E56A9A]">
+                        <SelectValue placeholder="Season" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Seasons</SelectItem>
+                        {seasons.map((s) => (
+                            <SelectItem key={s} value={s.toString()}>{s} Season</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={selectedOpponent} onValueChange={setSelectedOpponent}>
+                    <SelectTrigger className="w-full sm:w-[200px] border-[#EAEAEA] focus:ring-[#E56A9A]">
+                        <SelectValue placeholder="All Opponents" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Opponents</SelectItem>
+                        {opponents.map((o) => (
+                            <SelectItem key={o} value={o}>{o}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Table */}
+            <div className="border border-[#EAEAEA] rounded-xl overflow-hidden">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-[#F9F9F9] hover:bg-[#F9F9F9]">
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold w-[110px]">Date</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold">Home</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center">Score</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold">Away</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center w-[60px]">Result</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-right hidden sm:table-cell">Note</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filtered.length === 0 ? (
                             <TableRow>
-                                <TableHead className="w-[100px]">Date</TableHead>
-                                <TableHead>Home</TableHead>
-                                <TableHead className="text-center">Score</TableHead>
-                                <TableHead>Away</TableHead>
-                                <TableHead className="text-right">Note</TableHead>
+                                <TableCell colSpan={6} className="text-center text-[#555555] py-12">No matches found</TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filtered.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No matches found</TableCell>
-                                </TableRow>
-                            ) : filtered.map((m) => (
-                                <TableRow key={m._id} className={getRowClass(m)}>
-                                    <TableCell className="font-medium">{formatDate(m.date)}</TableCell>
-                                    <TableCell>{m.homeTeam}</TableCell>
-                                    <TableCell className="text-center">{getScore(m)}</TableCell>
-                                    <TableCell>{m.awayTeam}</TableCell>
-                                    <TableCell className="text-right">
+                        ) : filtered.map((m) => {
+                            const result = getResult(m)
+                            const isUpcoming = m.status === 'upcoming'
+                            const isCancelled = m.status === 'cancelled'
+                            return (
+                                <TableRow
+                                    key={m._id}
+                                    className={`border-t border-[#EAEAEA] ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
+                                >
+                                    <TableCell className="text-sm text-[#555555]">{formatDate(m.date)}</TableCell>
+                                    <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
+                                        {m.homeTeam}
+                                    </TableCell>
+                                    <TableCell className="text-center font-mono font-semibold text-[#111111]">
+                                        {isUpcoming ? <span className="text-xs text-[#6FA8C9] uppercase tracking-widest">Upcoming</span> : getScore(m)}
+                                    </TableCell>
+                                    <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
+                                        {m.awayTeam}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        {result && (
+                                            <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded ${RESULT_PILL[result]}`}>
+                                                {result}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right hidden sm:table-cell">
                                         {m.note && (
-                                            <Badge variant="secondary" className="inline-flex gap-1 text-xs">
-                                                <Info className="w-3 h-3" />
+                                            <span className="inline-flex items-center gap-1 text-xs text-[#555555]">
+                                                <Info className="w-3 h-3 shrink-0" />
                                                 {m.note}
-                                            </Badge>
+                                            </span>
                                         )}
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardContent>
-        </Card>
+                            )
+                        })}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
     )
 }
