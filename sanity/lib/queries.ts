@@ -31,6 +31,8 @@ export interface SanityMatch {
     awayTeam: string
     awayScore: number
     status: 'played' | 'upcoming' | 'cancelled' | 'forfeit_us' | 'forfeit_them'
+    matchType?: 'league' | 'friendly'
+    competition?: string
     note?: string
 }
 
@@ -44,6 +46,8 @@ export const matchesQuery = groq`
     awayTeam,
     awayScore,
     status,
+    matchType,
+    competition,
     note
   }
 `

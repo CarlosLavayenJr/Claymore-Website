@@ -59,6 +59,24 @@ export const match = defineType({
             validation: (rule) => rule.required(),
         }),
         defineField({
+            name: 'matchType',
+            title: 'Match Type',
+            type: 'string',
+            options: {
+                list: [
+                    { title: 'League', value: 'league' },
+                    { title: 'Friendly', value: 'friendly' },
+                ],
+                layout: 'radio',
+            },
+            initialValue: 'league',
+        }),
+        defineField({
+            name: 'competition',
+            title: 'Competition',
+            type: 'string',
+        }),
+        defineField({
             name: 'note',
             title: 'Note',
             type: 'string',

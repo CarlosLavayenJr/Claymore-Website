@@ -4,6 +4,7 @@ import { createClient } from '@sanity/client'
 const BASE_URL = 'https://rugbyfl.com/Clubs/Club.asp?Club_ID=117'
 
 type MatchStatus = 'played' | 'upcoming' | 'forfeit_us' | 'forfeit_them'
+type MatchType = 'league' | 'friendly'
 
 interface ScrapedMatch {
   _id: string
@@ -15,6 +16,8 @@ interface ScrapedMatch {
   awayTeam: string
   awayScore: number
   status: MatchStatus
+  matchType: MatchType
+  competition?: string
   note?: string
 }
 
@@ -47,11 +50,12 @@ function parseMatches(html: string): ScrapedMatch[] {
   const matches: ScrapedMatch[] = []
 
   let currentDate = ''
+  let currentCompetition = ''
 
   // Each game block starts with a .SectionTitleSec date row,
   // followed by a .TableRowBig time/competition row,
   // then a .TeamGame row with team names and optional scores.
-  $('td.SectionTitleSec, td.TeamGame').each((_i, el) => {
+  $('td.SectionTitleSec, td.TableRowBig, td.TeamGame').each((_i, el) => {
     const td = $(el)
 
     if (td.hasClass('SectionTitleSec')) {
@@ -59,6 +63,13 @@ function parseMatches(html: string): ScrapedMatch[] {
       const text = td.text().trim()
       const match = text.match(/(\w+ \d+,\s*\d{4})/)
       if (match) currentDate = match[1]
+      return
+    }
+
+    if (td.hasClass('TableRowBig')) {
+      // e.g. "1:00 PM | Friendlies 2025-26 | Ref: ..."
+      const compText = td.find('a font').first().text().trim()
+      if (compText) currentCompetition = compText
       return
     }
 
@@ -89,6 +100,7 @@ function parseMatches(html: string): ScrapedMatch[] {
     const status = parseStatus(hasScores, note)
     const isoDate = dateObj.toISOString().split('T')[0]
     const season = deriveSeason(dateObj)
+    const matchType: MatchType = /friendl/i.test(currentCompetition) ? 'friendly' : 'league'
 
     // Normalise Claymores team name; home is always first in the HTML so scores are never swapped
     const displayHome = isClaymores(homeTeam) ? 'Claymores' : homeTeam
@@ -117,6 +129,8 @@ function parseMatches(html: string): ScrapedMatch[] {
       awayTeam: displayAway,
       awayScore,
       status,
+      matchType,
+      ...(currentCompetition ? { competition: currentCompetition } : {}),
       ...(note ? { note } : {}),
     }
 
@@ -228,6 +242,8 @@ export async function GET(request: Request) {
               awayScore: m.awayScore,
               status: m.status,
               season: m.season,
+              matchType: m.matchType,
+              ...(m.competition ? { competition: m.competition } : {}),
               ...(m.note ? { note: m.note } : {}),
             }).commit()
           }
