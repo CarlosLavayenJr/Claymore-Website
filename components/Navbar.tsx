@@ -50,6 +50,7 @@ export const Navbar = () => {
                             <NavLink href="/about">About</NavLink>
                             <NavLink href="/team">Team</NavLink>
                             <NavLink href="/fixtures">Fixtures</NavLink>
+                            <NavLink href="/results">Results</NavLink>
                             <NavLink href="/faq">FAQ</NavLink>
                             <NavLink href="/contact">Contact</NavLink>
                             <Link href="/join" className="ml-2 px-4 py-2 bg-black text-white font-claymore text-lg rounded hover:bg-[#0066b2] transition-colors">
@@ -83,6 +84,7 @@ export const Navbar = () => {
                         <Link href="/about" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>About</Link>
                         <Link href="/team" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Team</Link>
                         <Link href="/fixtures" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Fixtures</Link>
+                        <Link href="/results" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Results</Link>
                         <Link href="/faq" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>FAQ</Link>
                         <Link href="/contact" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Contact</Link>
                         <Link href="/join" className="block bg-black text-white px-4 py-2 font-bold" onClick={toggleMenu}>Join Us</Link>

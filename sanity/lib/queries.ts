@@ -22,6 +22,32 @@ export const playersQuery = groq`
   }
 `
 
+export interface SanityMatch {
+    _id: string
+    date: string
+    season: number
+    homeTeam: string
+    homeScore: number
+    awayTeam: string
+    awayScore: number
+    status: 'played' | 'upcoming' | 'cancelled' | 'forfeit_us' | 'forfeit_them'
+    note?: string
+}
+
+export const matchesQuery = groq`
+  *[_type == "match"] | order(date asc) {
+    _id,
+    date,
+    season,
+    homeTeam,
+    homeScore,
+    awayTeam,
+    awayScore,
+    status,
+    note
+  }
+`
+
 export const postsQuery = groq`
   *[_type == "post"] | order(publishedAt desc) {
     _id,
