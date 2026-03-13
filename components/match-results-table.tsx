@@ -69,6 +69,7 @@ const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
 
 export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
     const [selectedOpponent, setSelectedOpponent] = useState('all')
+    const [selectedMatchType, setSelectedMatchType] = useState('all')
     const [selectedSeason, setSelectedSeason] = useState(() => {
         const s = new Set<number>()
         matches.forEach(m => s.add(m.season))
@@ -95,13 +96,16 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
     const filtered = useMemo(() => {
         return matches.filter((m) => {
             if (selectedSeason !== 'all' && m.season.toString() !== selectedSeason) return false
-            if (selectedOpponent === 'all') return true
-            const home = normalizeTeamName(m.homeTeam)
-            const away = normalizeTeamName(m.awayTeam)
-            const opp = normalizeTeamName(selectedOpponent)
-            return home === opp || away === opp
+            if (selectedMatchType !== 'all' && (m.matchType ?? 'league') !== selectedMatchType) return false
+            if (selectedOpponent !== 'all') {
+                const home = normalizeTeamName(m.homeTeam)
+                const away = normalizeTeamName(m.awayTeam)
+                const opp = normalizeTeamName(selectedOpponent)
+                if (home !== opp && away !== opp) return false
+            }
+            return true
         })
-    }, [matches, selectedSeason, selectedOpponent])
+    }, [matches, selectedSeason, selectedMatchType, selectedOpponent])
 
     const stats = useMemo(() => {
         let wins = 0, losses = 0, draws = 0, pf = 0, pa = 0, upcoming = 0, cancelled = 0
@@ -165,6 +169,16 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                     ]}
                 />
                 <FilterSelect
+                    value={selectedMatchType}
+                    onChange={setSelectedMatchType}
+                    width="w-[160px]"
+                    options={[
+                        { label: 'All Types', value: 'all' },
+                        { label: 'League', value: 'league' },
+                        { label: 'Friendly', value: 'friendly' },
+                    ]}
+                />
+                <FilterSelect
                     value={selectedOpponent}
                     onChange={setSelectedOpponent}
                     width="w-[200px]"
@@ -185,13 +199,14 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                             <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center">Score</TableHead>
                             <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold">Away</TableHead>
                             <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center w-[60px]">Result</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center hidden sm:table-cell w-[90px]">Type</TableHead>
                             <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-right hidden sm:table-cell">Note</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filtered.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center text-[#555555] py-12">No matches found</TableCell>
+                                <TableCell colSpan={7} className="text-center text-[#555555] py-12">No matches found</TableCell>
                             </TableRow>
                         ) : filtered.map((m) => {
                             const result = getResult(m)
@@ -217,6 +232,13 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                             <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded ${RESULT_PILL[result]}`}>
                                                 {result}
                                             </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-center hidden sm:table-cell">
+                                        {m.matchType === 'friendly' ? (
+                                            <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-[#fd80b5]/10 text-[#fd80b5] border border-[#fd80b5]/30">Friendly</span>
+                                        ) : (
+                                            <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-[#77c3ef]/10 text-[#77c3ef] border border-[#77c3ef]/30">League</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right hidden sm:table-cell">
