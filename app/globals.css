@@ -35,8 +35,10 @@
     font-style: normal;
     font-display: swap;
   }
+}
 
-
-
-
+/* Hide Elfsight Instagram feed "Load more" button */
+.eapps-instagram-feed-posts-load-more-button-holder,
+.eapps-instagram-feed-posts-load-more-container {
+  display: none !important;
 }
