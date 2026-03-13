@@ -38,6 +38,10 @@
   }
 }
 
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Hide Elfsight Instagram feed "Load more" button */
 .eapps-instagram-feed-posts-grid-load-more-container {
   display: none !important;
