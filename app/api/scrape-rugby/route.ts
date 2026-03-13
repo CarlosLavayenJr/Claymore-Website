@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio'
 import { createClient } from '@sanity/client'
 
-const SCRAPE_URL = 'https://rugbyfl.com/Clubs/Club.asp?Club_ID=117&Season_ID=27'
+const BASE_URL = 'https://rugbyfl.com/Clubs/Club.asp?Club_ID=117'
 
 type MatchStatus = 'played' | 'upcoming' | 'forfeit_us' | 'forfeit_them'
 
@@ -133,64 +133,86 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  console.log('[scrape-rugby] Starting scrape of', SCRAPE_URL)
+  const { searchParams } = new URL(request.url)
+  const all = searchParams.get('all') === 'true'
+  const seasonId = searchParams.get('seasonId') ?? '27'
+  const seasonIds = all ? Array.from({ length: 18 }, (_, i) => String(i + 10)) : [seasonId]
 
-  try {
-    const res = await fetch(SCRAPE_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ClaymoresScraper/1.0)' },
-      next: { revalidate: 0 },
-    })
+  const sanity = createClient({
+    projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
+    dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
+    apiVersion: '2024-01-01',
+    token: process.env.SANITY_API_TOKEN!,
+    useCdn: false,
+  })
 
-    if (!res.ok) {
-      const msg = `Fetch failed: ${res.status} ${res.statusText}`
-      console.error('[scrape-rugby]', msg)
-      return Response.json({ error: msg }, { status: 502 })
-    }
+  // Build a date → _id map of all existing Sanity matches to prevent duplicates
+  const existing: { _id: string; date: string }[] = await sanity.fetch(
+    `*[_type == "match"]{ _id, date }`
+  )
+  const existingByDate = new Map(existing.map(m => [m.date, m._id]))
 
-    const html = await res.text()
-    const matches = parseMatches(html)
+  const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
 
-    if (matches.length === 0) {
-      console.warn('[scrape-rugby] No matches parsed — HTML structure may have changed')
-      return Response.json({ warning: 'No matches parsed', count: 0 })
-    }
+  for (const sid of seasonIds) {
+    const url = `${BASE_URL}&Season_ID=${sid}`
+    console.log(`[scrape-rugby] Scraping Season_ID=${sid}`)
 
-    console.log(`[scrape-rugby] Parsed ${matches.length} matches, upserting to Sanity…`)
-
-    const sanity = createClient({
-      projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
-      dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
-      apiVersion: '2024-01-01',
-      token: process.env.SANITY_API_TOKEN!,
-      useCdn: false,
-    })
-
-    const results = await Promise.allSettled(
-      matches.map(m => sanity.createOrReplace(m))
-    )
-
-    const succeeded = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected')
-
-    if (failed.length > 0) {
-      failed.forEach((f, i) => {
-        if (f.status === 'rejected') {
-          console.error(`[scrape-rugby] Failed to upsert match ${i}:`, f.reason)
-        }
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ClaymoresScraper/1.0)' },
+        next: { revalidate: 0 },
       })
+
+      if (!res.ok) {
+        console.warn(`[scrape-rugby] Season ${sid}: fetch failed ${res.status}`)
+        summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
+        continue
+      }
+
+      const html = await res.text()
+      const matches = parseMatches(html)
+
+      if (matches.length === 0) {
+        console.warn(`[scrape-rugby] Season ${sid}: no matches found`)
+        summary[sid] = { parsed: 0, upserted: 0, failed: 0 }
+        continue
+      }
+
+      const results = await Promise.allSettled(
+        matches.map(m => {
+          const existingId = existingByDate.get(m.date)
+          if (existingId) {
+            // Patch existing doc — preserves the original _id, no duplicate
+            return sanity.patch(existingId).set({
+              homeTeam: m.homeTeam,
+              homeScore: m.homeScore,
+              awayTeam: m.awayTeam,
+              awayScore: m.awayScore,
+              status: m.status,
+              season: m.season,
+              ...(m.note ? { note: m.note } : {}),
+            }).commit()
+          }
+          // New match — create with scraped id and register in map for this run
+          existingByDate.set(m.date, m._id)
+          return sanity.createOrReplace(m)
+        })
+      )
+
+      const upserted = results.filter(r => r.status === 'fulfilled').length
+      const failed = results.filter(r => r.status === 'rejected').length
+
+      console.log(`[scrape-rugby] Season ${sid}: ${upserted}/${matches.length} upserted`)
+      summary[sid] = { parsed: matches.length, upserted, failed }
+    } catch (err) {
+      console.error(`[scrape-rugby] Season ${sid} error:`, err)
+      summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
     }
-
-    console.log(`[scrape-rugby] Done — ${succeeded}/${matches.length} upserted`)
-
-    return Response.json({
-      success: true,
-      parsed: matches.length,
-      upserted: succeeded,
-      failed: failed.length,
-      matches: matches.map(m => ({ id: m._id, date: m.date, home: m.homeTeam, away: m.awayTeam, status: m.status })),
-    })
-  } catch (err) {
-    console.error('[scrape-rugby] Unexpected error:', err)
-    return Response.json({ error: String(err) }, { status: 500 })
   }
+
+  const totalParsed = Object.values(summary).reduce((a, b) => a + b.parsed, 0)
+  const totalUpserted = Object.values(summary).reduce((a, b) => a + b.upserted, 0)
+
+  return Response.json({ success: true, seasons: summary, totalParsed, totalUpserted })
 }
