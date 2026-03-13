@@ -42,3 +42,13 @@
 .eapps-instagram-feed-posts-load-more-container {
   display: none !important;
 }
+
+/* Stretch 2-column Instagram grid to screen edges */
+.eapps-instagram-feed-posts-grid {
+  column-gap: 0 !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+.eapps-instagram-feed-posts-grid-col {
+  width: 48% !important;
+}
