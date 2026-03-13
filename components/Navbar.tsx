@@ -12,7 +12,7 @@ interface NavLinkProps {
 }
 
 const NavLink = ({ href, children }: NavLinkProps) => (
-    <Link href={href} className="relative group px-3 py-2 text-gray-600 hover:text-gray-900 text-lg font-claymore">
+    <Link href={href} className="relative group px-3 py-2 text-gray-600 hover:text-white text-lg font-claymore">
         <span className="relative z-10">{children}</span>
         <span className="absolute inset-0 bg-claymore-blue transform -skew-x-12 origin-left scale-x-0 transition-transform group-hover:scale-x-100"></span>
     </Link>

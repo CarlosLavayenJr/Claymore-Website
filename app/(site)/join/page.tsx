@@ -108,7 +108,7 @@ export default function JoinPage() {
                 {/* Practice schedule */}
                 <section className="mb-16 bg-black text-white rounded-xl p-10 text-center">
                     <h2 className="text-3xl font-claymore mb-4">Practice Schedule</h2>
-                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">Wednesday Evening</strong></p>
+                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">Thursday Evening</strong></p>
                     <p className="text-gray-400 mb-6">Orlando, FL — <Link href="/location" className="text-[#77c3ef] hover:underline">view location</Link></p>
                     <p className="text-gray-300 max-w-xl mx-auto">
                         Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] hover:underline">fixtures page</Link> for the full 2025 schedule.
