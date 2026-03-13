@@ -29,9 +29,9 @@ function getResult(m: SanityMatch): Result {
 }
 
 const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
-    W: 'bg-[#E56A9A] text-white',
+    W: 'bg-[#6FA8C9] text-white',
     L: 'bg-[#EAEAEA] text-[#555555]',
-    D: 'bg-[#6FA8C9] text-white',
+    D: 'bg-[#E56A9A] text-white',
 }
 
 export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
@@ -100,13 +100,13 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
             {/* Stats strip */}
             <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-[#EAEAEA] border border-[#EAEAEA] rounded-xl overflow-hidden mb-8">
                 {[
-                    { label: 'Wins', value: stats.wins, accent: 'text-[#E56A9A]' },
+                    { label: 'Wins', value: stats.wins, accent: 'text-[#6FA8C9]' },
                     { label: 'Losses', value: stats.losses, accent: 'text-[#555555]' },
-                    { label: 'Draws', value: stats.draws, accent: 'text-[#6FA8C9]' },
+                    { label: 'Draws', value: stats.draws, accent: 'text-[#E56A9A]' },
                     { label: 'Played', value: stats.played, accent: 'text-[#111111]' },
                     { label: 'PF', value: stats.pf, accent: 'text-[#111111]' },
                     { label: 'PA', value: stats.pa, accent: 'text-[#111111]' },
-                    { label: '+/−', value: stats.diff, accent: stats.diff >= 0 ? 'text-[#E56A9A]' : 'text-[#555555]' },
+                    { label: '+/−', value: stats.diff, accent: stats.diff >= 0 ? 'text-[#6FA8C9]' : 'text-[#555555]' },
                 ].map(({ label, value, accent }) => (
                     <div key={label} className="bg-white py-4 text-center">
                         <div className={`text-2xl font-bold font-claymore ${accent}`}>{value}</div>
