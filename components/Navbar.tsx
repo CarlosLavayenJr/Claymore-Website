@@ -53,8 +53,9 @@ export const Navbar = () => {
                             <NavLink href="/results">Results</NavLink>
                             <NavLink href="/faq">FAQ</NavLink>
                             <NavLink href="/contact">Contact</NavLink>
-                            <Link href="/join" className="ml-2 px-4 py-2 bg-[#77c3ef] text-white font-claymore text-lg rounded hover:opacity-90 transition-opacity">
-                                Join Us
+                            <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">
+                                <span className="relative z-10">Join Us</span>
+                                <span className="absolute inset-0 bg-[#77c3ef] group-hover:bg-[#a0d5f5] transform -skew-x-12 transition-colors"></span>
                             </Link>
                         </div>
 
