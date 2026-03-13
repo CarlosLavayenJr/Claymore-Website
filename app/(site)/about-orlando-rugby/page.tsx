@@ -98,13 +98,13 @@ export default function AboutOrlandoRugbyPage() {
                 <div className="text-center">
                     <Link
                         href="/join"
-                        className="inline-block bg-black text-white px-10 py-4 rounded-md font-semibold text-lg hover:bg-[#0066b2] transition-colors mr-4"
+                        className="inline-block bg-[#77c3ef] text-white px-10 py-4 rounded-md font-semibold text-lg hover:opacity-90 transition-opacity mr-4"
                     >
                         Join the Claymores
                     </Link>
                     <Link
                         href="/about"
-                        className="inline-block border border-black text-black px-10 py-4 rounded-md font-semibold text-lg hover:bg-gray-100 transition-colors"
+                        className="inline-block border border-[#77c3ef] text-[#77c3ef] px-10 py-4 rounded-md font-semibold text-lg hover:bg-[#77c3ef]/10 transition-colors"
                     >
                         Club History
                     </Link>

@@ -52,7 +52,7 @@ export default function ContactForm() {
     }
 
     const inputClass =
-        'w-full bg-background border border-border rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#78c3ef] transition-colors'
+        'w-full bg-background border border-border rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#77c3ef] transition-colors'
     const labelClass = 'block text-sm font-semibold mb-1'
 
     return (
@@ -113,7 +113,7 @@ export default function ContactForm() {
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#78c3ef] text-black font-bold py-3 rounded-md hover:bg-white transition-colors text-sm uppercase tracking-wide disabled:opacity-50"
+                className="w-full bg-[#77c3ef] text-white font-bold py-3 rounded-md hover:opacity-90 transition-opacity text-sm uppercase tracking-wide disabled:opacity-50"
             >
                 {loading ? 'Sending…' : 'Send Message'}
             </button>

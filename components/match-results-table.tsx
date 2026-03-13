@@ -2,9 +2,42 @@
 
 import { useState, useMemo } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Check, ChevronDown } from 'lucide-react'
 import { Info } from 'lucide-react'
 import type { SanityMatch } from '@/sanity/lib/queries'
+
+function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
+    value: string
+    onChange: (v: string) => void
+    options: { label: string; value: string }[]
+    width?: string
+}) {
+    const [open, setOpen] = useState(false)
+    const selected = options.find(o => o.value === value)
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button className={`flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-[#77c3ef] w-full sm:${width}`}>
+                    <span>{selected?.label}</span>
+                    <ChevronDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="p-1 w-[200px]">
+                {options.map(opt => (
+                    <button
+                        key={opt.value}
+                        onClick={() => { onChange(opt.value); setOpen(false) }}
+                        className="relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm hover:bg-accent cursor-pointer"
+                    >
+                        {opt.label}
+                        {opt.value === value && <Check className="absolute right-2 h-4 w-4" />}
+                    </button>
+                ))}
+            </PopoverContent>
+        </Popover>
+    )
+}
 
 function normalizeTeamName(name: string): string {
     return name.replace(/ \(D[34]\)/g, '').replace(/ D[34]/g, '').replace('IR/', '')
@@ -29,14 +62,19 @@ function getResult(m: SanityMatch): Result {
 }
 
 const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
-    W: 'bg-[#6FA8C9] text-white',
+    W: 'bg-[#77c3ef] text-white',
     L: 'bg-[#EAEAEA] text-[#555555]',
-    D: 'bg-[#E56A9A] text-white',
+    D: 'bg-[#fd80b5] text-white',
 }
 
 export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
     const [selectedOpponent, setSelectedOpponent] = useState('all')
-    const [selectedSeason, setSelectedSeason] = useState('all')
+    const [selectedSeason, setSelectedSeason] = useState(() => {
+        const s = new Set<number>()
+        matches.forEach(m => s.add(m.season))
+        const latest = Math.max(...Array.from(s))
+        return isFinite(latest) ? latest.toString() : 'all'
+    })
 
     const seasons = useMemo(() => {
         const set = new Set<number>()
@@ -100,13 +138,13 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
             {/* Stats strip */}
             <div className="grid grid-cols-4 sm:grid-cols-7 gap-px bg-[#EAEAEA] border border-[#EAEAEA] rounded-xl overflow-hidden mb-8">
                 {[
-                    { label: 'Wins', value: stats.wins, accent: 'text-[#6FA8C9]' },
+                    { label: 'Wins', value: stats.wins, accent: 'text-[#77c3ef]' },
                     { label: 'Losses', value: stats.losses, accent: 'text-[#555555]' },
-                    { label: 'Draws', value: stats.draws, accent: 'text-[#E56A9A]' },
+                    { label: 'Draws', value: stats.draws, accent: 'text-[#fd80b5]' },
                     { label: 'Played', value: stats.played, accent: 'text-[#111111]' },
                     { label: 'PF', value: stats.pf, accent: 'text-[#111111]' },
                     { label: 'PA', value: stats.pa, accent: 'text-[#111111]' },
-                    { label: '+/−', value: stats.diff, accent: stats.diff >= 0 ? 'text-[#6FA8C9]' : 'text-[#555555]' },
+                    { label: '+/−', value: stats.diff, accent: stats.diff >= 0 ? 'text-[#77c3ef]' : 'text-[#555555]' },
                 ].map(({ label, value, accent }) => (
                     <div key={label} className="bg-white py-4 text-center">
                         <div className={`text-2xl font-bold font-claymore ${accent}`}>{value}</div>
@@ -117,28 +155,24 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <Select value={selectedSeason} onValueChange={setSelectedSeason}>
-                    <SelectTrigger className="w-full sm:w-[160px] border-[#EAEAEA] focus:ring-[#E56A9A]">
-                        <SelectValue placeholder="Season" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Seasons</SelectItem>
-                        {seasons.map((s) => (
-                            <SelectItem key={s} value={s.toString()}>{s} Season</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Select value={selectedOpponent} onValueChange={setSelectedOpponent}>
-                    <SelectTrigger className="w-full sm:w-[200px] border-[#EAEAEA] focus:ring-[#E56A9A]">
-                        <SelectValue placeholder="All Opponents" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Opponents</SelectItem>
-                        {opponents.map((o) => (
-                            <SelectItem key={o} value={o}>{o}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <FilterSelect
+                    value={selectedSeason}
+                    onChange={setSelectedSeason}
+                    width="w-[160px]"
+                    options={[
+                        { label: 'All Seasons', value: 'all' },
+                        ...seasons.map(s => ({ label: `${s} Season`, value: s.toString() })),
+                    ]}
+                />
+                <FilterSelect
+                    value={selectedOpponent}
+                    onChange={setSelectedOpponent}
+                    width="w-[200px]"
+                    options={[
+                        { label: 'All Opponents', value: 'all' },
+                        ...opponents.map(o => ({ label: o, value: o })),
+                    ]}
+                />
             </div>
 
             {/* Table */}
@@ -173,7 +207,7 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                         {m.homeTeam}
                                     </TableCell>
                                     <TableCell className="text-center font-mono font-semibold text-[#111111]">
-                                        {isUpcoming ? <span className="text-xs text-[#6FA8C9] uppercase tracking-widest">Upcoming</span> : getScore(m)}
+                                        {isUpcoming ? <span className="text-xs text-[#77c3ef] uppercase tracking-widest">Upcoming</span> : getScore(m)}
                                     </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         {m.awayTeam}

@@ -17,6 +17,7 @@ Target keywords to own:
 - "Orlando rugby club"
 - "Florida rugby union"
 - "rugby Orlando FL"
+- "rugby near me"
 
 Every page should reference Orlando and Central Florida naturally and consistently.
 Meta titles, descriptions, headings, alt text, and URLs all matter.
@@ -44,6 +45,14 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 - News/blog page (Sanity posts schema already built)
 - SEO metadata on all pages (titles, descriptions, Open Graph)
 - Sitemap + robots.txt
+
+## Brand Colors
+- Pink Accent: `#fd80b5` (draws, links, CTAs primary)
+- Steel Blue: `#77c3ef` (wins, secondary CTAs — use this, NOT `#78c3ef`)
+- Divider: `#EAEAEA`
+- Primary Text: `#111111`
+- Secondary Text: `#555555`
+- Background: `#FFFFFF`
 
 ## Key Decisions
 - Sanity is used for content editors (players, news) — not hardcoded data

@@ -8,10 +8,10 @@ import TeamPhotoGrid from '@/components/team-photo-grid'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Contact the Orlando Claymores RFC — Join the Team',
-    description: 'Get in touch with the Central Florida Claymores RFC. Practices every Thursday at Barnett Park, Orlando. No experience required — come play rugby.',
+    title: 'Contact the Orlando Claymores RFC — Rugby Near Me in Orlando',
+    description: 'Looking for rugby near you in Orlando or Central Florida? Contact the Claymores RFC. Practices every Thursday at Barnett Park. No experience required.',
     openGraph: {
-        title: 'Contact the Orlando Claymores RFC',
+        title: 'Contact the Orlando Claymores RFC | Rugby Near Me',
         description: 'Reach out to join Orlando\'s USA Rugby D3 club. Practices every Thursday at Barnett Park.',
         url: '/contact',
     },
@@ -27,17 +27,11 @@ export default async function ContactPage() {
             <section className="bg-black text-white py-20 px-4 text-center">
                 <div className="max-w-3xl mx-auto">
                     <h1 className="text-4xl md:text-5xl font-claymore mb-6">
-                        Join the Claymores
+                        Get in Touch
                     </h1>
-                    <p className="text-xl text-gray-300 mb-8">
-                        Ready to play rugby in Orlando? Send us a message — we&apos;ll get back to you before the next Thursday practice.
+                    <p className="text-xl text-gray-300">
+                        Ready to play rugby in Orlando? Send us a message below — we&apos;ll get back to you before the next Thursday practice.
                     </p>
-                    <Link
-                        href="/join"
-                        className="inline-block border border-[#78c3ef] text-[#78c3ef] font-semibold px-8 py-3 rounded-md text-sm uppercase tracking-wide hover:bg-[#78c3ef] hover:text-black transition-colors"
-                    >
-                        Learn about joining
-                    </Link>
                 </div>
             </section>
 
@@ -81,7 +75,7 @@ export default async function ContactPage() {
                                     <dd>
                                         <a
                                             href="mailto:claymoresrfc@gmail.com"
-                                            className="text-[#78c3ef] hover:underline font-semibold"
+                                            className="text-[#77c3ef] hover:underline font-semibold"
                                         >
                                             claymoresrfc@gmail.com
                                         </a>
@@ -101,7 +95,7 @@ export default async function ContactPage() {
                             </p>
                             <Link
                                 href="/join"
-                                className="inline-block mt-4 text-sm font-semibold text-[#78c3ef] hover:underline"
+                                className="inline-block mt-4 text-sm font-semibold text-[#77c3ef] hover:underline"
                             >
                                 More about joining &rarr;
                             </Link>

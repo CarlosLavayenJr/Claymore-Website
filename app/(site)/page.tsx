@@ -34,19 +34,19 @@ export default function Home() {
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
                             href="/join"
-                            className="inline-block bg-black text-white px-8 py-3 rounded-md font-semibold hover:bg-[#0066b2] transition-colors"
+                            className="inline-block bg-[#77c3ef] text-white px-8 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity"
                         >
                             Join the Claymores
                         </Link>
                         <Link
                             href="/location"
-                            className="inline-block border border-black text-black px-8 py-3 rounded-md font-semibold hover:bg-gray-100 transition-colors"
+                            className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
                         >
                             Find Us in Orlando
                         </Link>
                         <Link
                             href="/about-orlando-rugby"
-                            className="inline-block border border-black text-black px-8 py-3 rounded-md font-semibold hover:bg-gray-100 transition-colors"
+                            className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
                         >
                             About Orlando Rugby
                         </Link>
@@ -63,6 +63,32 @@ export default function Home() {
             </section>
 
             <InstagramFeed />
+
+            {/* Join the Club */}
+            <section className="bg-white py-20 px-4 border-t border-[#EAEAEA]">
+                <div className="max-w-3xl mx-auto text-center">
+                    <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-3">Central Florida Claymores RFC</p>
+                    <h2 className="text-4xl md:text-5xl font-claymore text-[#111111] mb-4">Join the Club</h2>
+                    <div className="w-12 h-px bg-[#fd80b5] mx-auto mb-6" />
+                    <p className="text-lg text-[#555555] mb-8 max-w-xl mx-auto">
+                        No experience needed. We welcome players of all skill levels — come out to a practice and see what Orlando rugby is all about.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <Link
+                            href="/join"
+                            className="inline-block bg-[#77c3ef] text-white px-10 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity"
+                        >
+                            Get Started
+                        </Link>
+                        <Link
+                            href="/location"
+                            className="inline-block border border-[#77c3ef] text-[#77c3ef] px-10 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
+                        >
+                            Practice Info
+                        </Link>
+                    </div>
+                </div>
+            </section>
         </main>
     )
 }
