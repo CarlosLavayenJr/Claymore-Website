@@ -29,6 +29,9 @@ export const metadata: Metadata = {
         images: ['/assets/logo.png'],
     },
     robots: { index: true, follow: true },
+    verification: {
+        google: 'bGoxzjpFMH2ewROECCRBboUv9wyJ9BiS6t3jrucmZ_8',
+    },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
