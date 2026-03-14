@@ -1,5 +1,6 @@
 import { player } from './player'
 import { post } from './post'
 import { match } from './match'
+import { team } from './team'
 
-export const schema = { types: [player, post, match] }
+export const schema = { types: [player, post, match, team] }
