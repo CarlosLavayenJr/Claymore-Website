@@ -18,8 +18,10 @@ jobs:
         run: npm install -g @sanity/cli
 
       - name: Export dataset
+        env:
+          SANITY_AUTH_TOKEN: ${{ secrets.SANITY_API_TOKEN }}
         run: |
-          sanity dataset export production backups/sanity-backup-$(date +%Y-%m-%d).tar.gz --project ${{ secrets.SANITY_PROJECT_ID }} --dataset production --token ${{ secrets.SANITY_API_TOKEN }} --no-progress
+          sanity dataset export production backups/sanity-backup-$(date +%Y-%m-%d).tar.gz --project-id ${{ secrets.SANITY_PROJECT_ID }} --overwrite
 
       - name: Commit and push backup
         run: |
