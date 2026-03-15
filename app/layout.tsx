@@ -2,7 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://claymoresrugby.com'),
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'),
     title: {
         default: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
         template: '%s | Central Florida Claymores | Orlando, FL',
@@ -29,6 +29,9 @@ export const metadata: Metadata = {
         images: ['/assets/logo.png'],
     },
     robots: { index: true, follow: true },
+    verification: {
+        google: 'bGoxzjpFMH2ewROECCRBboUv9wyJ9BiS6t3jrucmZ_8',
+    },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

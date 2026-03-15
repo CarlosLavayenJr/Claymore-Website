@@ -64,7 +64,7 @@ export default function AboutUs() {
             name: "Adam Chivers",
             role: "Head Coach",
             bio: "Former Claymore player, Adam has transitioned into a Coaching role as of the 2024 season. Nothing defines a club built by players, for players more than one of your own making the transition to full time coach.",
-            image: "/determined-coach.png",
+            image: "/assets/adam.png",
         },
         {
             name: "Jamie Moncur",
@@ -148,41 +148,41 @@ export default function AboutUs() {
 
                         The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The club reached the D3 state final in 2023, cementing the Claymores as one of Central Florida&apos;s most competitive rugby programs. The team&apos;s expectations are clear — win a state title and advance as far nationally as their spirit and camaraderie will take them.<br /><br />
 
-                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grow in strength and experience at a rate that is electrifying. Every Wednesday, players come together from all over the Orlando area to practice and build the foundation of a long-lasting, winning culture. On Saturdays, the Claymores take the pitch to show that anything is possible with hard work, commitment, and heart.
+                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grow in strength and experience at a rate that is electrifying. Every Thursday, players come together from all over the Orlando area to practice and build the foundation of a long-lasting, winning culture. On Saturdays, the Claymores take the pitch to show that anything is possible with hard work, commitment, and heart.
                     </p>
                 </section>
 
-                {/* Timeline Section */}
-                <section className="mb-16 py-8">
-                    <h2 className="text-3xl font-claymore mb-12 text-center">Our Journey</h2>
-                    <div className="relative max-w-4xl mx-auto" ref={timelineRef}>
-                        <div className="absolute left-[80px] top-0 bottom-0 w-[2px] bg-primary/20"></div>
-                        {timelineItems.map((item, index) => (
-                            <div
-                                key={index}
-                                className={`relative mb-16 transition-all duration-500 ${index <= activeTimelineItem ? "opacity-100" : "opacity-40"
-                                    }`}
-                            >
-                                <div className="flex items-start">
-                                    <div className="min-w-[80px] z-10 flex-shrink-0">
-                                        <div
-                                            className={`inline-block text-xl font-bold py-2 px-3 rounded-lg ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"
-                                                } transition-colors duration-300`}
-                                        >
-                                            {item.year}
-                                        </div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="text-center">
-                                            <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                                            <p className="text-muted-foreground max-w-xl mx-auto">{item.description}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+                {/*/!* Timeline Section *!/*/}
+                {/*<section className="mb-16 py-8">*/}
+                {/*    <h2 className="text-3xl font-claymore mb-12 text-center">Our Journey</h2>*/}
+                {/*    <div className="relative max-w-4xl mx-auto" ref={timelineRef}>*/}
+                {/*        <div className="absolute left-[80px] top-0 bottom-0 w-[2px] bg-primary/20"></div>*/}
+                {/*        {timelineItems.map((item, index) => (*/}
+                {/*            <div*/}
+                {/*                key={index}*/}
+                {/*                className={`relative mb-16 transition-all duration-500 ${index <= activeTimelineItem ? "opacity-100" : "opacity-40"*/}
+                {/*                    }`}*/}
+                {/*            >*/}
+                {/*                <div className="flex items-start">*/}
+                {/*                    <div className="min-w-[80px] z-10 flex-shrink-0">*/}
+                {/*                        <div*/}
+                {/*                            className={`inline-block text-xl font-bold py-2 px-3 rounded-lg ${index === activeTimelineItem ? "bg-primary text-white" : "bg-muted"*/}
+                {/*                                } transition-colors duration-300`}*/}
+                {/*                        >*/}
+                {/*                            {item.year}*/}
+                {/*                        </div>*/}
+                {/*                    </div>*/}
+                {/*                    <div className="flex-1">*/}
+                {/*                        <div className="text-center">*/}
+                {/*                            <h3 className="text-xl font-bold mb-3">{item.title}</h3>*/}
+                {/*                            <p className="text-muted-foreground max-w-xl mx-auto">{item.description}</p>*/}
+                {/*                        </div>*/}
+                {/*                    </div>*/}
+                {/*                </div>*/}
+                {/*            </div>*/}
+                {/*        ))}*/}
+                {/*    </div>*/}
+                {/*</section>*/}
 
                 {/* Call to Action */}
                 <section className="py-16 text-center">

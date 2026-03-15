@@ -38,7 +38,7 @@ export default function TeamPhotoGrid({ photos, count = 4 }: Props) {
 
     return (
         <>
-            <div className={`grid ${cols} gap-1`}>
+            <div className={`grid ${cols}`}>
                 {displayed.map((photo, i) => (
                     <button
                         key={photo._id}

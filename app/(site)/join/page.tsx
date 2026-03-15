@@ -5,10 +5,10 @@ import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
 
 export const metadata: Metadata = {
-    title: 'Join a Rugby Club in Orlando, FL — No Experience Needed',
-    description: 'Join the Central Florida Claymores RFC — Orlando\'s USA Rugby D3 club. No experience required. Practices every Thursday in the Orlando area. All ages 18+ welcome.',
+    title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
+    description: 'Searching for rugby near me in Orlando or Central Florida? Join the Claymores RFC — USA Rugby D3. No experience required. Practices every Thursday. All ages 18+ welcome.',
     openGraph: {
-        title: 'Join a Rugby Club in Orlando, FL | Central Florida Claymores',
+        title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
         description: 'No experience needed. Practices every Thursday in Orlando. All skill levels welcome.',
         url: '/join',
     },
@@ -64,7 +64,7 @@ export default function JoinPage() {
                     </p>
                     <Link
                         href="/contact"
-                        className="inline-block bg-[#78c3ef] text-black font-bold px-10 py-4 rounded-md text-lg hover:bg-white transition-colors"
+                        className="inline-block bg-[#77c3ef] text-white font-bold px-10 py-4 rounded-md text-lg hover:opacity-90 transition-opacity"
                     >
                         Get in Touch
                     </Link>
@@ -108,10 +108,10 @@ export default function JoinPage() {
                 {/* Practice schedule */}
                 <section className="mb-16 bg-black text-white rounded-xl p-10 text-center">
                     <h2 className="text-3xl font-claymore mb-4">Practice Schedule</h2>
-                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">Wednesday Evening</strong></p>
-                    <p className="text-gray-400 mb-6">Orlando, FL — <Link href="/location" className="text-[#78c3ef] hover:underline">view location</Link></p>
+                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">Thursday Evening</strong></p>
+                    <p className="text-gray-400 mb-6">Orlando, FL — <Link href="/location" className="text-[#77c3ef] hover:underline">view location</Link></p>
                     <p className="text-gray-300 max-w-xl mx-auto">
-                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#78c3ef] hover:underline">fixtures page</Link> for the full 2025 schedule.
+                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] hover:underline">fixtures page</Link> for the full 2025 schedule.
                     </p>
                 </section>
 
@@ -152,7 +152,7 @@ export default function JoinPage() {
                     </p>
                     <Link
                         href="/contact"
-                        className="inline-block bg-black text-white px-10 py-4 rounded-md font-semibold text-lg hover:bg-[#0066b2] transition-colors"
+                        className="inline-block bg-[#77c3ef] text-white px-10 py-4 rounded-md font-semibold text-lg hover:opacity-90 transition-opacity"
                     >
                         Contact the Claymores
                     </Link>

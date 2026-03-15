@@ -17,15 +17,29 @@ export default function ContactForm() {
         message: '',
     })
     const [submitted, setSubmitted] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
         setFormData((prev) => ({ ...prev, [name]: value }))
     }
 
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        setSubmitted(true)
+        setLoading(true)
+        setError(null)
+        const res = await fetch('/api/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData),
+        })
+        setLoading(false)
+        if (res.ok) {
+            setSubmitted(true)
+        } else {
+            setError('Something went wrong. Please try again or email us directly.')
+        }
     }
 
     if (submitted) {
@@ -38,7 +52,7 @@ export default function ContactForm() {
     }
 
     const inputClass =
-        'w-full bg-background border border-border rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#78c3ef] transition-colors'
+        'w-full bg-background border border-border rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#77c3ef] transition-colors'
     const labelClass = 'block text-sm font-semibold mb-1'
 
     return (
@@ -95,11 +109,13 @@ export default function ContactForm() {
                     required
                 />
             </div>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
                 type="submit"
-                className="w-full bg-[#78c3ef] text-black font-bold py-3 rounded-md hover:bg-white transition-colors text-sm uppercase tracking-wide"
+                disabled={loading}
+                className="w-full bg-[#77c3ef] text-white font-bold py-3 rounded-md hover:opacity-90 transition-opacity text-sm uppercase tracking-wide disabled:opacity-50"
             >
-                Send Message
+                {loading ? 'Sending…' : 'Send Message'}
             </button>
         </form>
     )

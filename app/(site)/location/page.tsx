@@ -87,7 +87,7 @@ export default function LocationPage() {
                 <div className="text-center">
                     <Link
                         href="/join"
-                        className="inline-block bg-black text-white px-10 py-4 rounded-md font-semibold text-lg hover:bg-[#0066b2] transition-colors"
+                        className="inline-block bg-[#77c3ef] text-white px-10 py-4 rounded-md font-semibold text-lg hover:opacity-90 transition-opacity"
                     >
                         Join the Claymores
                     </Link>
