@@ -1,0 +1,30 @@
+name: Sanity Dataset Backup
+
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Every Monday at 4am UTC
+  workflow_dispatch:     # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install Sanity CLI
+        run: npm install -g @sanity/cli
+
+      - name: Export dataset
+        run: |
+          sanity dataset export production backups/sanity-backup-$(date +%Y-%m-%d).tar.gz --project ${{ secrets.SANITY_PROJECT_ID }} --dataset production --token ${{ secrets.SANITY_API_TOKEN }} --no-progress
+
+      - name: Commit and push backup
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add backups/
+          git commit -m "chore: Sanity backup $(date +%Y-%m-%d)" || echo "No changes to commit"
+          git push
