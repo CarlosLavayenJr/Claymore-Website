@@ -46,7 +46,7 @@ export const Navbar = () => {
                         </div>
 
                         <div className="hidden md:flex items-center space-x-1">
-                            <NavLink href="/">home</NavLink>
+                            <NavLink href="/">Home</NavLink>
                             <NavLink href="/about">About</NavLink>
                             <NavLink href="/team">Team</NavLink>
                             <NavLink href="/fixtures">Fixtures</NavLink>
