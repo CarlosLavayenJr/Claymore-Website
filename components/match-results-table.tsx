@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown } from 'lucide-react'
 import { Info } from 'lucide-react'
-import type { SanityMatch } from '@/sanity/lib/queries'
+import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
 function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
     value: string
@@ -67,7 +67,19 @@ const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
     D: 'bg-[#fd80b5] text-white',
 }
 
-export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
+function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
+    const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const n = normalized(name)
+    for (const team of teams) {
+        const candidates = [team.name, ...(team.aliases ?? [])]
+        if (candidates.some(alias => n.includes(normalized(alias)) || normalized(alias).includes(n))) {
+            return team.logoUrl ?? null
+        }
+    }
+    return null
+}
+
+export default function MatchResultsTable({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
     const [selectedOpponent, setSelectedOpponent] = useState('all')
     const [selectedMatchType, setSelectedMatchType] = useState('all')
     const [selectedSeason, setSelectedSeason] = useState(() => {
@@ -220,7 +232,9 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                     <TableCell className="text-sm text-[#555555]">{formatDate(m.date)}</TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
-                                            {m.homeTeamLogo && <img src={m.homeTeamLogo} alt={m.homeTeam} className="w-5 h-5 object-contain" />}
+                                            {(m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)) && (
+                                                <img src={m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)!} alt={m.homeTeam} className="w-5 h-5 object-contain" />
+                                            )}
                                             {m.homeTeam}
                                         </span>
                                     </TableCell>
@@ -229,7 +243,9 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                     </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
-                                            {m.awayTeamLogo && <img src={m.awayTeamLogo} alt={m.awayTeam} className="w-5 h-5 object-contain" />}
+                                            {(m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)) && (
+                                                <img src={m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)!} alt={m.awayTeam} className="w-5 h-5 object-contain" />
+                                            )}
                                             {m.awayTeam}
                                         </span>
                                     </TableCell>
