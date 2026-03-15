@@ -45,6 +45,7 @@ const Footer = () => {
                                 { href: '/about', label: 'About' },
                                 { href: '/team', label: 'Team' },
                                 { href: '/fixtures', label: 'Fixtures' },
+                                { href: '/blog', label: 'News' },
                                 { href: '/faq', label: 'FAQ' },
                             ].map(({ href, label }) => (
                                 <li key={href}>
@@ -72,8 +73,9 @@ const Footer = () => {
 
                 </div>
 
-                <div className="mt-10 pt-6 border-t border-gray-800 text-center text-xs text-gray-600">
-                    <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved. Orlando, FL.</p>
+                <div className="mt-10 pt-6 border-t border-gray-800 text-center text-xs text-gray-600 space-y-1">
+                    <p>Central Florida Claymores RFC — Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808 — claymoresrfc@gmail.com</p>
+                    <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved.</p>
                 </div>
             </div>
         </footer>

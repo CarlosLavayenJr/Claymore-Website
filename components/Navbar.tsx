@@ -51,6 +51,7 @@ export const Navbar = () => {
                             <NavLink href="/team">Team</NavLink>
                             <NavLink href="/fixtures">Fixtures</NavLink>
                             <NavLink href="/results">Results</NavLink>
+                            <NavLink href="/blog">News</NavLink>
                             <NavLink href="/faq">FAQ</NavLink>
                             <NavLink href="/contact">Contact</NavLink>
                             <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">

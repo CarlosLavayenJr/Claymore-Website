@@ -22,7 +22,15 @@ const faqs = [
     },
     {
         question: 'Where do the Claymores practice in Orlando?',
-        answer: 'We practice in the Orlando area every Thursday evening, 8–10pm. Contact us for the current training location as it can vary by season.',
+        answer: 'We practice at Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808, every Thursday 8–10pm.',
+    },
+    {
+        question: 'Is there a rugby club near me in Orlando?',
+        answer: "If you're in Orlando or anywhere in Central Florida — Clermont, Kissimmee, Winter Park, Lake Mary, the UCF area — the Central Florida Claymores RFC are your closest USA Rugby D3 club. We practice every Thursday at Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808.",
+    },
+    {
+        question: 'How do I find a rugby team near me in Central Florida?',
+        answer: "Search for the Central Florida Claymores RFC. We're Orlando's only USA Rugby D3 club and welcome players from across Central Florida regardless of experience level.",
     },
     {
         question: 'When is the rugby season in Central Florida?',

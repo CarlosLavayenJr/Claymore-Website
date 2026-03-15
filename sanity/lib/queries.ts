@@ -72,6 +72,16 @@ export const teamsQuery = groq`
   }
 `
 
+export interface SanityPost {
+    _id: string
+    title: string
+    slug: { current: string }
+    publishedAt: string
+    excerpt: string | null
+    coverImageUrl: string | null
+    body: unknown[]
+}
+
 export const postsQuery = groq`
   *[_type == "post"] | order(publishedAt desc) {
     _id,
@@ -80,6 +90,18 @@ export const postsQuery = groq`
     publishedAt,
     excerpt,
     "coverImageUrl": coverImage.asset->url
+  }
+`
+
+export const postBySlugQuery = groq`
+  *[_type == "post" && slug.current == $slug][0] {
+    _id,
+    title,
+    slug,
+    publishedAt,
+    excerpt,
+    "coverImageUrl": coverImage.asset->url,
+    body
   }
 `
 
