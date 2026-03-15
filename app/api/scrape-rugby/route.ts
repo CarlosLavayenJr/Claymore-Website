@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio'
 import { createClient } from '@sanity/client'
 
-const BASE_URL = 'https://rugbyfl.com/Clubs/Club.asp?Club_ID=117'
+const CLUB_IDS = ['117', '51'] // 117 = Claymores, 51 = IR/Claymores (legacy joined club)
 
 type MatchStatus = 'played' | 'upcoming' | 'forfeit_us' | 'forfeit_them'
 type MatchType = 'league' | 'friendly'
@@ -151,6 +151,7 @@ export async function GET(request: Request) {
   const all = searchParams.get('all') === 'true'
   const seasonId = searchParams.get('seasonId') ?? '27'
   const seasonIds = all ? Array.from({ length: 18 }, (_, i) => String(i + 10)) : [seasonId]
+  const clubIds = all ? CLUB_IDS : [searchParams.get('clubId') ?? '117']
 
   const sanity = createClient({
     projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
@@ -185,9 +186,10 @@ export async function GET(request: Request) {
 
   const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
 
+  for (const cid of clubIds) {
   for (const sid of seasonIds) {
-    const url = `${BASE_URL}&Season_ID=${sid}`
-    console.log(`[scrape-rugby] Scraping Season_ID=${sid}`)
+    const url = `https://rugbyfl.com/Clubs/Club.asp?Club_ID=${cid}&Season_ID=${sid}`
+    console.log(`[scrape-rugby] Scraping Club_ID=${cid} Season_ID=${sid}`)
 
     try {
       const res = await fetch(url, {
@@ -197,7 +199,7 @@ export async function GET(request: Request) {
 
       if (!res.ok) {
         console.warn(`[scrape-rugby] Season ${sid}: fetch failed ${res.status}`)
-        summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
+        summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 1 }
         continue
       }
 
@@ -205,8 +207,8 @@ export async function GET(request: Request) {
       const allMatches = parseMatches(html)
 
       if (allMatches.length === 0) {
-        console.warn(`[scrape-rugby] Season ${sid}: no matches found`)
-        summary[sid] = { parsed: 0, upserted: 0, failed: 0 }
+        console.warn(`[scrape-rugby] Club ${cid} Season ${sid}: no matches found`)
+        summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 0 }
         continue
       }
 
@@ -257,11 +259,12 @@ export async function GET(request: Request) {
       const failed = results.filter(r => r.status === 'rejected').length
 
       console.log(`[scrape-rugby] Season ${sid}: ${upserted}/${matches.length} upserted`)
-      summary[sid] = { parsed: matches.length, upserted, failed }
+      summary[`${cid}:${sid}`] = { parsed: matches.length, upserted, failed }
     } catch (err) {
-      console.error(`[scrape-rugby] Season ${sid} error:`, err)
-      summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
+      console.error(`[scrape-rugby] Club ${cid} Season ${sid} error:`, err)
+      summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 1 }
     }
+  }
   }
 
   const totalParsed = Object.values(summary).reduce((a, b) => a + b.parsed, 0)
