@@ -10,7 +10,7 @@ import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
     value: string
     onChange: (v: string) => void
-    options: { label: string; value: string }[]
+    options: { label: string; value: string; logo?: string | null }[]
     width?: string
 }) {
     const [open, setOpen] = useState(false)
@@ -19,7 +19,10 @@ function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <button className={`flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-[#77c3ef] w-full sm:${width}`}>
-                    <span>{selected?.label}</span>
+                    <span className="flex items-center gap-2">
+                        {selected?.logo && <img src={selected.logo} alt={selected.label} className="w-4 h-4 object-contain" />}
+                        {selected?.label}
+                    </span>
                     <ChevronDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
                 </button>
             </PopoverTrigger>
@@ -28,8 +31,9 @@ function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
                     <button
                         key={opt.value}
                         onClick={() => { onChange(opt.value); setOpen(false) }}
-                        className="relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm hover:bg-accent cursor-pointer"
+                        className="relative flex w-full items-center gap-2 rounded-sm py-1.5 pl-2 pr-8 text-sm hover:bg-accent cursor-pointer"
                     >
+                        {opt.logo && <img src={opt.logo} alt={opt.label} className="w-4 h-4 object-contain shrink-0" />}
                         {opt.label}
                         {opt.value === value && <Check className="absolute right-2 h-4 w-4" />}
                     </button>
@@ -196,7 +200,7 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                     width="w-[200px]"
                     options={[
                         { label: 'All Opponents', value: 'all' },
-                        ...opponents.map(o => ({ label: o, value: o })),
+                        ...opponents.map(o => ({ label: o, value: o, logo: findTeamLogo(o, teams) })),
                     ]}
                 />
             </div>
