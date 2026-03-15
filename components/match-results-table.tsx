@@ -219,13 +219,19 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                 >
                                     <TableCell className="text-sm text-[#555555]">{formatDate(m.date)}</TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
-                                        {m.homeTeam}
+                                        <span className="flex items-center gap-2">
+                                            {m.homeTeamLogo && <img src={m.homeTeamLogo} alt={m.homeTeam} className="w-5 h-5 object-contain" />}
+                                            {m.homeTeam}
+                                        </span>
                                     </TableCell>
                                     <TableCell className="text-center font-mono font-semibold text-[#111111]">
                                         {isUpcoming ? <span className="text-xs text-[#77c3ef] uppercase tracking-widest">Upcoming</span> : getScore(m)}
                                     </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
-                                        {m.awayTeam}
+                                        <span className="flex items-center gap-2">
+                                            {m.awayTeamLogo && <img src={m.awayTeamLogo} alt={m.awayTeam} className="w-5 h-5 object-contain" />}
+                                            {m.awayTeam}
+                                        </span>
                                     </TableCell>
                                     <TableCell className="text-center">
                                         {result && (

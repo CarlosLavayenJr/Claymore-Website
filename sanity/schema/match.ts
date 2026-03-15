@@ -81,6 +81,20 @@ export const match = defineType({
             title: 'Note',
             type: 'string',
         }),
+        defineField({
+            name: 'homeTeamRef',
+            title: 'Home Team (linked)',
+            type: 'reference',
+            to: [{ type: 'team' }],
+            description: 'Link to a Team document to show their logo',
+        }),
+        defineField({
+            name: 'awayTeamRef',
+            title: 'Away Team (linked)',
+            type: 'reference',
+            to: [{ type: 'team' }],
+            description: 'Link to a Team document to show their logo',
+        }),
     ],
     preview: {
         select: {
