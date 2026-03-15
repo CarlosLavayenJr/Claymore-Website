@@ -34,6 +34,8 @@ export interface SanityMatch {
     matchType?: 'league' | 'friendly'
     competition?: string
     note?: string
+    homeTeamLogo?: string | null
+    awayTeamLogo?: string | null
 }
 
 export const matchesQuery = groq`
@@ -48,7 +50,25 @@ export const matchesQuery = groq`
     status,
     matchType,
     competition,
-    note
+    note,
+    "homeTeamLogo": homeTeamRef->image.asset->url,
+    "awayTeamLogo": awayTeamRef->image.asset->url
+  }
+`
+
+export interface SanityTeam {
+    _id: string
+    name: string
+    aliases: string[]
+    logoUrl: string | null
+}
+
+export const teamsQuery = groq`
+  *[_type == "team"] {
+    _id,
+    name,
+    aliases,
+    "logoUrl": image.asset->url
   }
 `
 

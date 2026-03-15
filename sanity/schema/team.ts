@@ -19,6 +19,13 @@ export const team = defineType({
             validation: (rule) => rule.required(),
         }),
         defineField({
+            name: 'aliases',
+            title: 'Name Aliases',
+            type: 'array',
+            of: [{ type: 'string' }],
+            description: 'Short names or variations used in match records (e.g. "Brevard", "Brevard RFC")',
+        }),
+        defineField({
             name: 'description',
             title: 'Notes / Description',
             type: 'text',
