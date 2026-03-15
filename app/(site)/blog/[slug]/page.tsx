@@ -56,7 +56,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             <div className="w-12 h-px bg-[#fd80b5] mb-8" />
 
             {post.body && post.body.length > 0 ? (
-                <div className="prose prose-lg max-w-none text-[#333333] [&_h2]:font-claymore [&_h2]:text-[#111111] [&_a]:text-[#77c3ef]">
+                <div className="prose prose-lg max-w-none text-[#333333] [&_h2]:font-claymore [&_h2]:text-[#111111] [&_h2]:mt-10 [&_h2]:mb-3 [&_p]:mb-5 [&_a]:text-[#77c3ef]">
                     <PortableText value={post.body as Parameters<typeof PortableText>[0]['value']} />
                 </div>
             ) : post.excerpt ? (
