@@ -23,7 +23,7 @@ jobs:
         env:
           SANITY_AUTH_TOKEN: ${{ secrets.SANITY_API_TOKEN }}
         run: |
-          sanity dataset export production backups/sanity-backup-$(date +%Y-%m-%d).tar.gz --project-id ${{ secrets.SANITY_PROJECT_ID }} --overwrite
+          sanity dataset export production backups/sanity-backup-$(date +%Y-%m-%d).tar.gz --project-id ${{ secrets.SANITY_PROJECT_ID }} --no-assets --overwrite
 
       - name: Commit and push backup
         run: |
