@@ -56,6 +56,22 @@ export const matchesQuery = groq`
   }
 `
 
+export interface SanityTeam {
+    _id: string
+    name: string
+    aliases: string[]
+    logoUrl: string | null
+}
+
+export const teamsQuery = groq`
+  *[_type == "team"] {
+    _id,
+    name,
+    aliases,
+    "logoUrl": image.asset->url
+  }
+`
+
 export const postsQuery = groq`
   *[_type == "post"] | order(publishedAt desc) {
     _id,
