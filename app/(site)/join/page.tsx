@@ -7,6 +7,7 @@ import TeamPhotoStrip from '@/components/team-photo-strip'
 export const metadata: Metadata = {
     title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
     description: 'Searching for rugby near me in Orlando or Central Florida? Join the Claymores RFC — USA Rugby D3. No experience required. Practices every Thursday. All ages 18+ welcome.',
+    alternates: { canonical: '/join' },
     openGraph: {
         title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
         description: 'No experience needed. Practices every Thursday in Orlando. All skill levels welcome.',

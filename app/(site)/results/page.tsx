@@ -8,6 +8,7 @@ export const revalidate = 3600
 export const metadata: Metadata = {
     title: 'Match Results & History | Central Florida Claymores RFC',
     description: 'Full match history and results for the Central Florida Claymores RFC — Orlando rugby. Scores, standings, and season records.',
+    alternates: { canonical: '/results' },
     openGraph: {
         title: 'Match Results | Central Florida Claymores RFC | Orlando Rugby',
         description: 'Season-by-season match results for the Central Florida Claymores RFC.',

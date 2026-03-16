@@ -9,6 +9,7 @@ export const revalidate = 3600
 export const metadata: Metadata = {
     title: 'Fixtures & Schedule | Central Florida Claymores RFC',
     description: 'Full match schedule and results for the Central Florida Claymores RFC. Upcoming fixtures and past results for Orlando rugby.',
+    alternates: { canonical: '/fixtures' },
     openGraph: {
         title: 'Fixtures & Schedule | Central Florida Claymores | Orlando, FL',
         description: 'Fixtures and results for the Central Florida Claymores RFC — Orlando rugby.',

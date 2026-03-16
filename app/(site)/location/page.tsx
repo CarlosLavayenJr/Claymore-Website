@@ -6,6 +6,7 @@ import { organizationSchema } from '@/lib/schema'
 export const metadata: Metadata = {
     title: 'Orlando Rugby Club Location — Where We Practice',
     description: 'Find the Central Florida Claymores RFC practice location in Orlando, FL. We train every Thursday evening, 8–10pm in the Orlando area. All skill levels welcome.',
+    alternates: { canonical: '/location' },
     openGraph: {
         title: 'Orlando Rugby Club Location | Central Florida Claymores',
         description: 'Where the Central Florida Claymores RFC practice in Orlando, FL. Thursday evening, 8–10pms.',

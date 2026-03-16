@@ -4,6 +4,7 @@ import JsonLd from '@/components/json-ld'
 export const metadata: Metadata = {
     title: 'Orlando Rugby FAQ — Joining the Claymores',
     description: 'FAQ about joining the Central Florida Claymores RFC in Orlando, FL. Practice schedule, costs, experience needed, USA Rugby D3 season info, and more. Join us Thursdays.',
+    alternates: { canonical: '/faq' },
     openGraph: {
         title: 'Orlando Rugby FAQ — Joining the Claymores | Central Florida Claymores',
         description: 'Everything you need to know about joining Orlando rugby with the Central Florida Claymores RFC.',
