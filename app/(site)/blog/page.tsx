@@ -8,6 +8,9 @@ export const revalidate = 3600
 export const metadata: Metadata = {
     title: 'News & Updates | Central Florida Claymores RFC',
     description: 'Latest news, match recaps, and season updates from the Central Florida Claymores RFC — Orlando\'s USA Rugby D3 club.',
+    alternates: {
+        canonical: '/blog',
+    },
     openGraph: {
         title: 'News & Updates | Central Florida Claymores RFC | Orlando Rugby',
         description: 'Match recaps, season previews, and club news from Orlando\'s USA Rugby D3 club.',

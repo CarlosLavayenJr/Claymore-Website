@@ -19,6 +19,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return {
         title: `${post.title} | Central Florida Claymores RFC`,
         description: post.excerpt ?? `${post.title} — Central Florida Claymores RFC Orlando rugby news.`,
+        alternates: {
+            canonical: `/blog/${slug}`,
+        },
         openGraph: {
             title: post.title,
             description: post.excerpt ?? undefined,
