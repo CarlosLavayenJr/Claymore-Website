@@ -52,7 +52,7 @@ export const playerPhotosQuery = groq`
     url,
     "aspectRatio": metadata.dimensions.aspectRatio
   }
-`
+` as string
 
 export interface SanityMatch {
     _id: string
