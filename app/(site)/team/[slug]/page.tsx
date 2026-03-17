@@ -32,7 +32,7 @@ export default async function PlayerPage({ params }: Props) {
     if (!player) notFound()
 
     const photos: SanityPlayerPhoto[] = player.mediaTag
-        ? await client.fetch(playerPhotosQuery, { tag: player.mediaTag })
+        ? await client.fetch(playerPhotosQuery, { tag: player.mediaTag } as Record<string, string>)
         : []
 
     return <PlayerProfile player={player} photos={photos} />
