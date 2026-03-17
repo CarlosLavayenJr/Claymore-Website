@@ -1,8 +1,19 @@
 import type { MetadataRoute } from 'next'
+import { client } from '@/sanity/lib/client'
+import { playersQuery, type SanityPlayer } from '@/sanity/lib/queries'
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+    const players: SanityPlayer[] = await client.fetch(playersQuery)
+
+    const playerEntries: MetadataRoute.Sitemap = players.map((p) => ({
+        url: `${baseUrl}/team/${p.slug}`,
+        lastModified: new Date(),
+        changeFrequency: 'monthly',
+        priority: 0.6,
+    }))
+
     return [
         { url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1 },
         { url: `${baseUrl}/join`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.95 },
@@ -14,5 +25,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/blog`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.75 },
         { url: `${baseUrl}/faq`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
         { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
+        ...playerEntries,
     ]
 }

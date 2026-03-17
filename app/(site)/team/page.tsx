@@ -7,12 +7,12 @@ import TeamGrid from '@/components/team-grid'
 export const revalidate = 0
 
 export const metadata: Metadata = {
-    title: 'Meet the Team | Central Florida Claymores',
+    title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
     description: "Meet the players of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club. Forwards, backs, and everyone in between. Join us Thursdays.",
     alternates: { canonical: '/team' },
     openGraph: {
-        title: 'Meet the Team | Central Florida Claymores | Orlando, FL',
-        description: "The players of Orlando's Central Florida Claymores RFC.",
+        title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
+        description: "Meet the forwards, backs, and staff of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club.",
         url: '/team',
     },
 }

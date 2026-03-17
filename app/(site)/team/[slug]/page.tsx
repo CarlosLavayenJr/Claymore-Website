@@ -16,12 +16,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
     const player: SanityPlayer | null = await client.fetch(playerBySlugQuery, { slug })
     if (!player) return {}
+    const description = player.description
+        || `${player.name} plays ${player.position} for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`
     return {
-        title: `${player.name} | Central Florida Claymores`,
-        description: player.description || `${player.name} — ${player.position} for the Central Florida Claymores RFC.`,
+        title: `${player.name} | Orlando Rugby | Central Florida Claymores RFC`,
+        description,
+        alternates: { canonical: `/team/${slug}` },
         openGraph: {
-            title: `${player.name} | Central Florida Claymores`,
-            images: player.imageUrl ? [player.imageUrl] : [],
+            title: `${player.name} | Central Florida Claymores RFC`,
+            description,
+            url: `/team/${slug}`,
+            images: player.imageUrl
+                ? [{ url: player.imageUrl, width: 800, height: 800, alt: `${player.name} — Central Florida Claymores RFC Orlando Rugby` }]
+                : [],
         },
     }
 }
