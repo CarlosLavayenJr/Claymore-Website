@@ -24,7 +24,7 @@ export const Navbar = () => {
     const toggleMenu = () => setIsOpen(!isOpen)
 
     useEffect(() => {
-        document.body.style.overflow = isOpen ? "hidden" : "unset"
+        document.body.style.overflow = isOpen ? "hidden" : ""
     }, [isOpen])
 
     return (
