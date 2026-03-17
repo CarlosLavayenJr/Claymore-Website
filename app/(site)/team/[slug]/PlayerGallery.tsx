@@ -49,10 +49,10 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                 </div>
 
                 <div className="flex gap-4 items-start">
-                    {/* Column 1 — moves upward on scroll */}
+                    {/* Column 1 — drifts left on scroll */}
                     <div
                         className="flex-1 flex flex-col gap-4 will-change-transform"
-                        style={{ transform: `translateY(${-parallax}px)` }}
+                        style={{ transform: `translateX(${-parallax}px)` }}
                     >
                         {col1.map((photo, i) => (
                             <button
@@ -69,10 +69,10 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         ))}
                     </div>
 
-                    {/* Column 2 — offset down, moves downward on scroll */}
+                    {/* Column 2 — drifts right on scroll */}
                     <div
-                        className="flex-1 flex flex-col gap-4 will-change-transform mt-16"
-                        style={{ transform: `translateY(${parallax}px)` }}
+                        className="flex-1 flex flex-col gap-4 will-change-transform"
+                        style={{ transform: `translateX(${parallax}px)` }}
                     >
                         {col2.map((photo, i) => (
                             <button
