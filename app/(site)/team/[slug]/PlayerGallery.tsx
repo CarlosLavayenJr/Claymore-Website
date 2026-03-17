@@ -9,8 +9,8 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
     const [parallax, setParallax] = useState(0)
     const [lightbox, setLightbox] = useState<number | null>(null)
 
-    const col1 = photos.filter((_, i) => i % 2 === 0)
-    const col2 = photos.filter((_, i) => i % 2 === 1)
+    const row1 = photos.filter((_, i) => i % 2 === 0)
+    const row2 = photos.filter((_, i) => i % 2 === 1)
 
     // Parallax: columns move in opposite directions as you scroll
     useEffect(() => {
@@ -37,53 +37,55 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
         return () => window.removeEventListener('keydown', onKey)
     }, [lightbox, photos.length])
 
-    // Map col/row index back to full photos array index
-    const photoIndex = (colIdx: number, col: 0 | 1) => colIdx * 2 + col
+    // Map row/index back to full photos array index
+    const photoIndex = (rowIdx: number, row: 0 | 1) => rowIdx * 2 + row
 
     return (
         <>
-            <div ref={sectionRef} className="px-8 pb-20 overflow-hidden">
-                <div className="flex items-center gap-4 mb-10">
+            <div ref={sectionRef} className="pb-20 overflow-hidden">
+                <div className="flex items-center gap-4 mb-10 px-8">
                     <div className="w-8 h-0.5 bg-[#78c3ef]" />
                     <h2 className="text-2xl font-claymore text-[#78c3ef] uppercase tracking-widest">Gallery</h2>
                 </div>
 
-                <div className="flex gap-4 items-start">
-                    {/* Column 1 — drifts left on scroll */}
+                <div className="flex flex-col gap-4">
+                    {/* Row 1 — drifts left on scroll */}
                     <div
-                        className="flex-1 flex flex-col gap-4 will-change-transform"
+                        className="flex gap-4 will-change-transform"
                         style={{ transform: `translateX(${-parallax}px)` }}
                     >
-                        {col1.map((photo, i) => (
+                        {row1.map((photo, i) => (
                             <button
                                 key={photo._id}
                                 onClick={() => setLightbox(photoIndex(i, 0))}
-                                className="w-full overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                className="flex-shrink-0 h-64 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                style={{ width: `${photo.aspectRatio * 256}px` }}
                             >
                                 <img
                                     src={photo.url}
                                     alt={playerName}
-                                    className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                             </button>
                         ))}
                     </div>
 
-                    {/* Column 2 — drifts right on scroll */}
+                    {/* Row 2 — drifts right on scroll */}
                     <div
-                        className="flex-1 flex flex-col gap-4 will-change-transform"
+                        className="flex gap-4 will-change-transform"
                         style={{ transform: `translateX(${parallax}px)` }}
                     >
-                        {col2.map((photo, i) => (
+                        {row2.map((photo, i) => (
                             <button
                                 key={photo._id}
                                 onClick={() => setLightbox(photoIndex(i, 1))}
-                                className="w-full overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                className="flex-shrink-0 h-64 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                style={{ width: `${photo.aspectRatio * 256}px` }}
                             >
                                 <img
                                     src={photo.url}
                                     alt={playerName}
-                                    className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                             </button>
                         ))}
