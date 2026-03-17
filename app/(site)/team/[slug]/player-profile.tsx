@@ -62,7 +62,7 @@ export default function PlayerProfile({
 
                 {/* Player photo — right side, dual fade */}
                 <div
-                    className="absolute right-0 top-0 bottom-0 w-1/2 md:w-2/5"
+                    className="absolute right-0 top-0 bottom-0 w-3/5 md:w-2/5"
                     style={{
                         maskImage: 'linear-gradient(to left, black 40%, transparent 100%)',
                         WebkitMaskImage: 'linear-gradient(to left, black 40%, transparent 100%)',
@@ -92,7 +92,7 @@ export default function PlayerProfile({
                     <p className="text-[#78c3ef] text-xs font-bold uppercase tracking-[0.4em] mb-3">
                         {player.position}
                     </p>
-                    <h1 className="text-4xl sm:text-5xl md:text-9xl font-claymore leading-none max-w-xl text-center md:text-left">
+                    <h1 className="text-[2.6rem] sm:text-5xl md:text-9xl font-claymore leading-none max-w-xl text-center md:text-left">
                         {player.name}
                     </h1>
 
