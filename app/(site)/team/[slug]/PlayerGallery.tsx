@@ -50,46 +50,50 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    {/* Row 1 — starts right, drifts left on scroll */}
-                    <div
-                        className="flex gap-3 will-change-transform"
-                        style={{ transform: `translateX(calc(60px - ${parallax}px))` }}
-                    >
-                        {row1.map((photo, i) => (
-                            <button
-                                key={photo._id}
-                                onClick={() => setLightbox(photoIndex(i, 0))}
-                                className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                style={{ width: `${photo.aspectRatio * 320}px` }}
-                            >
-                                <img
-                                    src={photo.url}
-                                    alt={playerName}
-                                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                />
-                            </button>
-                        ))}
+                    {/* Row 1 — centered, drifts left on scroll */}
+                    <div className="flex justify-center">
+                        <div
+                            className="flex gap-3 will-change-transform"
+                            style={{ transform: `translateX(${-parallax}px)` }}
+                        >
+                            {row1.map((photo, i) => (
+                                <button
+                                    key={photo._id}
+                                    onClick={() => setLightbox(photoIndex(i, 0))}
+                                    className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                    style={{ width: `${photo.aspectRatio * 320}px` }}
+                                >
+                                    <img
+                                        src={photo.url}
+                                        alt={playerName}
+                                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    />
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Row 2 — starts left, drifts right on scroll */}
-                    <div
-                        className="flex gap-3 will-change-transform"
-                        style={{ transform: `translateX(calc(-60px + ${parallax}px))` }}
-                    >
-                        {row2.map((photo, i) => (
-                            <button
-                                key={photo._id}
-                                onClick={() => setLightbox(photoIndex(i, 1))}
-                                className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                style={{ width: `${photo.aspectRatio * 320}px` }}
-                            >
-                                <img
-                                    src={photo.url}
-                                    alt={playerName}
-                                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                />
-                            </button>
-                        ))}
+                    {/* Row 2 — centered, drifts right on scroll */}
+                    <div className="flex justify-center">
+                        <div
+                            className="flex gap-3 will-change-transform"
+                            style={{ transform: `translateX(${parallax}px)` }}
+                        >
+                            {row2.map((photo, i) => (
+                                <button
+                                    key={photo._id}
+                                    onClick={() => setLightbox(photoIndex(i, 1))}
+                                    className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                    style={{ width: `${photo.aspectRatio * 320}px` }}
+                                >
+                                    <img
+                                        src={photo.url}
+                                        alt={playerName}
+                                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    />
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
