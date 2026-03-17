@@ -46,7 +46,7 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex justify-center">
+                    <div className="flex justify-center overflow-hidden w-full">
                         <div
                             className="flex gap-3 will-change-transform"
                             style={{ transform: `translateX(${-parallax}px)` }}
@@ -68,7 +68,7 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         </div>
                     </div>
 
-                    <div className="flex justify-center">
+                    <div className="flex justify-center overflow-hidden w-full">
                         <div
                             className="flex gap-3 will-change-transform"
                             style={{ transform: `translateX(${parallax}px)` }}
