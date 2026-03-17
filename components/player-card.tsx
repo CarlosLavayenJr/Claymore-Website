@@ -1,17 +1,15 @@
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import type { SanityPlayer } from "@/sanity/lib/queries"
 
 interface PlayerCardProps {
     player: SanityPlayer
-    onClick: () => void
+    onClick?: () => void
 }
 
 export default function PlayerCard({ player, onClick }: PlayerCardProps) {
-    return (
-        <Card
-            className="overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg"
-            onClick={onClick}
-        >
+    const inner = (
+        <Card className="overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg">
             <div className="aspect-square overflow-hidden">
                 <img
                     src={player.imageUrl || "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"}
@@ -27,4 +25,10 @@ export default function PlayerCard({ player, onClick }: PlayerCardProps) {
             </CardContent>
         </Card>
     )
+
+    if (player.slug) {
+        return <Link href={`/team/${player.slug}`}>{inner}</Link>
+    }
+
+    return <div onClick={onClick}>{inner}</div>
 }

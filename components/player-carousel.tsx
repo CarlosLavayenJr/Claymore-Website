@@ -1,25 +1,22 @@
 'use client'
 
 import { useRef, useEffect } from 'react'
+import Link from 'next/link'
 import type { SanityPlayer } from '@/sanity/lib/queries'
 
 interface Props {
     players: SanityPlayer[]
-    onSelect: (p: SanityPlayer) => void
     badgeColor?: string
 }
 
-export default function PlayerCarousel({ players, onSelect, badgeColor = '#77c3ef' }: Props) {
+export default function PlayerCarousel({ players, badgeColor = '#77c3ef' }: Props) {
     const scrollRef = useRef<HTMLDivElement>(null)
 
-    // Triple the items so we can silently jump between copies
     const items = [...players, ...players, ...players]
 
     useEffect(() => {
         const el = scrollRef.current
         if (!el) return
-
-        // Start scrolled to the middle copy
         const cardWidth = el.scrollWidth / 3
         el.scrollLeft = cardWidth
     }, [])
@@ -28,8 +25,6 @@ export default function PlayerCarousel({ players, onSelect, badgeColor = '#77c3e
         const el = scrollRef.current
         if (!el) return
         const setWidth = el.scrollWidth / 3
-
-        // Silently jump back to middle copy when drifting into first or last copy
         if (el.scrollLeft < setWidth) {
             el.scrollLeft += setWidth
         } else if (el.scrollLeft >= setWidth * 2) {
@@ -45,9 +40,9 @@ export default function PlayerCarousel({ players, onSelect, badgeColor = '#77c3e
         >
             <div className="flex gap-3 w-max pb-2">
                 {items.map((player, i) => (
-                    <button
+                    <Link
                         key={`${player._id}-${i}`}
-                        onClick={() => onSelect(player)}
+                        href={player.slug ? `/team/${player.slug}` : '#'}
                         className="shrink-0 w-[300px] rounded-xl overflow-hidden border border-[#EAEAEA] shadow-sm bg-white text-left"
                     >
                         <div className="aspect-square overflow-hidden">
@@ -63,7 +58,7 @@ export default function PlayerCarousel({ players, onSelect, badgeColor = '#77c3e
                                 {player.position}
                             </span>
                         </div>
-                    </button>
+                    </Link>
                 ))}
             </div>
         </div>

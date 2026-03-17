@@ -12,6 +12,19 @@ export const player = defineType({
             validation: (rule) => rule.required(),
         }),
         defineField({
+            name: 'slug',
+            title: 'Slug',
+            type: 'slug',
+            options: { source: 'name' },
+            validation: (rule) => rule.required(),
+        }),
+        defineField({
+            name: 'mediaTag',
+            title: 'Media Tag',
+            type: 'string',
+            description: 'The Sanity media tag used to populate this player\'s gallery (e.g. "john-doe")',
+        }),
+        defineField({
             name: 'position',
             title: 'Position',
             type: 'string',
