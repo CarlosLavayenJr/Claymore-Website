@@ -6,7 +6,7 @@ import { schema } from '@/sanity/schema'
 
 export default defineConfig({
     name: 'claymore-website',
-    title: 'Claymore Rugby',
+    title: process.env.NEXT_PUBLIC_SANITY_DATASET === 'development' ? 'Claymore Rugby [DEV]' : 'Claymore Rugby',
     basePath: '/studio',
 
     projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,

@@ -46,11 +46,12 @@ export const Navbar = () => {
                         </div>
 
                         <div className="hidden md:flex items-center space-x-1">
-                            <NavLink href="/">home</NavLink>
+                            <NavLink href="/">Home</NavLink>
                             <NavLink href="/about">About</NavLink>
                             <NavLink href="/team">Team</NavLink>
                             <NavLink href="/fixtures">Fixtures</NavLink>
                             <NavLink href="/results">Results</NavLink>
+                            <NavLink href="/blog">News</NavLink>
                             <NavLink href="/faq">FAQ</NavLink>
                             <NavLink href="/contact">Contact</NavLink>
                             <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">

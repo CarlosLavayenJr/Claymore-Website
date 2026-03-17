@@ -6,6 +6,7 @@ import { organizationSchema } from '@/lib/schema'
 export const metadata: Metadata = {
     title: 'Orlando Rugby — About the Central Florida Claymores RFC',
     description: 'The Central Florida Claymores RFC are Orlando\'s USA Rugby D3 club. Founded in 2018, 2023 state finalists, and growing. Learn about rugby in Orlando and Central Florida.',
+    alternates: { canonical: '/about-orlando-rugby' },
     openGraph: {
         title: 'Orlando Rugby — About the Central Florida Claymores RFC',
         description: 'Founded 2018. 2023 state finalists. Orlando\'s USA Rugby D3 club.',

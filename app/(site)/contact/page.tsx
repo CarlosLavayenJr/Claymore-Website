@@ -10,6 +10,7 @@ export const revalidate = 3600
 export const metadata: Metadata = {
     title: 'Contact the Orlando Claymores RFC — Rugby Near Me in Orlando',
     description: 'Looking for rugby near you in Orlando or Central Florida? Contact the Claymores RFC. Practices every Thursday at Barnett Park. No experience required.',
+    alternates: { canonical: '/contact' },
     openGraph: {
         title: 'Contact the Orlando Claymores RFC | Rugby Near Me',
         description: 'Reach out to join Orlando\'s USA Rugby D3 club. Practices every Thursday at Barnett Park.',

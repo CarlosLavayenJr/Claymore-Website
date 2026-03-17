@@ -5,12 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown } from 'lucide-react'
 import { Info } from 'lucide-react'
-import type { SanityMatch } from '@/sanity/lib/queries'
+import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
 function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
     value: string
     onChange: (v: string) => void
-    options: { label: string; value: string }[]
+    options: { label: string; value: string; logo?: string | null }[]
     width?: string
 }) {
     const [open, setOpen] = useState(false)
@@ -19,7 +19,10 @@ function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <button className={`flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-[#EAEAEA] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-[#77c3ef] w-full sm:${width}`}>
-                    <span>{selected?.label}</span>
+                    <span className="flex items-center gap-2">
+                        {selected?.logo && <img src={selected.logo} alt={selected.label} className="w-4 h-4 object-contain" />}
+                        {selected?.label}
+                    </span>
                     <ChevronDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
                 </button>
             </PopoverTrigger>
@@ -28,8 +31,9 @@ function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
                     <button
                         key={opt.value}
                         onClick={() => { onChange(opt.value); setOpen(false) }}
-                        className="relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm hover:bg-accent cursor-pointer"
+                        className="relative flex w-full items-center gap-2 rounded-sm py-1.5 pl-2 pr-8 text-sm hover:bg-accent cursor-pointer"
                     >
+                        {opt.logo && <img src={opt.logo} alt={opt.label} className="w-4 h-4 object-contain shrink-0" />}
                         {opt.label}
                         {opt.value === value && <Check className="absolute right-2 h-4 w-4" />}
                     </button>
@@ -67,7 +71,19 @@ const RESULT_PILL: Record<'W' | 'L' | 'D', string> = {
     D: 'bg-[#fd80b5] text-white',
 }
 
-export default function MatchResultsTable({ matches }: { matches: SanityMatch[] }) {
+function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
+    const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const n = normalized(name)
+    for (const team of teams) {
+        const candidates = [team.name, ...(team.aliases ?? [])]
+        if (candidates.some(alias => n.includes(normalized(alias)) || normalized(alias).includes(n))) {
+            return team.logoUrl ?? null
+        }
+    }
+    return null
+}
+
+export default function MatchResultsTable({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
     const [selectedOpponent, setSelectedOpponent] = useState('all')
     const [selectedMatchType, setSelectedMatchType] = useState('all')
     const [selectedSeason, setSelectedSeason] = useState(() => {
@@ -184,7 +200,7 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                     width="w-[200px]"
                     options={[
                         { label: 'All Opponents', value: 'all' },
-                        ...opponents.map(o => ({ label: o, value: o })),
+                        ...opponents.map(o => ({ label: o, value: o, logo: findTeamLogo(o, teams) })),
                     ]}
                 />
             </div>
@@ -219,13 +235,23 @@ export default function MatchResultsTable({ matches }: { matches: SanityMatch[] 
                                 >
                                     <TableCell className="text-sm text-[#555555]">{formatDate(m.date)}</TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
-                                        {m.homeTeam}
+                                        <span className="flex items-center gap-2">
+                                            {(m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)) && (
+                                                <img src={m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)!} alt={m.homeTeam} className="w-5 h-5 object-contain" />
+                                            )}
+                                            {m.homeTeam}
+                                        </span>
                                     </TableCell>
                                     <TableCell className="text-center font-mono font-semibold text-[#111111]">
                                         {isUpcoming ? <span className="text-xs text-[#77c3ef] uppercase tracking-widest">Upcoming</span> : getScore(m)}
                                     </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
-                                        {m.awayTeam}
+                                        <span className="flex items-center gap-2">
+                                            {(m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)) && (
+                                                <img src={m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)!} alt={m.awayTeam} className="w-5 h-5 object-contain" />
+                                            )}
+                                            {m.awayTeam}
+                                        </span>
                                     </TableCell>
                                     <TableCell className="text-center">
                                         {result && (

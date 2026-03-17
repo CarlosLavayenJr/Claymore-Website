@@ -66,6 +66,8 @@ export interface SanityMatch {
     matchType?: 'league' | 'friendly'
     competition?: string
     note?: string
+    homeTeamLogo?: string | null
+    awayTeamLogo?: string | null
 }
 
 export const matchesQuery = groq`
@@ -80,9 +82,37 @@ export const matchesQuery = groq`
     status,
     matchType,
     competition,
-    note
+    note,
+    "homeTeamLogo": homeTeamRef->image.asset->url,
+    "awayTeamLogo": awayTeamRef->image.asset->url
   }
 `
+
+export interface SanityTeam {
+    _id: string
+    name: string
+    aliases: string[]
+    logoUrl: string | null
+}
+
+export const teamsQuery = groq`
+  *[_type == "team"] {
+    _id,
+    name,
+    aliases,
+    "logoUrl": image.asset->url
+  }
+`
+
+export interface SanityPost {
+    _id: string
+    title: string
+    slug: { current: string }
+    publishedAt: string
+    excerpt: string | null
+    coverImageUrl: string | null
+    body: unknown[]
+}
 
 export const postsQuery = groq`
   *[_type == "post"] | order(publishedAt desc) {
@@ -92,6 +122,18 @@ export const postsQuery = groq`
     publishedAt,
     excerpt,
     "coverImageUrl": coverImage.asset->url
+  }
+`
+
+export const postBySlugQuery = groq`
+  *[_type == "post" && slug.current == $slug][0] {
+    _id,
+    title,
+    slug,
+    publishedAt,
+    excerpt,
+    "coverImageUrl": coverImage.asset->url,
+    body
   }
 `
 

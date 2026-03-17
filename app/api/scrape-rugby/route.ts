@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio'
 import { createClient } from '@sanity/client'
 
-const BASE_URL = 'https://rugbyfl.com/Clubs/Club.asp?Club_ID=117'
+const CLUB_IDS = ['117', '51'] // 117 = Claymores, 51 = IR/Claymores (legacy joined club)
 
 type MatchStatus = 'played' | 'upcoming' | 'forfeit_us' | 'forfeit_them'
 type MatchType = 'league' | 'friendly'
@@ -149,8 +149,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const all = searchParams.get('all') === 'true'
-  const seasonId = searchParams.get('seasonId') ?? '27'
-  const seasonIds = all ? Array.from({ length: 18 }, (_, i) => String(i + 10)) : [seasonId]
+  const seasonIds = all ? Array.from({ length: 18 }, (_, i) => String(i + 10)) : ['27']
+  const clubIds = all ? CLUB_IDS : ['117']
 
   const sanity = createClient({
     projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
@@ -160,34 +160,22 @@ export async function GET(request: Request) {
     useCdn: false,
   })
 
-  // Fetch all matches and group by date
+  // Fetch all matches indexed by date (oldest doc wins — never delete)
   const existing: { _id: string; date: string }[] = await sanity.fetch(
     `*[_type == "match"] | order(_createdAt asc) { _id, date }`
   )
 
-  // Deduplicate: for each date keep the FIRST (oldest) doc, delete the rest
-  const seenDates = new Map<string, string>() // date → keeper _id
-  const toDelete: string[] = []
+  const existingByDate = new Map<string, string>()
   for (const m of existing) {
-    if (seenDates.has(m.date)) {
-      toDelete.push(m._id)
-    } else {
-      seenDates.set(m.date, m._id)
-    }
+    if (!existingByDate.has(m.date)) existingByDate.set(m.date, m._id)
   }
-  if (toDelete.length > 0) {
-    console.log(`[scrape-rugby] Deleting ${toDelete.length} duplicate match(es)`)
-    await Promise.all(toDelete.map(id => sanity.delete(id)))
-  }
-
-  // existingByDate now has one doc per date (the keeper)
-  const existingByDate = new Map(seenDates)
 
   const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
 
+  for (const cid of clubIds) {
   for (const sid of seasonIds) {
-    const url = `${BASE_URL}&Season_ID=${sid}`
-    console.log(`[scrape-rugby] Scraping Season_ID=${sid}`)
+    const url = `https://rugbyfl.com/Clubs/Club.asp?Club_ID=${cid}&Season_ID=${sid}`
+    console.log(`[scrape-rugby] Scraping Club_ID=${cid} Season_ID=${sid}`)
 
     try {
       const res = await fetch(url, {
@@ -197,38 +185,22 @@ export async function GET(request: Request) {
 
       if (!res.ok) {
         console.warn(`[scrape-rugby] Season ${sid}: fetch failed ${res.status}`)
-        summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
+        summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 1 }
         continue
       }
 
       const html = await res.text()
-      const allMatches = parseMatches(html)
+      const allMatches = parseMatches(html).filter(m =>
+        m.homeTeam === 'Claymores' || m.awayTeam === 'Claymores'
+      )
 
       if (allMatches.length === 0) {
-        console.warn(`[scrape-rugby] Season ${sid}: no matches found`)
-        summary[sid] = { parsed: 0, upserted: 0, failed: 0 }
+        console.warn(`[scrape-rugby] Club ${cid} Season ${sid}: no matches found`)
+        summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 0 }
         continue
       }
 
-      const today = new Date()
-      today.setUTCHours(0, 0, 0, 0)
-
-      // Drop matches: past date with no score recorded (regardless of note)
-      const staleIds: string[] = []
-      const matches = allMatches.filter(m => {
-        const isPast = new Date(m.date) < today
-        if (isPast && m.status === 'upcoming') {
-          const existingId = existingByDate.get(m.date)
-          if (existingId) staleIds.push(existingId)
-          return false
-        }
-        return true
-      })
-
-      if (staleIds.length > 0) {
-        console.log(`[scrape-rugby] Season ${sid}: removing ${staleIds.length} ghost match(es)`)
-        await Promise.all(staleIds.map(id => sanity.delete(id)))
-      }
+      const matches = allMatches
 
       const results = await Promise.allSettled(
         matches.map(m => {
@@ -257,11 +229,12 @@ export async function GET(request: Request) {
       const failed = results.filter(r => r.status === 'rejected').length
 
       console.log(`[scrape-rugby] Season ${sid}: ${upserted}/${matches.length} upserted`)
-      summary[sid] = { parsed: matches.length, upserted, failed }
+      summary[`${cid}:${sid}`] = { parsed: matches.length, upserted, failed }
     } catch (err) {
-      console.error(`[scrape-rugby] Season ${sid} error:`, err)
-      summary[sid] = { parsed: 0, upserted: 0, failed: 1 }
+      console.error(`[scrape-rugby] Club ${cid} Season ${sid} error:`, err)
+      summary[`${cid}:${sid}`] = { parsed: 0, upserted: 0, failed: 1 }
     }
+  }
   }
 
   const totalParsed = Object.values(summary).reduce((a, b) => a + b.parsed, 0)
