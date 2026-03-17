@@ -4,6 +4,7 @@ export interface SanityPlayer {
     _id: string
     name: string
     slug: string
+    active: boolean
     position: string
     height: string
     weight: string
@@ -17,6 +18,7 @@ export const playersQuery = groq`
     _id,
     name,
     "slug": slug.current,
+    active,
     position,
     height,
     weight,
@@ -31,6 +33,7 @@ export const playerBySlugQuery = groq`
     _id,
     name,
     "slug": slug.current,
+    active,
     position,
     height,
     weight,

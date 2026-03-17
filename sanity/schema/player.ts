@@ -29,6 +29,13 @@ export const player = defineType({
             },
         }),
         defineField({
+            name: 'active',
+            title: 'Active',
+            type: 'boolean',
+            initialValue: true,
+            description: 'Is this player currently on the active roster?',
+        }),
+        defineField({
             name: 'position',
             title: 'Position',
             type: 'string',
