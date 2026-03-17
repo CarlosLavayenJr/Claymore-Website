@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { client } from "@/sanity/lib/client"
-import { playerBySlugQuery, playerPhotosQuery } from "@/sanity/lib/queries"
+import { playerBySlugQuery, playerPhotosQuery, playersQuery } from "@/sanity/lib/queries"
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
 
 import PlayerProfile from "./player-profile"
@@ -28,12 +28,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PlayerPage({ params }: Props) {
     const { slug } = await params
-    const player: SanityPlayer | null = await client.fetch(playerBySlugQuery, { slug })
+
+    const [player, allPlayers]: [SanityPlayer | null, SanityPlayer[]] = await Promise.all([
+        client.fetch(playerBySlugQuery, { slug }),
+        client.fetch(playersQuery),
+    ])
+
     if (!player) notFound()
 
     const photos: SanityPlayerPhoto[] = player.mediaTag
         ? await client.fetch(playerPhotosQuery, { tag: player.mediaTag } as Record<string, string>)
         : []
 
-    return <PlayerProfile player={player} photos={photos} />
+    const currentIndex = allPlayers.findIndex((p) => p.slug === slug)
+    const nextPlayer = allPlayers[(currentIndex + 1) % allPlayers.length] ?? null
+
+    return <PlayerProfile player={player} photos={photos} nextPlayer={nextPlayer} />
 }

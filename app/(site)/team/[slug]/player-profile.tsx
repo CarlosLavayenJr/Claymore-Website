@@ -1,11 +1,20 @@
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
+import PlayerGallery from "./PlayerGallery"
 
 const DEFAULT_IMG = "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"
 const LOGO_GHOST = "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"
 
-export default function PlayerProfile({ player, photos }: { player: SanityPlayer; photos: SanityPlayerPhoto[] }) {
+export default function PlayerProfile({
+    player,
+    photos,
+    nextPlayer,
+}: {
+    player: SanityPlayer
+    photos: SanityPlayerPhoto[]
+    nextPlayer: SanityPlayer | null
+}) {
     return (
         <div className="min-h-screen bg-[#131518] text-white">
 
@@ -115,21 +124,34 @@ export default function PlayerProfile({ player, photos }: { player: SanityPlayer
 
             {/* Gallery */}
             {photos.length > 0 && (
-                <div className="container mx-auto px-8 pb-20">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="w-8 h-0.5 bg-[#78c3ef]" />
-                        <h2 className="text-2xl font-claymore text-[#78c3ef] uppercase tracking-widest">Gallery</h2>
-                    </div>
-                    <div className="columns-2 md:columns-3 gap-3 space-y-3">
-                        {photos.map((photo) => (
-                            <img
-                                key={photo._id}
-                                src={photo.url}
-                                alt={player.name}
-                                className="w-full rounded-lg break-inside-avoid"
-                            />
-                        ))}
-                    </div>
+                <PlayerGallery photos={photos} playerName={player.name} />
+            )}
+
+            {/* Next Player */}
+            {nextPlayer && (
+                <div className="border-t border-zinc-800">
+                    <Link
+                        href={`/team/${nextPlayer.slug}`}
+                        className="group flex items-center justify-between px-8 py-10 hover:bg-zinc-900/50 transition-colors"
+                    >
+                        <div>
+                            <p className="text-xs text-zinc-500 uppercase tracking-[0.3em] mb-2">Next Player</p>
+                            <p className="text-3xl md:text-5xl font-claymore text-white group-hover:text-[#78c3ef] transition-colors">
+                                {nextPlayer.name}
+                            </p>
+                            <p className="text-zinc-500 text-sm mt-1">{nextPlayer.position}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {nextPlayer.imageUrl && (
+                                <img
+                                    src={nextPlayer.imageUrl}
+                                    alt={nextPlayer.name}
+                                    className="w-16 h-20 object-cover object-top rounded opacity-60 group-hover:opacity-100 transition-opacity"
+                                />
+                            )}
+                            <ArrowRight className="w-8 h-8 text-zinc-600 group-hover:text-[#78c3ef] transition-colors" />
+                        </div>
+                    </Link>
                 </div>
             )}
         </div>
