@@ -21,8 +21,12 @@ export const player = defineType({
         defineField({
             name: 'mediaTag',
             title: 'Media Tag',
-            type: 'string',
-            description: 'The Sanity media tag used to populate this player\'s gallery (e.g. "john-doe")',
+            type: 'reference',
+            to: [{ type: 'media.tag' }],
+            description: 'The Sanity media tag used to populate this player\'s gallery.',
+            options: {
+                disableNew: true,
+            },
         }),
         defineField({
             name: 'position',

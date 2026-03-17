@@ -36,7 +36,7 @@ export const playerBySlugQuery = groq`
     weight,
     "imageUrl": image.asset->url,
     description,
-    mediaTag
+    "mediaTag": mediaTag->name.current
   }
 `
 
