@@ -7,26 +7,35 @@ import type { SanityPlayerPhoto } from '@/sanity/lib/queries'
 export default function PlayerGallery({ photos, playerName }: { photos: SanityPlayerPhoto[], playerName: string }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const [parallax, setParallax] = useState(0)
+    const [isDesktop, setIsDesktop] = useState(false)
     const [lightbox, setLightbox] = useState<number | null>(null)
 
     const row1 = photos.filter((_, i) => i % 2 === 0)
     const row2 = photos.filter((_, i) => i % 2 === 1)
 
-    // Parallax: drive off raw scrollY so row 1 moves left and row 2 moves right
+    // Detect desktop
     useEffect(() => {
+        const check = () => setIsDesktop(window.innerWidth >= 768)
+        check()
+        window.addEventListener('resize', check)
+        return () => window.removeEventListener('resize', check)
+    }, [])
+
+    // Parallax (desktop only)
+    useEffect(() => {
+        if (!isDesktop) return
         const onScroll = () => {
             if (!sectionRef.current) return
             const rect = sectionRef.current.getBoundingClientRect()
-            // Progress 0→1 as section scrolls through viewport
             const progress = 1 - (rect.bottom / (window.innerHeight + rect.height))
             setParallax(progress * 180)
         }
         window.addEventListener('scroll', onScroll, { passive: true })
         onScroll()
         return () => window.removeEventListener('scroll', onScroll)
-    }, [])
+    }, [isDesktop])
 
-    // Keyboard nav
+    // Keyboard nav for lightbox
     useEffect(() => {
         if (lightbox === null) return
         const onKey = (e: KeyboardEvent) => {
@@ -38,30 +47,34 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
         return () => window.removeEventListener('keydown', onKey)
     }, [lightbox, photos.length])
 
-    // Map row/index back to full photos array index
     const photoIndex = (rowIdx: number, row: 0 | 1) => rowIdx * 2 + row
+
+    const rowClass = (height: string) =>
+        `flex gap-3 ${height} ${isDesktop ? 'will-change-transform' : 'overflow-x-auto scrollbar-hide'}`
+
+    const imgWidth = (aspectRatio: number) => `${aspectRatio * (isDesktop ? 320 : 240)}px`
 
     return (
         <>
-            <div ref={sectionRef} className="pb-20 overflow-hidden">
+            <div ref={sectionRef} className={`pb-20 ${isDesktop ? 'overflow-hidden' : ''}`}>
                 <div className="flex items-center gap-4 mb-10 px-8">
                     <div className="w-8 h-0.5 bg-[#78c3ef]" />
                     <h2 className="text-2xl font-claymore text-[#78c3ef] uppercase tracking-widest">Gallery</h2>
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    {/* Row 1 — centered, drifts left on scroll */}
-                    <div className="flex justify-center">
+                    {/* Row 1 — desktop: centered + drifts left | mobile: swipeable */}
+                    <div className={isDesktop ? 'flex justify-center' : ''}>
                         <div
-                            className="flex gap-3 will-change-transform"
-                            style={{ transform: `translateX(${-parallax}px)` }}
+                            className={rowClass('h-60 md:h-80')}
+                            style={isDesktop ? { transform: `translateX(${-parallax}px)` } : undefined}
                         >
                             {row1.map((photo, i) => (
                                 <button
                                     key={photo._id}
                                     onClick={() => setLightbox(photoIndex(i, 0))}
-                                    className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                    style={{ width: `${photo.aspectRatio * 320}px` }}
+                                    className="flex-shrink-0 h-full overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                    style={{ width: imgWidth(photo.aspectRatio) }}
                                 >
                                     <img
                                         src={photo.url}
@@ -73,18 +86,18 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         </div>
                     </div>
 
-                    {/* Row 2 — centered, drifts right on scroll */}
-                    <div className="flex justify-center">
+                    {/* Row 2 — desktop: centered + drifts right | mobile: swipeable */}
+                    <div className={isDesktop ? 'flex justify-center' : ''}>
                         <div
-                            className="flex gap-3 will-change-transform"
-                            style={{ transform: `translateX(${parallax}px)` }}
+                            className={rowClass('h-60 md:h-80')}
+                            style={isDesktop ? { transform: `translateX(${parallax}px)` } : undefined}
                         >
                             {row2.map((photo, i) => (
                                 <button
                                     key={photo._id}
                                     onClick={() => setLightbox(photoIndex(i, 1))}
-                                    className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                    style={{ width: `${photo.aspectRatio * 320}px` }}
+                                    className="flex-shrink-0 h-full overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                    style={{ width: imgWidth(photo.aspectRatio) }}
                                 >
                                     <img
                                         src={photo.url}
@@ -104,7 +117,6 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                     className="fixed inset-0 z-50 bg-black/92 flex items-center justify-center"
                     onClick={() => setLightbox(null)}
                 >
-                    {/* Close */}
                     <button
                         className="absolute top-5 right-5 text-white/70 hover:text-white transition-colors p-2"
                         onClick={() => setLightbox(null)}
@@ -113,7 +125,6 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         <X className="w-7 h-7" />
                     </button>
 
-                    {/* Prev */}
                     <button
                         className="absolute left-4 text-white/70 hover:text-white transition-colors p-3"
                         onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + photos.length) % photos.length) }}
@@ -122,7 +133,6 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         <ChevronLeft className="w-10 h-10" />
                     </button>
 
-                    {/* Image */}
                     <img
                         src={photos[lightbox].url}
                         alt={playerName}
@@ -130,7 +140,6 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         onClick={(e) => e.stopPropagation()}
                     />
 
-                    {/* Next */}
                     <button
                         className="absolute right-4 text-white/70 hover:text-white transition-colors p-3"
                         onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % photos.length) }}
@@ -139,7 +148,6 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         <ChevronRight className="w-10 h-10" />
                     </button>
 
-                    {/* Counter */}
                     <p className="absolute bottom-5 text-zinc-500 text-sm tracking-widest">
                         {lightbox + 1} / {photos.length}
                     </p>
