@@ -55,7 +55,10 @@ export default function PlayerProfile({
                 </div>
 
                 {/* Blue vertical accent bar */}
-                <div className="absolute left-0 top-0 w-1.5 bg-[#78c3ef] h-1/2 md:h-full" />
+                <div
+                    className="absolute left-0 top-0 w-1.5 h-1/2 md:h-full"
+                    style={{ background: 'linear-gradient(to bottom, #78c3ef 70%, transparent 100%)' }}
+                />
 
                 {/* Player photo — right side, dual fade */}
                 <div
