@@ -17,7 +17,7 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
             if (!sectionRef.current) return
             const rect = sectionRef.current.getBoundingClientRect()
             const progress = 1 - (rect.bottom / (window.innerHeight + rect.height))
-            setParallax(progress * 180)
+            setParallax(Math.max(0, progress * 180))
         }
         window.addEventListener('scroll', onScroll, { passive: true })
         onScroll()
