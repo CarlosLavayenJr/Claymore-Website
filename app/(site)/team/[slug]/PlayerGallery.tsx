@@ -12,13 +12,14 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
     const row1 = photos.filter((_, i) => i % 2 === 0)
     const row2 = photos.filter((_, i) => i % 2 === 1)
 
-    // Parallax: columns move in opposite directions as you scroll
+    // Parallax: drive off raw scrollY so row 1 moves left and row 2 moves right
     useEffect(() => {
         const onScroll = () => {
             if (!sectionRef.current) return
             const rect = sectionRef.current.getBoundingClientRect()
-            const center = rect.top + rect.height / 2 - window.innerHeight / 2
-            setParallax(center * 0.12)
+            // Progress 0→1 as section scrolls through viewport
+            const progress = 1 - (rect.bottom / (window.innerHeight + rect.height))
+            setParallax(progress * 180)
         }
         window.addEventListener('scroll', onScroll, { passive: true })
         onScroll()
@@ -49,17 +50,17 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                 </div>
 
                 <div className="flex flex-col gap-4">
-                    {/* Row 1 — drifts left on scroll */}
+                    {/* Row 1 — starts right, drifts left on scroll */}
                     <div
-                        className="flex gap-4 will-change-transform"
-                        style={{ transform: `translateX(${-parallax}px)` }}
+                        className="flex gap-3 will-change-transform"
+                        style={{ transform: `translateX(calc(60px - ${parallax}px))` }}
                     >
                         {row1.map((photo, i) => (
                             <button
                                 key={photo._id}
                                 onClick={() => setLightbox(photoIndex(i, 0))}
-                                className="flex-shrink-0 h-64 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                style={{ width: `${photo.aspectRatio * 256}px` }}
+                                className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                style={{ width: `${photo.aspectRatio * 320}px` }}
                             >
                                 <img
                                     src={photo.url}
@@ -70,17 +71,17 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                         ))}
                     </div>
 
-                    {/* Row 2 — drifts right on scroll */}
+                    {/* Row 2 — starts left, drifts right on scroll */}
                     <div
-                        className="flex gap-4 will-change-transform"
-                        style={{ transform: `translateX(${parallax}px)` }}
+                        className="flex gap-3 will-change-transform"
+                        style={{ transform: `translateX(calc(-60px + ${parallax}px))` }}
                     >
                         {row2.map((photo, i) => (
                             <button
                                 key={photo._id}
                                 onClick={() => setLightbox(photoIndex(i, 1))}
-                                className="flex-shrink-0 h-64 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
-                                style={{ width: `${photo.aspectRatio * 256}px` }}
+                                className="flex-shrink-0 h-80 overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
+                                style={{ width: `${photo.aspectRatio * 320}px` }}
                             >
                                 <img
                                     src={photo.url}
