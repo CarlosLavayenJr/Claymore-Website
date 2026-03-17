@@ -16,7 +16,7 @@ export default function PlayerProfile({
     nextPlayer: SanityPlayer | null
 }) {
     return (
-        <div className="min-h-screen bg-[#131518] text-white">
+        <div className="min-h-screen bg-[#131518] text-white overflow-x-hidden">
 
             {/* Hero */}
             <div className="relative overflow-hidden bg-[#131518] min-h-[80vh] flex items-end">
