@@ -30,13 +30,13 @@ export default function PlayerProfile({
                 />
 
                 {/* Background ghost — huge logo, right-aligned */}
-                <div className="absolute inset-0 flex items-end justify-end pointer-events-none overflow-hidden" style={{ marginRight: '-12%' }}>
+                <div className="absolute inset-0 flex items-end justify-end pointer-events-none overflow-hidden">
                     <img
                         src={LOGO_GHOST}
                         alt=""
                         aria-hidden="true"
                         className="select-none"
-                        style={{ width: 'clamp(300px, 55vw, 700px)', opacity: 0.18, mixBlendMode: 'screen', transform: 'translateY(20%)' }}
+                        style={{ width: 'clamp(300px, 55vw, 700px)', opacity: 0.18, mixBlendMode: 'screen', transform: 'translate(12%, 20%)' }}
                     />
                 </div>
 
@@ -55,7 +55,7 @@ export default function PlayerProfile({
                 </div>
 
                 {/* Blue vertical accent bar */}
-                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#78c3ef]" />
+                <div className="absolute left-0 top-0 w-1.5 bg-[#78c3ef] h-1/2 md:h-full" />
 
                 {/* Player photo — right side, dual fade */}
                 <div
