@@ -92,7 +92,7 @@ export default function PlayerProfile({
                     <p className="text-[#78c3ef] text-xs font-bold uppercase tracking-[0.4em] mb-3">
                         {player.position}
                     </p>
-                    <h1 className="text-5xl md:text-9xl font-claymore leading-none max-w-xl text-center md:text-left">
+                    <h1 className="text-4xl sm:text-5xl md:text-9xl font-claymore leading-none max-w-xl text-center md:text-left">
                         {player.name}
                     </h1>
 
