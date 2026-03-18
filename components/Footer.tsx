@@ -4,7 +4,7 @@ import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa'
 
 const Footer = () => {
     return (
-        <footer className="bg-black text-gray-400">
+        <footer className="text-gray-400" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, #1a3a4a 0%, #0f2535 30%, #111111 70%)' }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
 
@@ -73,7 +73,7 @@ const Footer = () => {
 
                 </div>
 
-                <div className="mt-10 pt-6 border-t border-gray-800 text-center text-xs text-gray-600 space-y-1">
+                <div className="mt-10 pt-6 border-t border-gray-700/50 text-center text-xs text-gray-600 space-y-1">
                     <p>Central Florida Claymores RFC — Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808 — claymoresrfc@gmail.com</p>
                     <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved.</p>
                 </div>

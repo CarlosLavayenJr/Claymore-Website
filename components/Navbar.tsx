@@ -18,13 +18,26 @@ const NavLink = ({ href, children }: NavLinkProps) => (
     </Link>
 )
 
+const navLinks = [
+    { href: '/', label: 'Home' },
+    { href: '/about', label: 'About' },
+    { href: '/team', label: 'Team' },
+    { href: '/fixtures', label: 'Fixtures' },
+    { href: '/results', label: 'Results' },
+    { href: '/blog', label: 'News' },
+    { href: '/faq', label: 'FAQ' },
+    { href: '/contact', label: 'Contact' },
+]
+
 export const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false)
 
     const toggleMenu = () => setIsOpen(!isOpen)
+    const closeMenu = () => setIsOpen(false)
 
     useEffect(() => {
         document.body.style.overflow = isOpen ? "hidden" : ""
+        return () => { document.body.style.overflow = "" }
     }, [isOpen])
 
     return (
@@ -33,7 +46,7 @@ export const Navbar = () => {
                 <div className="px-4 sm:px-6 lg:px-32">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex-shrink-0 mr-auto">
-                            <Link href="/" className="flex items-center">
+                            <Link href="/" className="flex items-center" onClick={closeMenu}>
                                 <Image
                                     src="/assets/logo.png"
                                     alt="Claymores Rugby Logo"
@@ -46,14 +59,9 @@ export const Navbar = () => {
                         </div>
 
                         <div className="hidden md:flex items-center space-x-1">
-                            <NavLink href="/">Home</NavLink>
-                            <NavLink href="/about">About</NavLink>
-                            <NavLink href="/team">Team</NavLink>
-                            <NavLink href="/fixtures">Fixtures</NavLink>
-                            <NavLink href="/results">Results</NavLink>
-                            <NavLink href="/blog">News</NavLink>
-                            <NavLink href="/faq">FAQ</NavLink>
-                            <NavLink href="/contact">Contact</NavLink>
+                            {navLinks.map(({ href, label }) => (
+                                <NavLink key={href} href={href}>{label}</NavLink>
+                            ))}
                             <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">
                                 <span className="relative z-10">Join Us</span>
                                 <span className="absolute inset-0 bg-[#77c3ef] group-hover:bg-[#a0d5f5] transform -skew-x-12 transition-colors"></span>
@@ -65,7 +73,7 @@ export const Navbar = () => {
                                 onClick={toggleMenu}
                                 variant="ghost"
                                 size="icon"
-                                className="text-gray-700 hover:bg-gray-100 relative z-40"
+                                className="text-gray-700 hover:bg-gray-100 relative z-50"
                             >
                                 <Menu className="h-6 w-6" />
                                 <span className="sr-only">Open menu</span>
@@ -75,24 +83,36 @@ export const Navbar = () => {
                 </div>
             </nav>
 
-            {isOpen && (
-                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20" onClick={toggleMenu} aria-hidden="true" />
-            )}
-
-            {isOpen && (
-                <div className="md:hidden fixed top-16 right-0 w-48 bg-white shadow-lg z-30">
-                    <div className="py-1">
-                        <Link href="/" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Home</Link>
-                        <Link href="/about" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>About</Link>
-                        <Link href="/team" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Team</Link>
-                        <Link href="/fixtures" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Fixtures</Link>
-                        <Link href="/results" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Results</Link>
-                        <Link href="/faq" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>FAQ</Link>
-                        <Link href="/contact" className="block text-gray-700 hover:bg-gray-700 px-4 py-2" onClick={toggleMenu}>Contact</Link>
-                        <Link href="/join" className="block bg-[#77c3ef] text-white px-4 py-2 font-bold" onClick={toggleMenu}>Join Us</Link>
-                    </div>
+            {/* Mobile drawer — slides down below navbar */}
+            <div
+                className={`md:hidden fixed top-16 left-0 right-0 bottom-0 z-20 bg-white transition-opacity duration-200 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+            >
+                {/* Links */}
+                <div className="flex flex-col items-center px-8 mt-4">
+                    {navLinks.map(({ href, label }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            onClick={closeMenu}
+                            className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
+                        >
+                            {label}
+                        </Link>
+                    ))}
                 </div>
-            )}
+
+                {/* Join CTA */}
+                <div className="px-8 mt-8">
+                    <Link
+                        href="/join"
+                        onClick={closeMenu}
+                        className="block w-full text-center py-4 font-claymore text-2xl text-white rounded-md"
+                        style={{ backgroundColor: '#fd80b5' }}
+                    >
+                        Join Us
+                    </Link>
+                </div>
+            </div>
         </>
     )
 }
