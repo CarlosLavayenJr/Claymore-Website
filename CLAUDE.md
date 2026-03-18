@@ -9,7 +9,7 @@ Every page, every piece of content, and every technical decision should serve th
 - Site: https://www.claymoresrfc.com
 - Contact: claymoresrfc@gmail.com
 - Region: Orlando / Central Florida / Florida Rugby Union
-- Division: D4
+- Division: D3
 
 ## SEO North Star
 Target keywords to own:

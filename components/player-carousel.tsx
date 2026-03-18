@@ -43,20 +43,22 @@ export default function PlayerCarousel({ players, badgeColor = '#77c3ef' }: Prop
                     <Link
                         key={`${player._id}-${i}`}
                         href={player.slug ? `/team/${player.slug}` : '#'}
-                        className="shrink-0 w-[300px] rounded-xl overflow-hidden border border-[#EAEAEA] shadow-sm bg-white text-left"
+                        className="group shrink-0 w-[220px] rounded-xl overflow-hidden relative aspect-[3/4] bg-[#131518]"
                     >
-                        <div className="aspect-square overflow-hidden">
-                            <img
-                                src={player.imageUrl || 'https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png'}
-                                alt={player.name}
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                        <div className="p-3">
-                            <p className="font-bold text-sm truncate text-[#111111]">{player.name}</p>
-                            <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full text-white" style={{ backgroundColor: badgeColor }}>
+                        <img
+                            src={player.imageUrl || 'https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png'}
+                            alt={player.name}
+                            className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0f1113] via-[#0f1113]/30 to-transparent" />
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                            <span
+                                className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full mb-1.5"
+                                style={{ backgroundColor: badgeColor + '33', color: badgeColor, border: `1px solid ${badgeColor}55` }}
+                            >
                                 {player.position}
                             </span>
+                            <p className="font-claymore text-white text-lg leading-tight">{player.name}</p>
                         </div>
                     </Link>
                 ))}

@@ -45,7 +45,7 @@ export default function AboutOrlandoRugbyPage() {
                         USA Rugby divides men&apos;s club rugby into competitive divisions nationally. Division 3 (D3) is a serious level of play — organized through territorial unions like the Florida Rugby Union — where clubs compete for state titles and the chance to advance in national competition.
                     </p>
                     <p className="text-gray-300 leading-relaxed mb-4">
-                        The Central Florida Claymores RFC reached the D3 state final in 2023, establishing themselves as one of the premier rugby clubs in the Florida Rugby Union. The club&apos;s trajectory — from founding in 2018 to state finalists in five years — reflects both the quality of the players and the strength of the Central Florida rugby community.
+                        The Central Florida Claymores RFC reached the D4 state final in 2023 before earning promotion to D3, establishing themselves as one of the premier rugby clubs in the Florida Rugby Union. The club&apos;s trajectory — from founding in 2018 to state finalists in five years — reflects both the quality of the players and the strength of the Central Florida rugby community.
                     </p>
                     <p className="text-gray-300 leading-relaxed">
                         The goal is a state championship. The Claymores are building toward it every Thursday in Orlando.

@@ -9,17 +9,22 @@ function isForward(position: string) {
     return FORWARD_KEYWORDS.some((kw) => p.includes(kw))
 }
 
-function PlayerSection({ title, players, badgeColor }: { title: string; players: SanityPlayer[]; badgeColor?: string }) {
+function PlayerSection({ title, players, badgeColor }: { title: string; players: SanityPlayer[]; badgeColor: string }) {
     if (players.length === 0) return null
     return (
-        <div className="mb-14">
-            <h2 className="text-3xl font-claymore mb-4 sm:mb-6">{title}</h2>
+        <div className="mb-16">
+            <h2
+                className="text-3xl font-claymore text-white border-l-2 pl-4 mb-8"
+                style={{ borderColor: badgeColor }}
+            >
+                {title}
+            </h2>
             <div className="sm:hidden">
                 <PlayerCarousel players={players} badgeColor={badgeColor} />
             </div>
-            <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {players.map((player) => (
-                    <PlayerCard key={player._id} player={player} />
+                    <PlayerCard key={player._id} player={player} badgeColor={badgeColor} />
                 ))}
             </div>
         </div>
@@ -32,9 +37,9 @@ export default function TeamGrid({ players }: { players: SanityPlayer[] }) {
     const backs = active.filter((p) => !isForward(p.position))
 
     return (
-        <>
+        <div className="container mx-auto px-4 py-12">
             <PlayerSection title="Forwards" players={forwards} badgeColor="#77c3ef" />
             <PlayerSection title="Backs" players={backs} badgeColor="#fd80b5" />
-        </>
+        </div>
     )
 }

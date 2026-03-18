@@ -5,7 +5,11 @@
       "Bash(git config:*)",
       "WebFetch(domain:rugbyfl.com)",
       "Bash(npx tsx:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git fetch:*)",
+      "Bash(git:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ]
   }
 }
