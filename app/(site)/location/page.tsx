@@ -42,7 +42,7 @@ export default function LocationPage() {
                             </div>
                             <div className="bg-muted rounded-lg p-4">
                                 <p className="font-bold mb-1">Contact</p>
-                                <p className="text-muted-foreground">claymoresrfc@gmail.com</p>
+                                <p className="text-muted-foreground">info@claymoresrfc.com</p>
                             </div>
                         </div>
 

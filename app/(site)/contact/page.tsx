@@ -75,10 +75,10 @@ export default async function ContactPage() {
                                     <dt className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">Email</dt>
                                     <dd>
                                         <a
-                                            href="mailto:claymoresrfc@gmail.com"
+                                            href="mailto:info@claymoresrfc.com"
                                             className="text-[#77c3ef] hover:underline font-semibold"
                                         >
-                                            claymoresrfc@gmail.com
+                                            info@claymoresrfc.com
                                         </a>
                                     </dd>
                                 </div>
