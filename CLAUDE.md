@@ -7,7 +7,7 @@ Every page, every piece of content, and every technical decision should serve th
 ## The Club
 **Central Florida Claymores RFC** — Orlando-based rugby club founded in 2018.
 - Site: https://www.claymoresrfc.com
-- Contact: info@claymoresrfc.com
+- Contact: claymoresrfc@gmail.com
 - Region: Orlando / Central Florida / Florida Rugby Union
 - Division: D3
 
@@ -26,26 +26,31 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 ## Tech Stack
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui
+- **Styling**: Tailwind CSS + shadcn/ui — see `STYLING.md` for full design system
 - **CMS**: Sanity (players, news posts) — Studio at `/studio`
 - **Database**: Supabase (planned — match history)
-- **Deployment**: TBD
+- **Deployment**: Vercel
 
 ## Pages
 | Route | Purpose |
 |---|---|
 | `/` | Home — hero + Instagram feed |
 | `/about` | Club history, coaches, timeline |
+| `/about-orlando-rugby` | SEO landing page for Orlando rugby |
 | `/team` | Player roster (fed from Sanity) |
-| `/fixtures` | Google Calendar embed + Xplorer Rugby results |
-| `/contact` | Contact form |
+| `/team/[slug]` | Individual player profile pages |
+| `/fixtures` | Upcoming fixtures (Google Calendar embed) |
+| `/results` | Match results |
+| `/blog` | News/blog (fed from Sanity) |
+| `/blog/[slug]` | Individual blog post pages |
+| `/join` | Join the club CTA page |
+| `/faq` | Frequently asked questions |
+| `/location` | Location / directions page |
+| `/contact` | Contact form (sends via Resend to claymoresrfc@gmail.com) |
 | `/studio` | Sanity CMS (not public-facing) |
 
 ## Planned
 - Match history page (Supabase DB)
-- News/blog page (Sanity posts schema already built)
-- SEO metadata on all pages (titles, descriptions, Open Graph)
-- Sitemap + robots.txt
 
 ## Brand Colors
 - Pink Accent: `#fd80b5` (draws, links, CTAs primary)
@@ -55,8 +60,12 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 - Secondary Text: `#555555`
 - Background: `#FFFFFF`
 
+See `STYLING.md` for full design system including typography, buttons, cards, and match graphic styles.
+
 ## Key Decisions
 - Sanity is used for content editors (players, news) — not hardcoded data
 - Supabase for structured match data (scores, opponents, dates)
 - No monorepo — Sanity Studio is embedded at `/studio`
 - `(site)` route group keeps Studio outside the Navbar/Footer layout
+- Contact form uses Resend API (`/api/contact`) — emails go to claymoresrfc@gmail.com
+- Sitemap and robots.txt are live
