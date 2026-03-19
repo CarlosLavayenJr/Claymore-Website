@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
     const { error } = await resend.emails.send({
         from: 'Claymores Website <no-reply@claymoresrfc.com>',
-        to: 'info@claymoresrfc.com',
+        to: 'claymoresrfc@gmail.com',
         replyTo: email,
         subject: subject || `New message from ${name}`,
         text: `Name: ${name}\nEmail: ${email}\n\n${message}`,

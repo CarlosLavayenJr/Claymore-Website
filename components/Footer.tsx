@@ -22,8 +22,8 @@ const Footer = () => {
                             Built by players, for players.
                         </p>
                         <p className="text-sm">
-                            <a href="mailto:info@claymoresrfc.com" className="text-claymore-blue hover:text-white transition-colors">
-                                info@claymoresrfc.com
+                            <a href="mailto:claymoresrfc@gmail.com" className="text-claymore-blue hover:text-white transition-colors">
+                                claymoresrfc@gmail.com
                             </a>
                         </p>
                         <div className="flex gap-4 mt-1">
@@ -74,7 +74,7 @@ const Footer = () => {
                 </div>
 
                 <div className="mt-10 pt-6 border-t border-gray-700/50 text-center text-xs text-gray-600 space-y-1">
-                    <p>Central Florida Claymores RFC — Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808 — info@claymoresrfc.com</p>
+                    <p>Central Florida Claymores RFC — Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808 — claymoresrfc@gmail.com</p>
                     <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved.</p>
                 </div>
             </div>
