@@ -14,7 +14,7 @@ export interface SanityPlayer {
 }
 
 export const playersQuery = groq`
-  *[_type == "player"] | order(name asc) {
+  *[_type == "player" && active == true] | order(name asc) {
     _id,
     name,
     "slug": slug.current,
@@ -29,7 +29,7 @@ export const playersQuery = groq`
 `
 
 export const playerBySlugQuery = groq`
-  *[_type == "player" && slug.current == $slug][0] {
+  *[_type == "player" && slug.current == $slug && active == true][0] {
     _id,
     name,
     "slug": slug.current,
