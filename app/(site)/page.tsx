@@ -10,12 +10,12 @@ export const metadata: Metadata = {
     title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
     description: "Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. No experience needed. Join us Thursdays.",
     alternates: {
-        canonical: '/',
+        canonical: 'https://www.claymoresrfc.com',
     },
     openGraph: {
         title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
         description: "Orlando's USA Rugby D3 club. No experience needed. Join us Thursdays.",
-        url: '/',
+        url: 'https://www.claymoresrfc.com',
     },
 }
 
