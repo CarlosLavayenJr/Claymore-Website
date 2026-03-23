@@ -62,7 +62,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     if (!post) notFound()
 
     const galleryPhotos: SanityPlayerPhoto[] = post.mediaTag
-        ? await client.fetch<SanityPlayerPhoto[]>(playerPhotosQuery, { tag: post.mediaTag })
+        ? await client.fetch<SanityPlayerPhoto[]>(playerPhotosQuery, { tag: post.mediaTag } as Record<string, string>)
         : []
 
     return (
