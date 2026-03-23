@@ -27,7 +27,8 @@
     "sanity-plugin-media": "^4.1.1",
     "styled-components": "^6.3.11",
     "tailwind-merge": "^3.0.2",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "yet-another-react-lightbox": "^3.29.1"
   },
   "scripts": {
     "dev": "next dev",

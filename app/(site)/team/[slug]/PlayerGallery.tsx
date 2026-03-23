@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import Lightbox from '@/components/Lightbox'
 import type { SanityPlayerPhoto } from '@/sanity/lib/queries'
 
 export default function PlayerGallery({ photos, playerName }: { photos: SanityPlayerPhoto[], playerName: string }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const [parallax, setParallax] = useState(0)
-    const [lightbox, setLightbox] = useState<number | null>(null)
+    const [lightbox, setLightbox] = useState(-1)
 
     const row1 = photos.filter((_, i) => i % 2 === 0)
     const row2 = photos.filter((_, i) => i % 2 === 1)
@@ -24,16 +24,7 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
         return () => window.removeEventListener('scroll', onScroll)
     }, [])
 
-    useEffect(() => {
-        if (lightbox === null) return
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowRight') setLightbox(i => i !== null ? (i + 1) % photos.length : null)
-            if (e.key === 'ArrowLeft') setLightbox(i => i !== null ? (i - 1 + photos.length) % photos.length : null)
-            if (e.key === 'Escape') setLightbox(null)
-        }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [lightbox, photos.length])
+    const urls = photos.map(p => p.url)
 
     const photoIndex = (rowIdx: number, row: 0 | 1) => rowIdx * 2 + row
 
@@ -92,47 +83,11 @@ export default function PlayerGallery({ photos, playerName }: { photos: SanityPl
                 </div>
             </div>
 
-            {lightbox !== null && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/92 flex items-center justify-center"
-                    onClick={() => setLightbox(null)}
-                >
-                    <button
-                        className="absolute top-5 right-5 text-white/70 hover:text-white transition-colors p-2"
-                        onClick={() => setLightbox(null)}
-                        aria-label="Close"
-                    >
-                        <X className="w-7 h-7" />
-                    </button>
-
-                    <button
-                        className="absolute left-4 text-white/70 hover:text-white transition-colors p-3"
-                        onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + photos.length) % photos.length) }}
-                        aria-label="Previous"
-                    >
-                        <ChevronLeft className="w-10 h-10" />
-                    </button>
-
-                    <img
-                        src={photos[lightbox].url}
-                        alt={playerName}
-                        className="max-h-[88vh] max-w-[80vw] object-contain rounded-lg shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
-                    />
-
-                    <button
-                        className="absolute right-4 text-white/70 hover:text-white transition-colors p-3"
-                        onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % photos.length) }}
-                        aria-label="Next"
-                    >
-                        <ChevronRight className="w-10 h-10" />
-                    </button>
-
-                    <p className="absolute bottom-5 text-zinc-500 text-sm tracking-widest">
-                        {lightbox + 1} / {photos.length}
-                    </p>
-                </div>
-            )}
+            <Lightbox
+                images={urls}
+                index={lightbox}
+                onClose={() => setLightbox(-1)}
+            />
         </>
     )
 }

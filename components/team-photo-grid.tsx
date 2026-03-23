@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import Lightbox from '@/components/Lightbox'
 import type { SanityTeamPhoto } from '@/sanity/lib/queries'
 
 interface Props {
@@ -17,11 +18,9 @@ export default function TeamPhotoGrid({ photos, count = 4 }: Props) {
         setDisplayed(shuffled.slice(0, count))
     }, [photos, count])
 
-    const [activeIndex, setActiveIndex] = useState<number | null>(null)
+    const [activeIndex, setActiveIndex] = useState(-1)
 
-    const close = () => setActiveIndex(null)
-    const prev = () => setActiveIndex((i) => (i === null ? null : (i - 1 + displayed.length) % displayed.length))
-    const next = () => setActiveIndex((i) => (i === null ? null : (i + 1) % displayed.length))
+    const urls = displayed.map(p => p.url)
 
     if (displayed.length === 0) return null
 
@@ -57,63 +56,11 @@ export default function TeamPhotoGrid({ photos, count = 4 }: Props) {
                 ))}
             </div>
 
-            {/* Lightbox */}
-            {activeIndex !== null && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-                    onClick={close}
-                >
-                    {/* Close */}
-                    <button
-                        className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300 focus:outline-none"
-                        onClick={close}
-                        aria-label="Close"
-                    >
-                        &times;
-                    </button>
-
-                    {/* Prev */}
-                    {displayed.length > 1 && (
-                        <button
-                            className="absolute left-4 text-white text-4xl px-4 py-2 hover:text-gray-300 focus:outline-none"
-                            onClick={(e) => { e.stopPropagation(); prev() }}
-                            aria-label="Previous"
-                        >
-                            &#8249;
-                        </button>
-                    )}
-
-                    {/* Image */}
-                    <div
-                        className="relative w-full max-w-4xl max-h-[85vh] mx-16"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <Image
-                            src={displayed[activeIndex].url}
-                            alt="Central Florida Claymores RFC"
-                            width={1200}
-                            height={800}
-                            className="object-contain w-full h-full max-h-[85vh]"
-                        />
-                    </div>
-
-                    {/* Next */}
-                    {displayed.length > 1 && (
-                        <button
-                            className="absolute right-4 text-white text-4xl px-4 py-2 hover:text-gray-300 focus:outline-none"
-                            onClick={(e) => { e.stopPropagation(); next() }}
-                            aria-label="Next"
-                        >
-                            &#8250;
-                        </button>
-                    )}
-
-                    {/* Counter */}
-                    <p className="absolute bottom-4 text-gray-400 text-sm">
-                        {activeIndex + 1} / {displayed.length}
-                    </p>
-                </div>
-            )}
+            <Lightbox
+                images={urls}
+                index={activeIndex}
+                onClose={() => setActiveIndex(-1)}
+            />
         </>
     )
 }
