@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
 import { postBySlugQuery, postsQuery, playerPhotosQuery, type SanityPost, type SanityPlayerPhoto } from '@/sanity/lib/queries'
-import PlayerGallery from '@/app/(site)/team/[slug]/PlayerGallery'
+import PostGallery from './PostGallery'
 
 export const revalidate = 3600
 
@@ -91,11 +91,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                 <p className="text-[#555555] leading-relaxed text-lg">{post.excerpt}</p>
             ) : null}
 
-            {galleryPhotos.length > 0 && (
-                <div className="mt-16 -mx-4">
-                    <PlayerGallery photos={galleryPhotos} playerName={post.title} />
-                </div>
-            )}
+            {galleryPhotos.length > 0 && <PostGallery photos={galleryPhotos} />}
 
             <div className="mt-16 border-t border-[#EAEAEA] pt-8 text-center">
                 <p className="text-[#555555] mb-4">Want to be part of the story? Join the Claymores.</p>
