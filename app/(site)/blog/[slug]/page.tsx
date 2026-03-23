@@ -1,32 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
 import { postBySlugQuery, postsQuery, playerPhotosQuery, type SanityPost, type SanityPlayerPhoto } from '@/sanity/lib/queries'
 import PostGallery from './PostGallery'
+import BlogContent from './BlogContent'
 
 export const revalidate = 3600
-
-const portableTextComponents = {
-    types: {
-        image: ({ value }: { value: { asset?: { url?: string }; alt?: string; caption?: string } }) => {
-            if (!value.asset?.url) return null
-            return (
-                <figure className="my-8">
-                    <img
-                        src={value.asset.url}
-                        alt={value.alt ?? ''}
-                        className="w-full rounded-lg"
-                    />
-                    {value.caption && (
-                        <figcaption className="text-center text-sm text-gray-500 mt-2">{value.caption}</figcaption>
-                    )}
-                </figure>
-            )
-        },
-    },
-}
 
 export async function generateStaticParams() {
     const posts: SanityPost[] = await client.fetch(postsQuery)
@@ -69,27 +49,18 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         <div className="container mx-auto px-4 py-12 max-w-3xl">
             <Link href="/blog" className="text-sm text-[#77c3ef] hover:underline mb-8 inline-block">&larr; Back to News</Link>
 
-            {post.coverImageUrl && (
-                <img
-                    src={post.coverImageUrl}
-                    alt={`${post.title} — Central Florida Claymores RFC`}
-                    className="w-full h-72 object-cover rounded-xl mb-8"
-                />
-            )}
-
             <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-2">
                 {post.publishedAt ? formatDate(post.publishedAt) : 'Central Florida Claymores RFC'}
             </p>
             <h1 className="text-4xl md:text-5xl font-claymore text-[#111111] mb-6">{post.title}</h1>
             <div className="w-12 h-px bg-[#fd80b5] mb-8" />
 
-            {post.body && post.body.length > 0 ? (
-                <div className="prose prose-lg max-w-none text-[#333333] [&_h2]:font-claymore [&_h2]:text-[#111111] [&_h2]:mt-10 [&_h2]:mb-3 [&_p]:mb-5 [&_a]:text-[#77c3ef]">
-                    <PortableText value={post.body as Parameters<typeof PortableText>[0]['value']} components={portableTextComponents} />
-                </div>
-            ) : post.excerpt ? (
-                <p className="text-[#555555] leading-relaxed text-lg">{post.excerpt}</p>
-            ) : null}
+            <BlogContent
+                coverImageUrl={post.coverImageUrl}
+                coverImageAlt={`${post.title} — Central Florida Claymores RFC`}
+                body={post.body ?? []}
+                excerpt={post.excerpt}
+            />
 
             {galleryPhotos.length > 0 && <PostGallery photos={galleryPhotos} />}
 
