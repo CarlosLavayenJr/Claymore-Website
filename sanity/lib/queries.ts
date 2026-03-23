@@ -141,7 +141,7 @@ export const postBySlugQuery = groq`
       ...,
       asset->
     },
-    mediaTag
+    "mediaTag": mediaTag->name.current
   }
 `
 

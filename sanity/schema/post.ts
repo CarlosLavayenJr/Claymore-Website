@@ -44,8 +44,10 @@ export const post = defineType({
         defineField({
             name: 'mediaTag',
             title: 'Gallery Tag',
-            type: 'string',
-            description: 'Sanity media tag name — photos with this tag will appear in a gallery at the bottom of the post.',
+            type: 'reference',
+            to: [{ type: 'media.tag' }],
+            options: { disableNew: true },
+            description: 'Photos with this tag will appear in a gallery at the bottom of the post.',
         }),
     ],
     preview: {
