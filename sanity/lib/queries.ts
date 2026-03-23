@@ -115,6 +115,7 @@ export interface SanityPost {
     excerpt: string | null
     coverImageUrl: string | null
     body: unknown[]
+    mediaTag: string | null
 }
 
 export const postsQuery = groq`
@@ -136,7 +137,11 @@ export const postBySlugQuery = groq`
     publishedAt,
     excerpt,
     "coverImageUrl": coverImage.asset->url,
-    body
+    body[]{
+      ...,
+      asset->
+    },
+    mediaTag
   }
 `
 
