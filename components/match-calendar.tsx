@@ -108,10 +108,9 @@ function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
 function MobileList({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
     const grouped = useMemo(() => {
         const latestSeason = Math.max(...matches.map(m => m.season))
-        const seasonMatches = matches.filter(m => m.season === latestSeason)
 
-        const upcoming = seasonMatches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
-        const past = seasonMatches.filter(m => m.status !== 'upcoming').sort((a, b) => b.date.localeCompare(a.date))
+        const upcoming = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
+        const past = matches.filter(m => m.status !== 'upcoming' && m.season === latestSeason).sort((a, b) => b.date.localeCompare(a.date))
         const sorted = [...upcoming, ...past]
 
         const map = new Map<string, SanityMatch[]>()

@@ -161,13 +161,13 @@ export async function GET(request: Request) {
   })
 
   // Fetch all matches indexed by date (oldest doc wins — never delete)
-  const existing: { _id: string; date: string }[] = await sanity.fetch(
-    `*[_type == "match"] | order(_createdAt asc) { _id, date }`
+  const existing: { _id: string; date: string; status: string; homeScore: number; awayScore: number }[] = await sanity.fetch(
+    `*[_type == "match"] | order(_createdAt asc) { _id, date, status, homeScore, awayScore }`
   )
 
-  const existingByDate = new Map<string, string>()
+  const existingByDate = new Map<string, { _id: string; status: string; homeScore: number; awayScore: number }>()
   for (const m of existing) {
-    if (!existingByDate.has(m.date)) existingByDate.set(m.date, m._id)
+    if (!existingByDate.has(m.date)) existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore })
   }
 
   const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
@@ -204,23 +204,24 @@ export async function GET(request: Request) {
 
       const results = await Promise.allSettled(
         matches.map(m => {
-          const existingId = existingByDate.get(m.date)
-          if (existingId) {
-            // Patch existing doc — preserves the original _id, no duplicate
-            return sanity.patch(existingId).set({
+          const existingDoc = existingByDate.get(m.date)
+          if (existingDoc) {
+            // If already played and scores are set, preserve them (manual edits protected)
+            const scoresAlreadySet = existingDoc.status === 'played' &&
+              (existingDoc.homeScore != null || existingDoc.awayScore != null)
+            return sanity.patch(existingDoc._id).set({
               homeTeam: m.homeTeam,
-              homeScore: m.homeScore,
               awayTeam: m.awayTeam,
-              awayScore: m.awayScore,
               status: m.status,
               season: m.season,
               matchType: m.matchType,
+              ...(scoresAlreadySet ? {} : { homeScore: m.homeScore, awayScore: m.awayScore }),
               ...(m.competition ? { competition: m.competition } : {}),
               ...(m.note ? { note: m.note } : {}),
             }).commit()
           }
           // New match — create with scraped id and register in map for this run
-          existingByDate.set(m.date, m._id)
+          existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore })
           return sanity.createOrReplace(m)
         })
       )
