@@ -23,8 +23,8 @@ function PlayerSection({ title, players, badgeColor }: { title: string; players:
                 <PlayerCarousel players={players} badgeColor={badgeColor} />
             </div>
             <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {players.map((player) => (
-                    <PlayerCard key={player._id} player={player} badgeColor={badgeColor} />
+                {players.map((player, i) => (
+                    <PlayerCard key={player._id} player={player} badgeColor={badgeColor} priority={i < 5} />
                 ))}
             </div>
         </div>
