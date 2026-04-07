@@ -24,7 +24,7 @@ export default async function TeamPage() {
     return (
         <div>
             {/* Hero — white */}
-            <div className="bg-gradient-to-b from-[#f0f0f0] to-white py-16 md:py-24 text-center">
+            <div className="bg-gradient-to-b from-white from-70% to-[#111111] py-16 md:py-24 text-center">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#fd80b5] mb-3">
                     Central Florida Claymores RFC
                 </p>
@@ -41,10 +41,11 @@ export default async function TeamPage() {
                 ) : (
                     <TeamGrid players={players} />
                 )}
+                <div className="h-24 bg-gradient-to-b from-transparent to-white" />
             </div>
 
             {/* CTA */}
-            <div className="bg-white border-t border-[#EAEAEA] py-16 px-8 text-center">
+            <div className="bg-white py-16 px-8 text-center">
                 <p className="text-xs font-bold uppercase tracking-[0.4em] text-[#fd80b5] mb-3">Join the Club</p>
                 <h2 className="font-claymore text-[#111111] text-4xl md:text-5xl leading-none mb-4">
                     Ready to Play?
