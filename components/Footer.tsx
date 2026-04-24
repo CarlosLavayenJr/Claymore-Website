@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa'
+import { features } from '@/lib/features'
 
 const Footer = () => {
     return (
@@ -44,7 +45,10 @@ const Footer = () => {
                                 { href: '/', label: 'Home' },
                                 { href: '/about', label: 'About' },
                                 { href: '/team', label: 'Team' },
+                                ...(features.coaches ? [{ href: '/coaches', label: 'Coaches' }] : []),
                                 { href: '/fixtures', label: 'Fixtures' },
+                                { href: '/results', label: 'Results' },
+                                { href: '/opponents', label: 'Opponents' },
                                 { href: '/blog', label: 'News' },
                                 { href: '/faq', label: 'FAQ' },
                             ].map(({ href, label }) => (

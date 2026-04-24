@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import JsonLd from '@/components/json-ld'
+import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby FAQ — Joining the Claymores',
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
         title: 'Orlando Rugby FAQ — Joining the Claymores | Central Florida Claymores',
         description: 'Everything you need to know about joining Orlando rugby with the Central Florida Claymores RFC.',
         url: '/faq',
+        images: ogImage(),
     },
 }
 

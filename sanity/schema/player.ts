@@ -62,6 +62,15 @@ export const player = defineType({
             title: 'Photo',
             type: 'image',
             options: { hotspot: true },
+            fields: [
+                defineField({
+                    name: 'alt',
+                    title: 'Alt text',
+                    type: 'string',
+                    description:
+                        'Describe what is visible in the photo (e.g. "John Smith carrying the ball through a tackle"). Falls back to player name when empty.',
+                }),
+            ],
         }),
         defineField({
             name: 'description',
