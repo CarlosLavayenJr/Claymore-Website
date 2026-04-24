@@ -3,6 +3,7 @@ import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
+import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
     title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
         title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
         description: 'No experience needed. Practices every Thursday in Orlando. All skill levels welcome.',
         url: '/join',
+        images: ogImage(),
     },
 }
 

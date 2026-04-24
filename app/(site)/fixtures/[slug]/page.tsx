@@ -19,6 +19,7 @@ import {
     seasonLabel,
     sportsEventSchema,
 } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -65,6 +66,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
             description: autoMatchSummary(match).slice(0, 200),
             url: `/fixtures/${slug}`,
             type: 'article',
+            images: ogImage(`/fixtures/${slug}`),
         },
     }
 }

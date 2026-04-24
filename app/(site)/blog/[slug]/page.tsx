@@ -8,6 +8,7 @@ import BlogContent from './BlogContent'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import { articleSchema } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
             title: post.title,
             description: post.excerpt ?? undefined,
             url: `/blog/${slug}`,
-            images: post.coverImageUrl ? [{ url: post.coverImageUrl }] : undefined,
+            images: post.coverImageUrl ? [{ url: post.coverImageUrl }] : ogImage(`/blog/${slug}`),
         },
     }
 }

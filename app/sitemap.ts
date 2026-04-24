@@ -14,6 +14,7 @@ import {
 } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
 import { CITIES } from '@/lib/cities'
+import { features } from '@/lib/features'
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'
 
@@ -29,7 +30,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         client.fetch(postsQuery),
         client.fetch(matchesQuery),
         client.fetch(teamsQuery),
-        client.fetch(coachesQuery).catch(() => [] as SanityCoach[]),
+        features.coaches
+            ? client.fetch(coachesQuery).catch(() => [] as SanityCoach[])
+            : Promise.resolve([] as SanityCoach[]),
     ])
 
     const playerEntries: MetadataRoute.Sitemap = players.map((p) => ({
@@ -78,11 +81,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
 
     const cityEntries: MetadataRoute.Sitemap = CITIES.map((c) => ({
-        url: `${baseUrl}/rugby-in-${c.slug}`,
+        url: `${baseUrl}/rugby-in/${c.slug}`,
         lastModified: new Date(),
         changeFrequency: 'monthly',
         priority: 0.75,
     }))
+
+    const coachesIndex: MetadataRoute.Sitemap = features.coaches
+        ? [{ url: `${baseUrl}/coaches`, lastModified: new Date(), changeFrequency: 'monthly' as const, priority: 0.8 }]
+        : []
 
     return [
         { url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1 },
@@ -91,7 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         { url: `${baseUrl}/fixtures`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.9 },
         { url: `${baseUrl}/about`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
         { url: `${baseUrl}/team`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
-        { url: `${baseUrl}/coaches`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
+        ...coachesIndex,
         { url: `${baseUrl}/opponents`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
         { url: `${baseUrl}/results`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
         { url: `${baseUrl}/location`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },

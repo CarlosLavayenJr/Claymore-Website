@@ -5,6 +5,7 @@ import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
+import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
     title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
         title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
         description: "Orlando's USA Rugby D3 club. No experience needed. Join us Thursdays.",
         url: '/',
+        images: ogImage(),
     },
 }
 

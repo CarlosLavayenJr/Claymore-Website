@@ -3,6 +3,7 @@ import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import { placeSchema } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby Club Location — Where We Practice',
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
         title: 'Orlando Rugby Club Location | Central Florida Claymores',
         description: 'Where the Central Florida Claymores RFC practice in Orlando, FL. Thursday evening, 8–10pms.',
         url: '/location',
+        images: ogImage(),
     },
 }
 

@@ -19,6 +19,7 @@ import {
     seasonLabel,
     sportsTeamSchema,
 } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -54,7 +55,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         title,
         description,
         alternates: { canonical: `/opponents/${slug}` },
-        openGraph: { title, description, url: `/opponents/${slug}` },
+        openGraph: {
+            title,
+            description,
+            url: `/opponents/${slug}`,
+            images: ogImage(`/opponents/${slug}`),
+        },
     }
 }
 

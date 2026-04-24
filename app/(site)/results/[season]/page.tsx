@@ -12,6 +12,7 @@ import {
     matchSlug,
     seasonLabel,
 } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -38,6 +39,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
             title: `${label} Season Results | Central Florida Claymores RFC`,
             description: `Match-by-match results from the Claymores' ${label} season in the Florida Rugby Union.`,
             url: `/results/${season}`,
+            images: ogImage(`/results/${season}`),
         },
     }
 }

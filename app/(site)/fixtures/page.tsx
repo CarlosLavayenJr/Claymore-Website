@@ -4,6 +4,7 @@ import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import MatchCalendar from '@/components/match-calendar'
 import { matchSlug } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
         title: 'Fixtures & Schedule | Central Florida Claymores | Orlando, FL',
         description: 'Fixtures and results for the Central Florida Claymores RFC — Orlando rugby.',
         url: '/fixtures',
+        images: ogImage(),
     },
 }
 

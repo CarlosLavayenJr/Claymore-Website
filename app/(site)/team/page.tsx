@@ -4,6 +4,7 @@ import { client } from '@/sanity/lib/client'
 import { playersQuery } from '@/sanity/lib/queries'
 import type { SanityPlayer } from '@/sanity/lib/queries'
 import TeamGrid from '@/components/team-grid'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 0
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
         title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
         description: "Meet the forwards, backs, and staff of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club.",
         url: '/team',
+        images: ogImage(),
     },
 }
 

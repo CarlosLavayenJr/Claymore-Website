@@ -6,6 +6,7 @@ import Breadcrumbs from '@/components/breadcrumbs'
 import { organizationSchema } from '@/lib/schema'
 import { breadcrumbSchema } from '@/lib/seo'
 import { CITIES, getCity } from '@/lib/cities'
+import { ogImage } from '@/lib/og'
 
 export const dynamicParams = false
 
@@ -26,11 +27,12 @@ export async function generateMetadata({
     return {
         title,
         description,
-        alternates: { canonical: `/rugby-in-${city}` },
+        alternates: { canonical: `/rugby-in/${city}` },
         openGraph: {
             title,
             description,
-            url: `/rugby-in-${city}`,
+            url: `/rugby-in/${city}`,
+            images: ogImage(`/rugby-in/${city}`),
         },
     }
 }
@@ -46,14 +48,14 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
             <JsonLd
                 data={breadcrumbSchema([
                     { name: 'Home', path: '/' },
-                    { name: `Rugby in ${c.name}`, path: `/rugby-in-${city}` },
+                    { name: `Rugby in ${c.name}`, path: `/rugby-in/${city}` },
                 ])}
             />
 
             <Breadcrumbs
                 items={[
                     { name: 'Home', path: '/' },
-                    { name: `Rugby in ${c.name}`, path: `/rugby-in-${city}` },
+                    { name: `Rugby in ${c.name}`, path: `/rugby-in/${city}` },
                 ]}
             />
 
@@ -150,7 +152,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                     {CITIES.filter((other) => other.slug !== c.slug).map((other) => (
                         <li key={other.slug}>
                             <Link
-                                href={`/rugby-in-${other.slug}`}
+                                href={`/rugby-in/${other.slug}`}
                                 className="text-[#77c3ef] hover:underline"
                             >
                                 Rugby in {other.name}

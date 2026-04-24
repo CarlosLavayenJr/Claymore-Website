@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { client } from '@/sanity/lib/client'
 import { coachesQuery, type SanityCoach } from '@/sanity/lib/queries'
 import Breadcrumbs from '@/components/breadcrumbs'
+import { features } from '@/lib/features'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -15,10 +18,12 @@ export const metadata: Metadata = {
         title: 'Coaches & Staff | Central Florida Claymores RFC',
         description: 'Meet the people building Orlando rugby with the Central Florida Claymores RFC.',
         url: '/coaches',
+        images: ogImage(),
     },
 }
 
 export default async function CoachesPage() {
+    if (!features.coaches) notFound()
     const coaches: SanityCoach[] = await client.fetch(coachesQuery)
 
     return (

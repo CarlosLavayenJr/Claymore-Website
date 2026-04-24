@@ -5,6 +5,7 @@ import { playerBySlugQuery, playerPhotosQuery, playersQuery } from "@/sanity/lib
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
 import JsonLd from "@/components/json-ld"
 import { athleteSchema, breadcrumbSchema } from "@/lib/seo"
+import { ogImage } from "@/lib/og"
 
 import PlayerProfile from "./player-profile"
 
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             url: `/team/${slug}`,
             images: player.imageUrl
                 ? [{ url: player.imageUrl, width: 800, height: 800, alt: `${player.name} — Central Florida Claymores RFC Orlando Rugby` }]
-                : [],
+                : ogImage(`/team/${slug}`),
         },
     }
 }

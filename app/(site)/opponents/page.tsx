@@ -4,6 +4,7 @@ import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import Breadcrumbs from '@/components/breadcrumbs'
 import { isClaymores } from '@/lib/seo'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
         title: 'Florida Rugby Union Opponents | Central Florida Claymores RFC',
         description: 'Every Florida Rugby Union opponent the Claymores have played, with head-to-head records.',
         url: '/opponents',
+        images: ogImage(),
     },
 }
 

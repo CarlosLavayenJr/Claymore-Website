@@ -22,13 +22,20 @@ export const metadata: Metadata = {
         siteName: 'Central Florida Claymores RFC',
         title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
         description: "Orlando's USA Rugby D3 club. All skill levels welcome. Join us Thursdays.",
-        images: [{ url: '/assets/logo.png', width: 800, height: 600, alt: 'Central Florida Claymores RFC — Orlando Rugby Club Logo' }],
+        images: [
+            {
+                url: '/opengraph-image',
+                width: 1200,
+                height: 630,
+                alt: 'Central Florida Claymores RFC — Orlando Rugby',
+            },
+        ],
     },
     twitter: {
         card: 'summary_large_image',
         title: 'Central Florida Claymores RFC | Orlando Rugby Club',
         description: "Orlando's USA Rugby D3 club. All skill levels welcome.",
-        images: ['/assets/logo.png'],
+        images: ['/opengraph-image'],
     },
     robots: { index: true, follow: true },
     verification: {

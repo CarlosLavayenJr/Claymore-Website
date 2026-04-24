@@ -6,6 +6,8 @@ import { coachBySlugQuery, coachesQuery, type SanityCoach } from '@/sanity/lib/q
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import { breadcrumbSchema, coachSchema } from '@/lib/seo'
+import { features } from '@/lib/features'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -14,6 +16,7 @@ interface Params {
 }
 
 export async function generateStaticParams() {
+    if (!features.coaches) return []
     const coaches: SanityCoach[] = await client.fetch(coachesQuery)
     return coaches.map((c) => ({ slug: c.slug }))
 }
@@ -33,12 +36,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
             title: `${coach.name} — ${coach.role} | Central Florida Claymores RFC`,
             description,
             url: `/coaches/${slug}`,
-            ...(coach.imageUrl ? { images: [{ url: coach.imageUrl }] } : {}),
+            images: coach.imageUrl ? [{ url: coach.imageUrl }] : ogImage(`/coaches/${slug}`),
         },
     }
 }
 
 export default async function CoachPage({ params }: Params) {
+    if (!features.coaches) notFound()
     const { slug } = await params
     const coach: SanityCoach | null = await client.fetch(coachBySlugQuery, { slug })
     if (!coach) notFound()
