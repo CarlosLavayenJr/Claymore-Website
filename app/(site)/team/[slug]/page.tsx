@@ -3,6 +3,8 @@ import type { Metadata } from "next"
 import { client } from "@/sanity/lib/client"
 import { playerBySlugQuery, playerPhotosQuery, playersQuery } from "@/sanity/lib/queries"
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
+import JsonLd from "@/components/json-ld"
+import { athleteSchema, breadcrumbSchema } from "@/lib/seo"
 
 import PlayerProfile from "./player-profile"
 
@@ -50,5 +52,17 @@ export default async function PlayerPage({ params }: Props) {
     const currentIndex = allPlayers.findIndex((p) => p.slug === slug)
     const nextPlayer = allPlayers[(currentIndex + 1) % allPlayers.length] ?? null
 
-    return <PlayerProfile player={player} photos={photos} nextPlayer={nextPlayer} />
+    return (
+        <>
+            <JsonLd data={athleteSchema(player)} />
+            <JsonLd
+                data={breadcrumbSchema([
+                    { name: "Home", path: "/" },
+                    { name: "Team", path: "/team" },
+                    { name: player.name, path: `/team/${slug}` },
+                ])}
+            />
+            <PlayerProfile player={player} photos={photos} nextPlayer={nextPlayer} />
+        </>
+    )
 }

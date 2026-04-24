@@ -5,6 +5,9 @@ import { client } from '@/sanity/lib/client'
 import { postBySlugQuery, postsQuery, playerPhotosQuery, type SanityPost, type SanityPlayerPhoto } from '@/sanity/lib/queries'
 import PostGallery from './PostGallery'
 import BlogContent from './BlogContent'
+import JsonLd from '@/components/json-ld'
+import Breadcrumbs from '@/components/breadcrumbs'
+import { articleSchema } from '@/lib/seo'
 
 export const revalidate = 3600
 
@@ -47,6 +50,14 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
     return (
         <div className="container mx-auto px-4 py-12 max-w-3xl">
+            <JsonLd data={articleSchema(post)} />
+            <Breadcrumbs
+                items={[
+                    { name: 'Home', path: '/' },
+                    { name: 'News', path: '/blog' },
+                    { name: post.title, path: `/blog/${slug}` },
+                ]}
+            />
             <Link href="/blog" className="text-sm text-[#77c3ef] hover:underline mb-8 inline-block">&larr; Back to News</Link>
 
             <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-2">
@@ -57,7 +68,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
             <BlogContent
                 coverImageUrl={post.coverImageUrl}
-                coverImageAlt={`${post.title} — Central Florida Claymores RFC`}
+                coverImageAlt={post.coverImageAlt ?? `${post.title} — Central Florida Claymores RFC`}
                 body={post.body ?? []}
                 excerpt={post.excerpt}
             />
