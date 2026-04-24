@@ -146,10 +146,6 @@ export default async function OpponentsIndexPage() {
                 </div>
             )}
 
-            <p className="text-xs text-[#555555] text-center mt-6">
-                Opponent profiles are added when a Team is created in Sanity Studio with a slug. Without a slug the
-                opponent appears here read-only.
-            </p>
         </div>
     )
 }
