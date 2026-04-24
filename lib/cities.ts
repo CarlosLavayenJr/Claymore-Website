@@ -182,6 +182,92 @@ export const CITIES: City[] = [
         intro:
             'St. Cloud players seeking serious club rugby join the Central Florida Claymores RFC. Practice is 45 minutes north at Barnett Park in Orlando.',
     },
+
+    // East Orlando — additional coverage beyond the broader "East Orlando" page
+    {
+        slug: 'waterford-lakes',
+        name: 'Waterford Lakes',
+        fullName: 'Waterford Lakes, FL',
+        driveMinutes: 20,
+        direction: 'west',
+        landmarks: ['Waterford Lakes Town Center', 'Alafaya Trail', 'East Orlando'],
+        intro:
+            'Looking for rugby near Waterford Lakes? The Central Florida Claymores RFC are the closest USA Rugby D3 club — practice is at Barnett Park, about 20 minutes west on the 408.',
+    },
+    {
+        slug: 'avalon-park',
+        name: 'Avalon Park',
+        fullName: 'Avalon Park, FL',
+        driveMinutes: 25,
+        direction: 'west',
+        landmarks: ['Avalon Park Town Center', 'East Orlando', 'Innovation Way'],
+        intro:
+            'Avalon Park residents who want to play club rugby join the Central Florida Claymores RFC. Practice is at Barnett Park in Orlando, roughly 25 minutes west of Avalon Park.',
+    },
+    {
+        slug: 'bithlo',
+        name: 'Bithlo',
+        fullName: 'Bithlo, FL',
+        driveMinutes: 30,
+        direction: 'west',
+        landmarks: ['East Orange County', 'Highway 50', 'Lake Pickett'],
+        intro:
+            "Bithlo and the far east side of Orange County are still close enough for the Claymores. The Central Florida Claymores RFC train every Thursday at Barnett Park, a straight shot west on Highway 50 from Bithlo.",
+    },
+
+    // Seminole County — east/central coverage
+    {
+        slug: 'casselberry',
+        name: 'Casselberry',
+        fullName: 'Casselberry, FL',
+        driveMinutes: 20,
+        direction: 'south',
+        landmarks: ['Lake Concord', 'Seminole County', 'Highway 17-92'],
+        intro:
+            'Casselberry residents are some of the closest Seminole County players to the Claymores. The Central Florida Claymores RFC practice every Thursday at Barnett Park in Orlando — about 20 minutes south.',
+    },
+    {
+        slug: 'winter-springs',
+        name: 'Winter Springs',
+        fullName: 'Winter Springs, FL',
+        driveMinutes: 25,
+        direction: 'south',
+        landmarks: ['Tuscawilla', 'Central Winds Park', 'Seminole County'],
+        intro:
+            'The Central Florida Claymores RFC are the rugby club for Winter Springs and the broader east Seminole area. Practice is 25 minutes south at Barnett Park in Orlando.',
+    },
+    {
+        slug: 'longwood',
+        name: 'Longwood',
+        fullName: 'Longwood, FL',
+        driveMinutes: 25,
+        direction: 'south',
+        landmarks: ['Reiter Park', 'Seminole County', 'Big Tree Park'],
+        intro:
+            'Longwood players join the Central Florida Claymores RFC for serious USA Rugby D3 competition. Practice is at Barnett Park in Orlando, about 25 minutes south of Longwood.',
+    },
+
+    // West Orange + Lake County — additional coverage
+    {
+        slug: 'horizon-west',
+        name: 'Horizon West',
+        fullName: 'Horizon West, FL',
+        driveMinutes: 25,
+        direction: 'north',
+        landmarks: ['Hamlin', 'Lakeside Village', 'West Orange County'],
+        intro:
+            "Horizon West is one of Central Florida's fastest-growing master-planned communities — and the Central Florida Claymores RFC are the closest senior club for residents. Practice is 25 minutes north at Barnett Park in Orlando.",
+    },
+    {
+        slug: 'minneola',
+        name: 'Minneola',
+        fullName: 'Minneola, FL',
+        driveMinutes: 35,
+        direction: 'east',
+        landmarks: ['Lake Minneola', 'Lake County', 'Highway 27'],
+        intro:
+            'Minneola sits right at the doorstep of Clermont and the broader Lake County rugby community. The Central Florida Claymores RFC practice at Barnett Park in Orlando, about 35 minutes east.',
+    },
 ]
 
 export function getCity(slug: string): City | undefined {
