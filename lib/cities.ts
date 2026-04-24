@@ -13,6 +13,7 @@ export interface City {
 }
 
 export const CITIES: City[] = [
+    // Original four
     {
         slug: 'kissimmee',
         name: 'Kissimmee',
@@ -52,6 +53,134 @@ export const CITIES: City[] = [
         landmarks: ['Lake Minneola', 'Citrus Tower', 'Lake County'],
         intro:
             'The Central Florida Claymores RFC welcome players from across Lake County, including Clermont. Practice is at Barnett Park in Orlando — a straight shot east on Highway 50.',
+    },
+
+    // West Orange County (closest to Barnett Park)
+    {
+        slug: 'ocoee',
+        name: 'Ocoee',
+        fullName: 'Ocoee, FL',
+        driveMinutes: 10,
+        direction: 'east',
+        landmarks: ['West Oaks Mall', 'Lake Olympia', 'West Orange County'],
+        intro:
+            "Ocoee is one of the closest cities to the Claymores' practice ground. The Central Florida Claymores RFC are Orlando's USA Rugby D3 club — Barnett Park is roughly 10 minutes east on Colonial Drive.",
+    },
+    {
+        slug: 'apopka',
+        name: 'Apopka',
+        fullName: 'Apopka, FL',
+        driveMinutes: 15,
+        direction: 'south',
+        landmarks: ['Wekiwa Springs', 'Northwest Recreation Complex', 'Lake Apopka'],
+        intro:
+            "Apopka residents are some of the closest to the Claymores' Thursday training. The Central Florida Claymores RFC are Orlando's USA Rugby D3 club, just 15 minutes south down 441.",
+    },
+    {
+        slug: 'winter-garden',
+        name: 'Winter Garden',
+        fullName: 'Winter Garden, FL',
+        driveMinutes: 20,
+        direction: 'east',
+        landmarks: ['Plant Street', 'West Orange Trail', 'Garden Theatre'],
+        intro:
+            'The Central Florida Claymores RFC are the closest rugby club to Winter Garden. Practice is at Barnett Park in Orlando — a quick trip east on Colonial Drive.',
+    },
+    {
+        slug: 'windermere',
+        name: 'Windermere',
+        fullName: 'Windermere, FL',
+        driveMinutes: 20,
+        direction: 'north',
+        landmarks: ['Butler Chain of Lakes', 'Isleworth', 'West Orange'],
+        intro:
+            'Looking for rugby near Windermere? The Central Florida Claymores RFC train every Thursday at Barnett Park in Orlando, roughly 20 minutes north of Windermere.',
+    },
+
+    // Seminole County (north corridor)
+    {
+        slug: 'maitland',
+        name: 'Maitland',
+        fullName: 'Maitland, FL',
+        driveMinutes: 15,
+        direction: 'south',
+        landmarks: ['Lake Lily', 'Maitland Art Center', 'Orange County'],
+        intro:
+            'Maitland is a short drive from the Claymores. The Central Florida Claymores RFC practice every Thursday at Barnett Park in Orlando, about 15 minutes south of Maitland.',
+    },
+    {
+        slug: 'altamonte-springs',
+        name: 'Altamonte Springs',
+        fullName: 'Altamonte Springs, FL',
+        driveMinutes: 20,
+        direction: 'south',
+        landmarks: ['Cranes Roost Park', 'Altamonte Mall', 'Seminole County'],
+        intro:
+            'The Central Florida Claymores RFC are the rugby club for Altamonte Springs and the broader Seminole County area. Practice is 20 minutes south at Barnett Park in Orlando.',
+    },
+    {
+        slug: 'sanford',
+        name: 'Sanford',
+        fullName: 'Sanford, FL',
+        driveMinutes: 30,
+        direction: 'south',
+        landmarks: ['Lake Monroe', 'Historic Downtown Sanford', 'Seminole County'],
+        intro:
+            'Sanford players join the Central Florida Claymores RFC for serious USA Rugby D3 competition. Practice is 30 minutes south at Barnett Park in Orlando.',
+    },
+
+    // East Orlando / UCF corridor (recruiting hub)
+    {
+        slug: 'oviedo',
+        name: 'Oviedo',
+        fullName: 'Oviedo, FL',
+        driveMinutes: 30,
+        direction: 'west',
+        landmarks: ['Oviedo on the Park', 'UCF area', 'Seminole County'],
+        intro:
+            'The Central Florida Claymores RFC welcome Oviedo and UCF-area players. Practice is at Barnett Park in Orlando, roughly 30 minutes west.',
+    },
+    {
+        slug: 'east-orlando',
+        name: 'East Orlando',
+        fullName: 'East Orlando / UCF area, FL',
+        driveMinutes: 25,
+        direction: 'west',
+        landmarks: ['University of Central Florida', 'Waterford Lakes', 'Avalon Park'],
+        intro:
+            "If you're in East Orlando or near UCF and looking to play club rugby, the Central Florida Claymores RFC are the senior USA Rugby D3 option in the area. Practice is at Barnett Park, roughly 25 minutes west.",
+    },
+
+    // South / Southwest Orlando
+    {
+        slug: 'dr-phillips',
+        name: 'Dr. Phillips',
+        fullName: 'Dr. Phillips, FL',
+        driveMinutes: 20,
+        direction: 'north',
+        landmarks: ['Restaurant Row', 'Sand Lake Road', 'Southwest Orlando'],
+        intro:
+            'The Central Florida Claymores RFC are the rugby club for Dr. Phillips and the Restaurant Row corridor. Practice is at Barnett Park, about 20 minutes north.',
+    },
+    {
+        slug: 'lake-nona',
+        name: 'Lake Nona',
+        fullName: 'Lake Nona, FL',
+        driveMinutes: 30,
+        direction: 'northwest',
+        landmarks: ['Medical City', 'Boxi Park', 'Southeast Orlando'],
+        intro:
+            "Lake Nona is one of Central Florida's fastest-growing communities — and the Central Florida Claymores RFC are the rugby club for the area. Practice is 30 minutes northwest at Barnett Park.",
+    },
+    {
+        slug: 'st-cloud',
+        name: 'St. Cloud',
+        fullName: 'St. Cloud, FL',
+        driveMinutes: 45,
+        direction: 'north',
+        landmarks: ['East Lake Tohopekaliga', 'Osceola County', 'Narcoossee'],
+        intro:
+            'St. Cloud players seeking serious club rugby join the Central Florida Claymores RFC. Practice is 45 minutes north at Barnett Park in Orlando.',
     },
 ]
 

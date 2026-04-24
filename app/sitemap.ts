@@ -13,11 +13,9 @@ import {
     type SanityTeam,
 } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
+import { CITIES } from '@/lib/cities'
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'
-
-// Static city landing pages (Tier 3 SEO targets)
-const CITY_SLUGS = ['kissimmee', 'winter-park', 'lake-mary', 'clermont']
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const [players, posts, matches, teams, coaches]: [
@@ -79,8 +77,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.6,
     }))
 
-    const cityEntries: MetadataRoute.Sitemap = CITY_SLUGS.map((slug) => ({
-        url: `${baseUrl}/rugby-in-${slug}`,
+    const cityEntries: MetadataRoute.Sitemap = CITIES.map((c) => ({
+        url: `${baseUrl}/rugby-in-${c.slug}`,
         lastModified: new Date(),
         changeFrequency: 'monthly',
         priority: 0.75,
