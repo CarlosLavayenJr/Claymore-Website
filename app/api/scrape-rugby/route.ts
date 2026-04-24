@@ -161,14 +161,22 @@ export async function GET(request: Request) {
   })
 
   // Fetch all matches indexed by date (oldest doc wins — never delete)
-  const existing: { _id: string; date: string; status: string; homeScore: number; awayScore: number }[] = await sanity.fetch(
-    `*[_type == "match"] | order(_createdAt asc) { _id, date, status, homeScore, awayScore }`
+  const existing: { _id: string; date: string; status: string; homeScore: number; awayScore: number; manualOverride?: boolean }[] = await sanity.fetch(
+    `*[_type == "match"] | order(_createdAt asc) { _id, date, status, homeScore, awayScore, manualOverride }`
   )
 
-  const existingByDate = new Map<string, { _id: string; status: string; homeScore: number; awayScore: number }>()
+  const existingByDate = new Map<string, { _id: string; status: string; homeScore: number; awayScore: number; manualOverride: boolean }>()
   for (const m of existing) {
-    if (!existingByDate.has(m.date)) existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore })
+    if (!existingByDate.has(m.date)) existingByDate.set(m.date, {
+      _id: m._id,
+      status: m.status,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      manualOverride: m.manualOverride === true,
+    })
   }
+
+  let skippedLocked = 0
 
   const summary: Record<string, { parsed: number; upserted: number; failed: number }> = {}
 
@@ -206,6 +214,11 @@ export async function GET(request: Request) {
         matches.map(m => {
           const existingDoc = existingByDate.get(m.date)
           if (existingDoc) {
+            // Manual override: editor has locked this doc — leave it completely alone
+            if (existingDoc.manualOverride) {
+              skippedLocked++
+              return Promise.resolve({ skipped: 'locked' as const })
+            }
             // If already played and scores are set, preserve them (manual edits protected)
             const scoresAlreadySet = existingDoc.status === 'played' &&
               (existingDoc.homeScore != null || existingDoc.awayScore != null)
@@ -221,7 +234,7 @@ export async function GET(request: Request) {
             }).commit()
           }
           // New match — create with scraped id and register in map for this run
-          existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore })
+          existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore, manualOverride: false })
           return sanity.createOrReplace(m)
         })
       )
@@ -241,5 +254,5 @@ export async function GET(request: Request) {
   const totalParsed = Object.values(summary).reduce((a, b) => a + b.parsed, 0)
   const totalUpserted = Object.values(summary).reduce((a, b) => a + b.upserted, 0)
 
-  return Response.json({ success: true, seasons: summary, totalParsed, totalUpserted })
+  return Response.json({ success: true, seasons: summary, totalParsed, totalUpserted, skippedLocked })
 }

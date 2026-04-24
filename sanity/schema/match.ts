@@ -6,6 +6,14 @@ export const match = defineType({
     type: 'document',
     fields: [
         defineField({
+            name: 'manualOverride',
+            title: 'Manual Override (lock from scraper)',
+            type: 'boolean',
+            description:
+                'When checked, the rugbyfl.com scraper will skip this match entirely. Use this when the official source is wrong (e.g. a cancelled match still shows as upcoming) and you want to preserve your edits.',
+            initialValue: false,
+        }),
+        defineField({
             name: 'date',
             title: 'Date',
             type: 'date',
