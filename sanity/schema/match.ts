@@ -90,6 +90,26 @@ export const match = defineType({
             type: 'string',
         }),
         defineField({
+            name: 'kickoffTime',
+            title: 'Kickoff Time',
+            type: 'string',
+            description: 'e.g. "1:00 PM" — appears on the match page and in SportsEvent schema.',
+        }),
+        defineField({
+            name: 'venue',
+            title: 'Venue',
+            type: 'string',
+            description: 'e.g. "Barnett Park, Orlando, FL". Defaults to home team city when empty.',
+        }),
+        defineField({
+            name: 'recap',
+            title: 'Match Recap (overrides auto-generated)',
+            type: 'array',
+            of: [{ type: 'block' }],
+            description:
+                'Optional editorial recap. When set, replaces the auto-generated summary on the match page.',
+        }),
+        defineField({
             name: 'homeTeamRef',
             title: 'Home Team (linked)',
             type: 'reference',

@@ -17,6 +17,32 @@ export const team = defineType({
             type: 'image',
             options: { hotspot: true },
             validation: (rule) => rule.required(),
+            fields: [
+                defineField({
+                    name: 'alt',
+                    title: 'Alt text',
+                    type: 'string',
+                    description: 'Describe the logo. Falls back to "[Team] logo" when empty.',
+                }),
+            ],
+        }),
+        defineField({
+            name: 'slug',
+            title: 'Slug',
+            type: 'slug',
+            options: { source: 'name' },
+            description: 'URL slug for /opponents/[slug]. Generate from team name.',
+        }),
+        defineField({
+            name: 'city',
+            title: 'City',
+            type: 'string',
+            description: 'Their home city/region (e.g. "Jacksonville, FL"). Used on opponent pages.',
+        }),
+        defineField({
+            name: 'website',
+            title: 'Website',
+            type: 'url',
         }),
         defineField({
             name: 'aliases',
