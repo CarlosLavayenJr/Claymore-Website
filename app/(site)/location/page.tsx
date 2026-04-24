@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
+import { placeSchema } from '@/lib/seo'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby Club Location — Where We Practice',
@@ -18,6 +19,7 @@ export default function LocationPage() {
     return (
         <div className="min-h-screen">
             <JsonLd data={organizationSchema} />
+            <JsonLd data={placeSchema()} />
 
             <div className="container mx-auto px-4 py-12 max-w-4xl">
                 <h1 className="text-4xl md:text-5xl font-claymore text-center mb-4">
