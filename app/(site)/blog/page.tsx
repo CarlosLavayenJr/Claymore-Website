@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { client } from '@/sanity/lib/client'
 import { postsQuery, type SanityPost } from '@/sanity/lib/queries'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
         title: 'News & Updates | Central Florida Claymores RFC | Orlando Rugby',
         description: 'Match recaps, season previews, and club news from Orlando\'s USA Rugby D3 club.',
         url: '/blog',
+        images: ogImage(),
     },
 }
 

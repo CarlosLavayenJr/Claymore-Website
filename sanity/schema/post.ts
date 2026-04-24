@@ -28,6 +28,14 @@ export const post = defineType({
             title: 'Cover Image',
             type: 'image',
             options: { hotspot: true },
+            fields: [
+                defineField({
+                    name: 'alt',
+                    title: 'Alt text',
+                    type: 'string',
+                    description: 'Describe the image. Falls back to the post title when empty.',
+                }),
+            ],
         }),
         defineField({
             name: 'excerpt',

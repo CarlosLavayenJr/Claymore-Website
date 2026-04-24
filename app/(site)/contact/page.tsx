@@ -4,6 +4,7 @@ import { client } from '@/sanity/lib/client'
 import { teamPhotosQuery, type SanityTeamPhoto } from '@/sanity/lib/queries'
 import ContactForm from '@/components/contact-form'
 import TeamPhotoGrid from '@/components/team-photo-grid'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
         title: 'Contact the Orlando Claymores RFC | Rugby Near Me',
         description: 'Reach out to join Orlando\'s USA Rugby D3 club. Practices every Thursday at Barnett Park.',
         url: '/contact',
+        images: ogImage(),
     },
 }
 

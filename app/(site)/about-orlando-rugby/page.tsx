@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
+import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby — About the Central Florida Claymores RFC',
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
         title: 'Orlando Rugby — About the Central Florida Claymores RFC',
         description: 'Founded 2018. 2023 state finalists. Orlando\'s USA Rugby D3 club.',
         url: '/about-orlando-rugby',
+        images: ogImage(),
     },
 }
 

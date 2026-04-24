@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import MatchResultsTable from '@/components/match-results-table'
+import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
         title: 'Match Results | Central Florida Claymores RFC | Orlando Rugby',
         description: 'Season-by-season match results for the Central Florida Claymores RFC.',
         url: '/results',
+        images: ogImage(),
     },
 }
 

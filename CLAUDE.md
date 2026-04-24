@@ -27,8 +27,7 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS + shadcn/ui — see `STYLING.md` for full design system
-- **CMS**: Sanity (players, news posts) — Studio at `/studio`
-- **Database**: Supabase (planned — match history)
+- **CMS**: Sanity (players, news posts, matches, teams) — Studio at `/studio`
 - **Deployment**: Vercel
 
 ## Pages
@@ -39,8 +38,8 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 | `/about-orlando-rugby` | SEO landing page for Orlando rugby |
 | `/team` | Player roster (fed from Sanity) |
 | `/team/[slug]` | Individual player profile pages |
-| `/fixtures` | Upcoming fixtures (Google Calendar embed) |
-| `/results` | Match results |
+| `/fixtures` | Upcoming fixtures (fed from Sanity match docs) |
+| `/results` | Match results (fed from Sanity match docs) |
 | `/blog` | News/blog (fed from Sanity) |
 | `/blog/[slug]` | Individual blog post pages |
 | `/join` | Join the club CTA page |
@@ -48,9 +47,6 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 | `/location` | Location / directions page |
 | `/contact` | Contact form (sends via Resend to claymoresrfc@gmail.com) |
 | `/studio` | Sanity CMS (not public-facing) |
-
-## Planned
-- Match history page (Supabase DB)
 
 ## Brand Colors
 - Pink Accent: `#fd80b5` (draws, links, CTAs primary)
@@ -63,8 +59,9 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 See `STYLING.md` for full design system including typography, buttons, cards, and match graphic styles.
 
 ## Key Decisions
-- Sanity is used for content editors (players, news) — not hardcoded data
-- Supabase for structured match data (scores, opponents, dates)
+- Sanity is used for content editors (players, news, matches, teams) — not hardcoded data
+- Match data is scraped nightly from rugbyfl.com via `/api/scrape-rugby` (Vercel cron) and upserted into Sanity
+- Match docs have a `manualOverride` boolean — when checked in Studio, the scraper skips that doc entirely (use it when the official source is wrong, e.g. cancelled matches still listed as upcoming)
 - No monorepo — Sanity Studio is embedded at `/studio`
 - `(site)` route group keeps Studio outside the Navbar/Footer layout
 - Contact form uses Resend API (`/api/contact`) — emails go to claymoresrfc@gmail.com

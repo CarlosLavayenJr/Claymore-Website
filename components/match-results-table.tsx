@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown } from 'lucide-react'
 import { Info } from 'lucide-react'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
+import { matchSlug } from '@/lib/seo'
 
 function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
     value: string
@@ -233,7 +235,14 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                                     key={m._id}
                                     className={`border-t border-[#EAEAEA] ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
                                 >
-                                    <TableCell className="text-sm text-[#555555]">{formatDate(m.date)}</TableCell>
+                                    <TableCell className="text-sm text-[#555555]">
+                                        <Link
+                                            href={`/fixtures/${matchSlug(m)}`}
+                                            className="hover:text-[#fd80b5] transition-colors"
+                                        >
+                                            {formatDate(m.date)}
+                                        </Link>
+                                    </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
                                             {(m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)) && (
