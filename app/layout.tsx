@@ -47,6 +47,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     gtag('js', new Date());
                     gtag('config', 'AW-18065227807');
                 `}</Script>
+                <Script
+                    async
+                    src="https://analytics.ahrefs.com/analytics.js"
+                    data-key="eP/tuY+suM/aoDhDwqCtKA"
+                    strategy="afterInteractive"
+                />
             </head>
             <body className="overflow-x-hidden">{children}</body>
             <Analytics />
