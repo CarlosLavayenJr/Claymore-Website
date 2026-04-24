@@ -22,7 +22,6 @@ const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
     { href: '/team', label: 'Team' },
-    { href: '/coaches', label: 'Coaches' },
     { href: '/fixtures', label: 'Fixtures' },
     { href: '/results', label: 'Results' },
     { href: '/blog', label: 'News' },
