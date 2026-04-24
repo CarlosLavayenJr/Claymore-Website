@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import MatchCalendar from '@/components/match-calendar'
+import { matchSlug } from '@/lib/seo'
 
 export const revalidate = 3600
 
@@ -76,10 +77,14 @@ export default async function Fixtures() {
                                 const isHome = isClaymores(m.homeTeam)
                                 const logo = findTeamLogo(opponent, teams)
                                 return (
-                                    <div key={m._id} className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors">
+                                    <Link
+                                        key={m._id}
+                                        href={`/fixtures/${matchSlug(m)}`}
+                                        className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors"
+                                    >
                                         <div className="flex items-center gap-3">
                                             {logo
-                                                ? <img src={logo} alt={opponent} className="w-8 h-8 object-contain shrink-0" />
+                                                ? <img src={logo} alt={`${opponent} logo`} className="w-8 h-8 object-contain shrink-0" />
                                                 : <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />}
                                             <div>
                                                 <p className="text-sm font-semibold text-[#111111]">{opponent}</p>
@@ -89,7 +94,7 @@ export default async function Fixtures() {
                                         <div className="text-right">
                                             <p className="text-sm font-medium text-[#77c3ef]">{formatDate(m.date)}</p>
                                         </div>
-                                    </div>
+                                    </Link>
                                 )
                             })}
                         </div>
