@@ -44,7 +44,10 @@ const Footer = () => {
                                 { href: '/', label: 'Home' },
                                 { href: '/about', label: 'About' },
                                 { href: '/team', label: 'Team' },
+                                { href: '/coaches', label: 'Coaches' },
                                 { href: '/fixtures', label: 'Fixtures' },
+                                { href: '/results', label: 'Results' },
+                                { href: '/opponents', label: 'Opponents' },
                                 { href: '/blog', label: 'News' },
                                 { href: '/faq', label: 'FAQ' },
                             ].map(({ href, label }) => (
