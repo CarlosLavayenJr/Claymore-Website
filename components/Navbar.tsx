@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Menu, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { AnimatePresence, motion } from "framer-motion"
 
 interface NavLinkProps {
     href: string
@@ -151,22 +152,33 @@ export const Navbar = () => {
                         className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors flex items-center justify-center gap-2"
                     >
                         Fixtures
-                        <ChevronDown className={`w-5 h-5 transition-transform ${mobileFixturesOpen ? 'rotate-180' : ''}`} />
+                        <motion.span animate={{ rotate: mobileFixturesOpen ? 180 : 0 }} transition={{ duration: 0.25 }}>
+                            <ChevronDown className="w-5 h-5" />
+                        </motion.span>
                     </button>
-                    {mobileFixturesOpen && (
-                        <div className="w-full border-b border-[#EAEAEA] bg-[#F9F9F9]">
-                            {fixturesChildren.map(({ href, label }) => (
-                                <Link
-                                    key={href}
-                                    href={href}
-                                    onClick={closeMenu}
-                                    className="block w-full text-center py-3 font-claymore text-xl text-[#555555] hover:text-[#77c3ef] transition-colors"
-                                >
-                                    {label}
-                                </Link>
-                            ))}
-                        </div>
-                    )}
+                    <AnimatePresence initial={false}>
+                        {mobileFixturesOpen && (
+                            <motion.div
+                                key="fixtures-children"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                                className="overflow-hidden w-full"
+                            >
+                                {fixturesChildren.map(({ href, label }) => (
+                                    <Link
+                                        key={href}
+                                        href={href}
+                                        onClick={closeMenu}
+                                        className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA]/60 transition-colors block bg-[#77c3ef]/5"
+                                    >
+                                        {label}
+                                    </Link>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {navLinks.slice(2).map(({ href, label }) => (
                         <Link
