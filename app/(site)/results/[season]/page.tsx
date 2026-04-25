@@ -188,9 +188,9 @@ export default async function SeasonPage({ params }: Params) {
                     const oppLogo = (weHome ? m.awayTeamLogo : m.homeTeamLogo) ?? findTeam(opp)?.logoUrl
 
                     return (
-                        <div key={m._id} className="relative flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors">
+                        <div key={m._id} className="relative flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors cursor-pointer">
                             {/* Full-row link to fixture page */}
-                            <Link href={`/fixtures/${matchSlug(m)}`} className="absolute inset-0" aria-label={`View fixture details`} />
+                            <Link href={`/fixtures/${matchSlug(m)}`} className="absolute inset-0 cursor-pointer" aria-label={`View fixture details`} />
 
                             <div className="flex items-center gap-3 relative z-10">
                                 {oppSlug ? (
