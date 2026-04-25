@@ -104,8 +104,12 @@ export default async function MatchPage({ params }: Params) {
     const opp = opponentOf(match)
     const oppSlug = (isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug)
         ?? findTeam(opp, teams)?.slug
-    const homeTeamLogo = match.homeTeamLogo ?? findTeam(match.homeTeam, teams)?.logoUrl
-    const awayTeamLogo = match.awayTeamLogo ?? findTeam(match.awayTeam, teams)?.logoUrl
+    const homeTeamDoc = findTeam(match.homeTeam, teams)
+    const awayTeamDoc = findTeam(match.awayTeam, teams)
+    const homeTeamLogo = match.homeTeamLogo ?? homeTeamDoc?.logoUrl
+    const awayTeamLogo = match.awayTeamLogo ?? awayTeamDoc?.logoUrl
+    const homeTeamName = homeTeamDoc?.name ?? match.homeTeam
+    const awayTeamName = awayTeamDoc?.name ?? match.awayTeam
     const home = isHomeMatch(match)
     const dateLong = formatMatchDateLong(match.date)
     const { ours, theirs } = claymoresScore(match)
@@ -173,7 +177,7 @@ export default async function MatchPage({ params }: Params) {
                         ) : (
                             <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
                         )}
-                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(match.homeTeam)}</p>
+                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(homeTeamName)}</p>
                         <p className="text-xs uppercase tracking-wider text-[#555555]">Home</p>
                     </div>
 
@@ -200,7 +204,7 @@ export default async function MatchPage({ params }: Params) {
                         ) : (
                             <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
                         )}
-                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(match.awayTeam)}</p>
+                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(awayTeamName)}</p>
                         <p className="text-xs uppercase tracking-wider text-[#555555]">Away</p>
                     </div>
                 </div>
