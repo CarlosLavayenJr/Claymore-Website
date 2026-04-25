@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
-import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
+import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import {
@@ -83,13 +83,29 @@ function clean(name: string): string {
     return isClaymores(name) ? 'Central Florida Claymores' : name
 }
 
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+function findTeam(name: string, teams: SanityTeam[]): SanityTeam | null {
+    const n = normalize(name)
+    for (const t of teams) {
+        const candidates = [t.name, ...(t.aliases ?? [])]
+        if (candidates.some(a => n.includes(normalize(a)) || normalize(a).includes(n))) return t
+    }
+    return null
+}
+
 export default async function MatchPage({ params }: Params) {
     const { slug } = await params
-    const match = await getMatch(slug)
+    const [match, teams]: [SanityMatch | null, SanityTeam[]] = await Promise.all([
+        getMatch(slug),
+        client.fetch(teamsQuery),
+    ])
     if (!match) notFound()
 
     const opp = opponentOf(match)
-    const oppSlug = isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug
+    const oppSlug = (isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug)
+        ?? findTeam(opp, teams)?.slug
+    const homeTeamLogo = match.homeTeamLogo ?? findTeam(match.homeTeam, teams)?.logoUrl
+    const awayTeamLogo = match.awayTeamLogo ?? findTeam(match.awayTeam, teams)?.logoUrl
     const home = isHomeMatch(match)
     const dateLong = formatMatchDateLong(match.date)
     const { ours, theirs } = claymoresScore(match)
@@ -148,9 +164,9 @@ export default async function MatchPage({ params }: Params) {
                 {/* Score line / matchup */}
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 my-6">
                     <div className="text-center">
-                        {match.homeTeamLogo ? (
+                        {homeTeamLogo ? (
                             <img
-                                src={match.homeTeamLogo}
+                                src={homeTeamLogo}
                                 alt={`${match.homeTeam} logo`}
                                 className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain"
                             />
@@ -175,9 +191,9 @@ export default async function MatchPage({ params }: Params) {
                     </div>
 
                     <div className="text-center">
-                        {match.awayTeamLogo ? (
+                        {awayTeamLogo ? (
                             <img
-                                src={match.awayTeamLogo}
+                                src={awayTeamLogo}
                                 alt={`${match.awayTeam} logo`}
                                 className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain"
                             />
