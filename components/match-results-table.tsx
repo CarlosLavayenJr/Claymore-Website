@@ -236,7 +236,7 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                                 <TableRow
                                     key={m._id}
                                     onClick={() => router.push(`/fixtures/${matchSlug(m)}`)}
-                                    className={`border-t border-[#EAEAEA] cursor-pointer hover:bg-[#F9F9F9] transition-colors ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
+                                    className={`border-t border-[#EAEAEA] cursor-pointer hover:bg-[#77c3ef]/5 transition-colors ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
                                 >
                                     <TableCell className="text-sm text-[#555555]">
                                         {formatDate(m.date)}
