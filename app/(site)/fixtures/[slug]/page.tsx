@@ -110,6 +110,8 @@ export default async function MatchPage({ params }: Params) {
     const awayTeamLogo = match.awayTeamLogo ?? awayTeamDoc?.logoUrl
     const homeTeamName = homeTeamDoc?.name ?? match.homeTeam
     const awayTeamName = awayTeamDoc?.name ?? match.awayTeam
+    const homeTeamHref = isClaymores(match.homeTeam) ? '/team' : (match.homeTeamSlug ?? homeTeamDoc?.slug) ? `/opponents/${match.homeTeamSlug ?? homeTeamDoc?.slug}` : null
+    const awayTeamHref = isClaymores(match.awayTeam) ? '/team' : (match.awayTeamSlug ?? awayTeamDoc?.slug) ? `/opponents/${match.awayTeamSlug ?? awayTeamDoc?.slug}` : null
     const home = isHomeMatch(match)
     const dateLong = formatMatchDateLong(match.date)
     const { ours, theirs } = claymoresScore(match)
@@ -168,16 +170,25 @@ export default async function MatchPage({ params }: Params) {
                 {/* Score line / matchup */}
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 my-6">
                     <div className="text-center">
-                        {homeTeamLogo ? (
-                            <img
-                                src={homeTeamLogo}
-                                alt={`${match.homeTeam} logo`}
-                                className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain"
-                            />
+                        {homeTeamHref ? (
+                            <Link href={homeTeamHref} className="group block hover:opacity-80 transition-opacity">
+                                {homeTeamLogo ? (
+                                    <img src={homeTeamLogo} alt={`${homeTeamName} logo`} className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain" />
+                                ) : (
+                                    <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                                )}
+                                <p className="mt-3 text-base md:text-lg font-bold text-[#77c3ef] group-hover:underline">{clean(homeTeamName)}</p>
+                            </Link>
                         ) : (
-                            <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                            <>
+                                {homeTeamLogo ? (
+                                    <img src={homeTeamLogo} alt={`${homeTeamName} logo`} className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain" />
+                                ) : (
+                                    <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                                )}
+                                <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(homeTeamName)}</p>
+                            </>
                         )}
-                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(homeTeamName)}</p>
                         <p className="text-xs uppercase tracking-wider text-[#555555]">Home</p>
                     </div>
 
@@ -195,16 +206,25 @@ export default async function MatchPage({ params }: Params) {
                     </div>
 
                     <div className="text-center">
-                        {awayTeamLogo ? (
-                            <img
-                                src={awayTeamLogo}
-                                alt={`${match.awayTeam} logo`}
-                                className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain"
-                            />
+                        {awayTeamHref ? (
+                            <Link href={awayTeamHref} className="group block hover:opacity-80 transition-opacity">
+                                {awayTeamLogo ? (
+                                    <img src={awayTeamLogo} alt={`${awayTeamName} logo`} className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain" />
+                                ) : (
+                                    <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                                )}
+                                <p className="mt-3 text-base md:text-lg font-bold text-[#77c3ef] group-hover:underline">{clean(awayTeamName)}</p>
+                            </Link>
                         ) : (
-                            <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                            <>
+                                {awayTeamLogo ? (
+                                    <img src={awayTeamLogo} alt={`${awayTeamName} logo`} className="w-16 h-16 md:w-24 md:h-24 mx-auto object-contain" />
+                                ) : (
+                                    <div className="w-16 h-16 md:w-24 md:h-24 mx-auto rounded-full bg-[#EAEAEA]" />
+                                )}
+                                <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(awayTeamName)}</p>
+                            </>
                         )}
-                        <p className="mt-3 text-base md:text-lg font-bold text-[#111111]">{clean(awayTeamName)}</p>
                         <p className="text-xs uppercase tracking-wider text-[#555555]">Away</p>
                     </div>
                 </div>
