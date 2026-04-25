@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown } from 'lucide-react'
@@ -86,6 +87,7 @@ function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
 }
 
 export default function MatchResultsTable({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
+    const router = useRouter()
     const [selectedOpponent, setSelectedOpponent] = useState('all')
     const [selectedMatchType, setSelectedMatchType] = useState('all')
     const [selectedSeason, setSelectedSeason] = useState(() => {
@@ -233,15 +235,11 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                             return (
                                 <TableRow
                                     key={m._id}
-                                    className={`border-t border-[#EAEAEA] ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
+                                    onClick={() => router.push(`/fixtures/${matchSlug(m)}`)}
+                                    className={`border-t border-[#EAEAEA] cursor-pointer hover:bg-[#F9F9F9] transition-colors ${isUpcoming ? 'opacity-50' : ''} ${isCancelled ? 'opacity-40 line-through' : ''}`}
                                 >
                                     <TableCell className="text-sm text-[#555555]">
-                                        <Link
-                                            href={`/fixtures/${matchSlug(m)}`}
-                                            className="hover:text-[#fd80b5] transition-colors"
-                                        >
-                                            {formatDate(m.date)}
-                                        </Link>
+                                        {formatDate(m.date)}
                                     </TableCell>
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
