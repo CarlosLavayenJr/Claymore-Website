@@ -1,20 +1,30 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
-function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
-    const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const n = normalized(name)
+const normalizeTeamName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+function findTeam(name: string, teams: SanityTeam[]): SanityTeam | null {
+    const n = normalizeTeamName(name)
     for (const team of teams) {
         const candidates = [team.name, ...(team.aliases ?? [])]
-        if (candidates.some(alias => n.includes(normalized(alias)) || normalized(alias).includes(n))) {
-            return team.logoUrl ?? null
+        if (candidates.some(alias => n.includes(normalizeTeamName(alias)) || normalizeTeamName(alias).includes(n))) {
+            return team
         }
     }
     return null
+}
+
+function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
+    return findTeam(name, teams)?.logoUrl ?? null
+}
+
+function findTeamSlug(name: string, teams: SanityTeam[]): string | null {
+    return findTeam(name, teams)?.slug ?? null
 }
 
 function isClaymores(name: string) {
@@ -70,15 +80,34 @@ function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
     const homeLogo = findTeamLogo(m.homeTeam, teams)
     const awayLogo = findTeamLogo(m.awayTeam, teams)
 
+    const homeSlug = m.homeTeamSlug ?? findTeamSlug(m.homeTeam, teams)
+    const awaySlug = m.awayTeamSlug ?? findTeamSlug(m.awayTeam, teams)
+    const homeHref = isClaymores(m.homeTeam) ? '/team' : homeSlug ? `/opponents/${homeSlug}` : null
+    const awayHref = isClaymores(m.awayTeam) ? '/team' : awaySlug ? `/opponents/${awaySlug}` : null
+
+    const HomeTeam = () => (
+        <div className="flex flex-col items-center gap-1 w-12 shrink-0">
+            {homeLogo
+                ? <img src={homeLogo} alt={m.homeTeam} className="w-8 h-8 object-contain" />
+                : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
+            <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.homeTeam}</p>
+        </div>
+    )
+    const AwayTeam = () => (
+        <div className="flex flex-col items-center gap-1 w-12 shrink-0">
+            {awayLogo
+                ? <img src={awayLogo} alt={m.awayTeam} className="w-8 h-8 object-contain" />
+                : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
+            <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.awayTeam}</p>
+        </div>
+    )
+
     return (
         <div className="flex items-center gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white">
             {/* Home */}
-            <div className="flex flex-col items-center gap-1 w-12 shrink-0">
-                {homeLogo
-                    ? <img src={homeLogo} alt={m.homeTeam} className="w-8 h-8 object-contain" />
-                    : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
-                <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.homeTeam}</p>
-            </div>
+            {homeHref
+                ? <Link href={homeHref} className="hover:opacity-75 transition-opacity cursor-pointer"><HomeTeam /></Link>
+                : <HomeTeam />}
 
             {/* Score / result */}
             <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
@@ -93,12 +122,9 @@ function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
             </div>
 
             {/* Away */}
-            <div className="flex flex-col items-center gap-1 w-12 shrink-0">
-                {awayLogo
-                    ? <img src={awayLogo} alt={m.awayTeam} className="w-8 h-8 object-contain" />
-                    : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
-                <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.awayTeam}</p>
-            </div>
+            {awayHref
+                ? <Link href={awayHref} className="hover:opacity-75 transition-opacity cursor-pointer"><AwayTeam /></Link>
+                : <AwayTeam />}
         </div>
     )
 }
