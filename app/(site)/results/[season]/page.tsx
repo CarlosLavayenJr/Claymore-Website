@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { client } from '@/sanity/lib/client'
-import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
+import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import {
@@ -49,7 +49,10 @@ export default async function SeasonPage({ params }: Params) {
     const seasonNum = Number(season)
     if (!Number.isFinite(seasonNum)) notFound()
 
-    const allMatches: SanityMatch[] = await client.fetch(matchesQuery)
+    const [allMatches, teams]: [SanityMatch[], SanityTeam[]] = await Promise.all([
+        client.fetch(matchesQuery),
+        client.fetch(teamsQuery),
+    ])
     const matches = allMatches
         .filter((m) => m.season === seasonNum)
         .sort((a, b) => a.date.localeCompare(b.date))
@@ -88,6 +91,16 @@ export default async function SeasonPage({ params }: Params) {
 
     const played = wins + losses + draws
     const label = seasonLabel(seasonNum)
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+    function findTeam(name: string): SanityTeam | null {
+        const n = normalize(name)
+        for (const t of teams) {
+            const candidates = [t.name, ...(t.aliases ?? [])]
+            if (candidates.some(a => n.includes(normalize(a)) || normalize(a).includes(n))) return t
+        }
+        return null
+    }
 
     // Find prev/next seasons that exist
     const allSeasons = Array.from(new Set(allMatches.map((m) => m.season))).sort((a, b) => a - b)
@@ -171,19 +184,38 @@ export default async function SeasonPage({ params }: Params) {
                             ? 'bg-[#fd80b5]/15 text-[#fd80b5] border-[#fd80b5]/30'
                             : 'bg-[#EAEAEA]/50 text-[#555555] border-[#EAEAEA]'
 
+                    const oppSlug = (weHome ? m.awayTeamSlug : m.homeTeamSlug) ?? findTeam(opp)?.slug
+                    const oppLogo = (weHome ? m.awayTeamLogo : m.homeTeamLogo) ?? findTeam(opp)?.logoUrl
+
                     return (
-                        <Link
-                            key={m._id}
-                            href={`/fixtures/${matchSlug(m)}`}
-                            className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors"
-                        >
-                            <div>
-                                <p className="text-sm font-semibold text-[#111111]">
-                                    Claymores {weHome ? 'vs' : '@'} {opp}
-                                </p>
-                                <p className="text-xs text-[#555555] mt-0.5">{formatMatchDateLong(m.date)}</p>
+                        <div key={m._id} className="relative flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors">
+                            {/* Full-row link to fixture page */}
+                            <Link href={`/fixtures/${matchSlug(m)}`} className="absolute inset-0" aria-label={`View fixture details`} />
+
+                            <div className="flex items-center gap-3 relative z-10">
+                                {oppSlug ? (
+                                    <Link href={`/opponents/${oppSlug}`} className="shrink-0 hover:opacity-75 transition-opacity">
+                                        {oppLogo
+                                            ? <img src={oppLogo} alt={opp} className="w-8 h-8 object-contain" />
+                                            : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
+                                    </Link>
+                                ) : oppLogo ? (
+                                    <img src={oppLogo} alt={opp} className="w-8 h-8 object-contain shrink-0" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />
+                                )}
+                                <div>
+                                    <p className="text-sm font-semibold text-[#111111]">
+                                        Claymores {weHome ? 'vs' : '@'}{' '}
+                                        {oppSlug
+                                            ? <Link href={`/opponents/${oppSlug}`} className="text-[#77c3ef] hover:underline">{opp}</Link>
+                                            : opp}
+                                    </p>
+                                    <p className="text-xs text-[#555555] mt-0.5">{formatMatchDateLong(m.date)}</p>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
+
+                            <div className="flex items-center gap-3 relative z-10 pointer-events-none">
                                 {m.status === 'played' && (
                                     <span className="font-mono text-[#111111] font-semibold">
                                         {ours}–{theirs}
@@ -198,7 +230,7 @@ export default async function SeasonPage({ params }: Params) {
                                     </span>
                                 )}
                             </div>
-                        </Link>
+                        </div>
                     )
                 })}
             </div>
