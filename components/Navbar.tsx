@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Menu } from "lucide-react"
+import { Menu, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface NavLinkProps {
@@ -18,27 +18,42 @@ const NavLink = ({ href, children }: NavLinkProps) => (
     </Link>
 )
 
+const fixturesChildren = [
+    { href: '/fixtures', label: 'Schedule' },
+    { href: '/results', label: 'Results' },
+    { href: '/opponents', label: 'Opponents' },
+]
+
 const navLinks = [
-    { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
     { href: '/team', label: 'Team' },
-    { href: '/fixtures', label: 'Fixtures' },
-    { href: '/results', label: 'Results' },
     { href: '/blog', label: 'News' },
-    { href: '/faq', label: 'FAQ' },
     { href: '/contact', label: 'Contact' },
 ]
 
 export const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false)
+    const [fixturesOpen, setFixturesOpen] = useState(false)
+    const [mobileFixturesOpen, setMobileFixturesOpen] = useState(false)
+    const dropdownRef = useRef<HTMLDivElement>(null)
 
     const toggleMenu = () => setIsOpen(!isOpen)
-    const closeMenu = () => setIsOpen(false)
+    const closeMenu = () => { setIsOpen(false); setMobileFixturesOpen(false) }
 
     useEffect(() => {
         document.body.style.overflow = isOpen ? "hidden" : ""
         return () => { document.body.style.overflow = "" }
     }, [isOpen])
+
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setFixturesOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     return (
         <>
@@ -59,9 +74,40 @@ export const Navbar = () => {
                         </div>
 
                         <div className="hidden md:flex items-center space-x-1">
-                            {navLinks.map(({ href, label }) => (
+                            {navLinks.slice(0, 2).map(({ href, label }) => (
                                 <NavLink key={href} href={href}>{label}</NavLink>
                             ))}
+
+                            {/* Fixtures dropdown */}
+                            <div ref={dropdownRef} className="relative">
+                                <button
+                                    onClick={() => setFixturesOpen(o => !o)}
+                                    className="relative group px-3 py-2 text-gray-600 hover:text-white text-lg font-claymore flex items-center gap-1"
+                                >
+                                    <span className="relative z-10">Fixtures</span>
+                                    <ChevronDown className={`relative z-10 w-4 h-4 transition-transform ${fixturesOpen ? 'rotate-180' : ''}`} />
+                                    <span className="absolute inset-0 bg-claymore-blue transform -skew-x-12 origin-left scale-x-0 transition-transform group-hover:scale-x-100"></span>
+                                </button>
+                                {fixturesOpen && (
+                                    <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-[#EAEAEA] rounded-xl shadow-lg overflow-hidden z-50">
+                                        {fixturesChildren.map(({ href, label }) => (
+                                            <Link
+                                                key={href}
+                                                href={href}
+                                                onClick={() => setFixturesOpen(false)}
+                                                className="block px-4 py-2.5 text-sm font-claymore text-[#111111] hover:bg-[#77c3ef]/10 hover:text-[#77c3ef] transition-colors"
+                                            >
+                                                {label}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {navLinks.slice(2).map(({ href, label }) => (
+                                <NavLink key={href} href={href}>{label}</NavLink>
+                            ))}
+
                             <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">
                                 <span className="relative z-10">Join Us</span>
                                 <span className="absolute inset-0 bg-[#77c3ef] group-hover:bg-[#a0d5f5] transform -skew-x-12 transition-colors"></span>
@@ -83,13 +129,46 @@ export const Navbar = () => {
                 </div>
             </nav>
 
-            {/* Mobile drawer — slides down below navbar */}
+            {/* Mobile drawer */}
             <div
                 className={`md:hidden fixed top-16 left-0 right-0 bottom-0 z-20 bg-white transition-opacity duration-200 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             >
-                {/* Links */}
                 <div className="flex flex-col items-center px-8 mt-4">
-                    {navLinks.map(({ href, label }) => (
+                    {navLinks.slice(0, 2).map(({ href, label }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            onClick={closeMenu}
+                            className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
+                        >
+                            {label}
+                        </Link>
+                    ))}
+
+                    {/* Fixtures accordion */}
+                    <button
+                        onClick={() => setMobileFixturesOpen(o => !o)}
+                        className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors flex items-center justify-center gap-2"
+                    >
+                        Fixtures
+                        <ChevronDown className={`w-5 h-5 transition-transform ${mobileFixturesOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {mobileFixturesOpen && (
+                        <div className="w-full border-b border-[#EAEAEA] bg-[#F9F9F9]">
+                            {fixturesChildren.map(({ href, label }) => (
+                                <Link
+                                    key={href}
+                                    href={href}
+                                    onClick={closeMenu}
+                                    className="block w-full text-center py-3 font-claymore text-xl text-[#555555] hover:text-[#77c3ef] transition-colors"
+                                >
+                                    {label}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+
+                    {navLinks.slice(2).map(({ href, label }) => (
                         <Link
                             key={href}
                             href={href}
@@ -101,7 +180,6 @@ export const Navbar = () => {
                     ))}
                 </div>
 
-                {/* Join CTA */}
                 <div className="px-8 mt-8">
                     <Link
                         href="/join"

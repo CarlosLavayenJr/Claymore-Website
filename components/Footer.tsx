@@ -40,7 +40,7 @@ const Footer = () => {
                     {/* Quick Links */}
                     <div>
                         <h3 className="text-white font-claymore text-lg mb-4">Quick Links</h3>
-                        <ul className="space-y-2 text-sm">
+                        <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                             {[
                                 { href: '/', label: 'Home' },
                                 { href: '/about', label: 'About' },
@@ -51,6 +51,7 @@ const Footer = () => {
                                 { href: '/opponents', label: 'Opponents' },
                                 { href: '/blog', label: 'News' },
                                 { href: '/faq', label: 'FAQ' },
+                                { href: '/contact', label: 'Contact' },
                             ].map(({ href, label }) => (
                                 <li key={href}>
                                     <Link href={href} className="hover:text-white transition-colors">
