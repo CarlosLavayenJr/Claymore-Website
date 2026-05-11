@@ -267,6 +267,68 @@ export const coachBySlugQuery = groq`
   }
 `
 
+export interface SanityPracticeSchedule {
+    seasonLabel: string | null
+    weekday: string
+    time: string
+    venueName: string
+    venueAddress: string
+    venueStreet: string | null
+    venueCity: string | null
+    venueRegion: string | null
+    venuePostalCode: string | null
+    mapEmbedUrl: string | null
+    seasonalNote: string | null
+}
+
+export const practiceScheduleQuery = groq`
+  *[_type == "practiceSchedule" && _id == "practiceSchedule"][0] {
+    seasonLabel,
+    weekday,
+    time,
+    venueName,
+    venueAddress,
+    venueStreet,
+    venueCity,
+    venueRegion,
+    venuePostalCode,
+    mapEmbedUrl,
+    seasonalNote
+  }
+`
+
+export interface SanityPractice {
+    _id: string
+    _updatedAt?: string
+    title: string
+    active: boolean
+    iconUrl: string | null
+    iconAlt: string | null
+    startDate: string
+    time: string | null
+    address: string | null
+    description: string | null
+    recurring: boolean
+    weekdays: string[] | null
+}
+
+export const practicesQuery = groq`
+  *[_type == "practice" && active == true] | order(startDate asc) {
+    _id,
+    _updatedAt,
+    title,
+    active,
+    "iconUrl": icon.asset->url,
+    "iconAlt": icon.alt,
+    startDate,
+    time,
+    address,
+    description,
+    recurring,
+    weekdays
+  }
+`
+
 export interface SanityTeamPhoto {
     _id: string
     url: string

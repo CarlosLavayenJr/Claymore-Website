@@ -7,6 +7,7 @@ import { organizationSchema } from '@/lib/schema'
 import { breadcrumbSchema } from '@/lib/seo'
 import { CITIES, getCity } from '@/lib/cities'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const dynamicParams = false
 
@@ -22,8 +23,9 @@ export async function generateMetadata({
     const { city } = await params
     const c = getCity(city)
     if (!c) return {}
+    const s = await getPracticeSchedule()
     const title = `Rugby in ${c.name}, FL — Central Florida Claymores RFC`
-    const description = `Looking for a rugby club near ${c.name}? The Central Florida Claymores RFC are the USA Rugby D3 club for the ${c.name} area — practice every Thursday in Orlando, ${c.driveMinutes} minutes ${c.direction} of ${c.name}.`
+    const description = `Looking for a rugby club near ${c.name}? The Central Florida Claymores RFC are the USA Rugby D3 club for the ${c.name} area — practice every ${s.weekday} in Orlando, ${c.driveMinutes} minutes ${c.direction} of ${c.name}.`
     return {
         title,
         description,
@@ -41,6 +43,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
     const { city } = await params
     const c = getCity(city)
     if (!c) notFound()
+    const schedule = await getPracticeSchedule()
 
     return (
         <div className="container mx-auto px-4 py-12 max-w-3xl">
@@ -81,8 +84,11 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                     game, regardless of experience level.
                 </p>
                 <p>
-                    Practice is every Thursday, 8–10pm, at Barnett Park in Orlando. From {c.name}, the drive is roughly{' '}
-                    {c.driveMinutes} minutes {c.direction} — a manageable trip for a serious club rugby program.
+                    <strong>{schedule.seasonLabel}:</strong> practice runs every {schedule.weekday}, {schedule.time}, at {schedule.venueName} in {schedule.venueCity}.
+                    From {c.name}, the drive is roughly {c.driveMinutes} minutes {c.direction} — a manageable trip for a serious club rugby program.
+                </p>
+                <p className="text-sm italic">
+                    <Link href="/fixtures" className="text-[#77c3ef] hover:underline">{schedule.seasonalNote}</Link>
                 </p>
 
                 <h2 className="font-claymore text-3xl text-[#111111] mt-10 mb-4">
@@ -99,7 +105,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                     </li>
                     <li>
                         <strong>Player-built culture.</strong> The club was founded and is run by players. Everyone earns
-                        their spot, and the community extends far beyond Thursday nights.
+                        their spot, and the community extends far beyond {schedule.weekday} nights.
                     </li>
                     <li>
                         <strong>Year-round play.</strong> Central Florida&apos;s climate means we train all year and play
@@ -111,12 +117,12 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                     Getting to practice from {c.name}
                 </h2>
                 <p>
-                    Barnett Park is at <strong>4801 W Colonial Dr, Orlando, FL 32808</strong>. From {c.name}, you&apos;ll
+                    {schedule.venueName} is at <strong>{schedule.venueAddress}</strong>. From {c.name}, you&apos;ll
                     head {c.direction} into Orlando — most players in the {c.name} area pass landmarks like{' '}
-                    {c.landmarks.slice(0, 2).join(' or ')} on the way. Free parking is available at Barnett Park.
+                    {c.landmarks.slice(0, 2).join(' or ')} on the way. Free parking is available on site.
                 </p>
                 <p>
-                    Show up to a Thursday practice in athletic clothes and cleats if you have them. We&apos;ll handle the
+                    Show up to a {schedule.weekday} practice in athletic clothes and cleats if you have them. We&apos;ll handle the
                     rest. Or reach out beforehand and we&apos;ll meet you in the parking lot.
                 </p>
             </section>
@@ -124,7 +130,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
             <div className="mt-12 text-center bg-[#F9F9F9] rounded-xl p-8">
                 <h2 className="text-2xl font-claymore text-[#111111] mb-3">Play Rugby in {c.name}</h2>
                 <p className="text-[#555555] mb-6 max-w-xl mx-auto">
-                    The Claymores are the rugby club for {c.name}. Come to a Thursday practice and see what Orlando rugby
+                    The Claymores are the rugby club for {c.name}. Come to a {schedule.weekday} practice and see what Orlando rugby
                     is all about.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">

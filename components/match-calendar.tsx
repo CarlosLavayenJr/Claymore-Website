@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
+import type { SanityMatch, SanityTeam, SanityPractice } from '@/sanity/lib/queries'
+import { expandPractices, type PracticeInstance } from '@/lib/practices'
 
 const normalizeTeamName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -129,36 +130,113 @@ function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
     )
 }
 
+function AddressLink({ address }: { address: string }) {
+    const q = encodeURIComponent(address)
+    const googleUrl = `https://www.google.com/maps/search/?api=1&query=${q}`
+    const appleUrl = `https://maps.apple.com/?address=${q}`
+    // Default to Google Maps for SSR + non-Apple platforms; swap to Apple Maps
+    // after hydration when the visitor is on iOS / macOS so they land in their
+    // native map app instead of a Google redirect.
+    const [href, setHref] = useState(googleUrl)
+    useEffect(() => {
+        if (typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent)) {
+            setHref(appleUrl)
+        }
+    }, [appleUrl])
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#77c3ef] hover:underline"
+        >
+            {address}
+        </a>
+    )
+}
+
+function PracticeCard({ instance }: { instance: PracticeInstance }) {
+    const { practice } = instance
+    return (
+        <div className="flex items-start gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white">
+            {practice.iconUrl
+                ? <img src={practice.iconUrl} alt={practice.iconAlt ?? practice.title} className="w-10 h-10 object-contain shrink-0" />
+                : <div className="w-10 h-10 rounded-full bg-[#EAEAEA] shrink-0" />}
+            <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Practice</p>
+                <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.title}</p>
+                {practice.time && <p className="text-xs text-[#555555] mt-1">{practice.time}</p>}
+                {practice.address && <AddressLink address={practice.address} />}
+                {practice.description && (
+                    <p className="text-xs text-[#555555] mt-1 whitespace-pre-line">{practice.description}</p>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ── Mobile list view ─────────────────────────────────────────────────────────
 
-function MobileList({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
+function MobileList({
+    matches,
+    teams,
+    practices,
+}: {
+    matches: SanityMatch[]
+    teams: SanityTeam[]
+    practices: SanityPractice[]
+}) {
     const grouped = useMemo(() => {
-        const latestSeason = Math.max(...matches.map(m => m.season))
+        const latestSeason = matches.length > 0 ? Math.max(...matches.map(m => m.season)) : 0
 
-        const upcoming = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
-        const past = matches.filter(m => m.status !== 'upcoming' && m.season === latestSeason).sort((a, b) => b.date.localeCompare(a.date))
-        const sorted = [...upcoming, ...past]
+        const upcomingMatches = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
+        const pastMatches = matches.filter(m => m.status !== 'upcoming' && m.season === latestSeason).sort((a, b) => b.date.localeCompare(a.date))
 
-        const map = new Map<string, SanityMatch[]>()
-        for (const m of sorted) {
-            if (!map.has(m.date)) map.set(m.date, [])
-            map.get(m.date)!.push(m)
+        const today = new Date()
+        const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        const horizon = new Date(today)
+        horizon.setDate(horizon.getDate() + 60)
+        const horizonIso = `${horizon.getFullYear()}-${String(horizon.getMonth() + 1).padStart(2, '0')}-${String(horizon.getDate()).padStart(2, '0')}`
+        const upcomingPractices = expandPractices(practices, todayIso, horizonIso)
+
+        const map = new Map<string, { matches: SanityMatch[]; practices: PracticeInstance[] }>()
+        const ensure = (date: string) => {
+            if (!map.has(date)) map.set(date, { matches: [], practices: [] })
+            return map.get(date)!
         }
-        return Array.from(map.entries())
-    }, [matches])
+        for (const m of upcomingMatches) ensure(m.date).matches.push(m)
+        for (const p of upcomingPractices) ensure(p.date).practices.push(p)
+
+        const upcomingDates = Array.from(map.keys()).sort()
+
+        const pastMap = new Map<string, SanityMatch[]>()
+        for (const m of pastMatches) {
+            if (!pastMap.has(m.date)) pastMap.set(m.date, [])
+            pastMap.get(m.date)!.push(m)
+        }
+        const pastDates = Array.from(pastMap.keys()).sort((a, b) => b.localeCompare(a))
+
+        return {
+            upcoming: upcomingDates.map(d => [d, map.get(d)!] as const),
+            past: pastDates.map(d => [d, { matches: pastMap.get(d)!, practices: [] as PracticeInstance[] }] as const),
+        }
+    }, [matches, practices])
 
     const formatDate = (d: string) =>
         new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
+    const sections = [...grouped.upcoming, ...grouped.past]
+
     return (
         <div className="divide-y divide-[#EAEAEA]">
-            {grouped.map(([date, ms]) => (
+            {sections.map(([date, bucket]) => (
                 <div key={date} className="py-4">
                     <p className="text-xs uppercase tracking-widest text-[#555555] font-semibold mb-2">
                         {formatDate(date)}
                     </p>
                     <div className="flex flex-col gap-2">
-                        {ms.map(m => <MatchCard key={m._id} m={m} teams={teams} />)}
+                        {bucket.matches.map(m => <MatchCard key={m._id} m={m} teams={teams} />)}
+                        {bucket.practices.map(p => <PracticeCard key={p.key} instance={p} />)}
                     </div>
                 </div>
             ))}
@@ -168,7 +246,15 @@ function MobileList({ matches, teams }: { matches: SanityMatch[], teams: SanityT
 
 // ── Calendar grid view ────────────────────────────────────────────────────────
 
-export default function MatchCalendar({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
+export default function MatchCalendar({
+    matches,
+    teams,
+    practices = [],
+}: {
+    matches: SanityMatch[]
+    teams: SanityTeam[]
+    practices?: SanityPractice[]
+}) {
     const today = new Date()
     const [year, setYear] = useState(today.getFullYear())
     const [month, setMonth] = useState(today.getMonth())
@@ -181,6 +267,19 @@ export default function MatchCalendar({ matches, teams }: { matches: SanityMatch
         }
         return map
     }, [matches])
+
+    const practicesByDate = useMemo(() => {
+        const firstIso = `${year}-${String(month + 1).padStart(2, '0')}-01`
+        const lastDay = new Date(year, month + 1, 0).getDate()
+        const lastIso = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        const instances = expandPractices(practices, firstIso, lastIso)
+        const map = new Map<string, PracticeInstance[]>()
+        for (const inst of instances) {
+            if (!map.has(inst.date)) map.set(inst.date, [])
+            map.get(inst.date)!.push(inst)
+        }
+        return map
+    }, [practices, year, month])
 
     const firstDay = new Date(year, month, 1).getDay()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -240,12 +339,14 @@ export default function MatchCalendar({ matches, teams }: { matches: SanityMatch
                         }
                         const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                         const dayMatches = matchesByDate.get(isoDate) ?? []
+                        const dayPractices = practicesByDate.get(isoDate) ?? []
+                        const hasEvents = dayMatches.length > 0 || dayPractices.length > 0
                         const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day
 
                         const cell = (
                             <div
                                 className={`relative border-r border-b border-[#EAEAEA] h-28 overflow-hidden flex flex-col items-center pt-1.5 gap-1 transition-colors
-                                    ${dayMatches.length > 0 ? 'bg-white hover:bg-[#77c3ef]/5 cursor-pointer' : 'bg-white cursor-default'}`}
+                                    ${hasEvents ? 'bg-white hover:bg-[#77c3ef]/5 cursor-pointer' : 'bg-white cursor-default'}`}
                             >
                                 {dayMatches.length > 0 && (() => {
                                     const isHome = isClaymores(dayMatches[0].homeTeam)
@@ -281,11 +382,23 @@ export default function MatchCalendar({ matches, teams }: { matches: SanityMatch
                                             <span key={m._id} className={`w-1.5 h-1.5 rounded-full ${DOT[getResult(m)]}`} />
                                         )
                                     })}
+                                    {dayPractices.map(inst => (
+                                        inst.practice.iconUrl ? (
+                                            <img
+                                                key={inst.key}
+                                                src={inst.practice.iconUrl}
+                                                alt={inst.practice.iconAlt ?? inst.practice.title}
+                                                className="w-9 h-9 object-contain shrink-0"
+                                            />
+                                        ) : (
+                                            <span key={inst.key} className="w-1.5 h-1.5 rounded-full bg-[#fd80b5]" />
+                                        )
+                                    ))}
                                 </div>
                             </div>
                         )
 
-                        if (dayMatches.length === 0) return <div key={isoDate}>{cell}</div>
+                        if (!hasEvents) return <div key={isoDate}>{cell}</div>
 
                         return (
                             <Popover key={isoDate}>
@@ -298,6 +411,7 @@ export default function MatchCalendar({ matches, teams }: { matches: SanityMatch
                                     </p>
                                     <div className="flex flex-col gap-2">
                                         {dayMatches.map(m => <MatchCard key={m._id} m={m} teams={teams} />)}
+                                        {dayPractices.map(inst => <PracticeCard key={inst.key} instance={inst} />)}
                                     </div>
                                 </PopoverContent>
                             </Popover>
@@ -308,7 +422,7 @@ export default function MatchCalendar({ matches, teams }: { matches: SanityMatch
 
             {/* ── Mobile list ── */}
             <div className="sm:hidden">
-                <MobileList matches={matches} teams={teams} />
+                <MobileList matches={matches} teams={teams} practices={practices} />
             </div>
         </div>
     )

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const metadata: Metadata = {
     title: 'Orlando Rugby — About the Central Florida Claymores RFC',
@@ -16,7 +17,8 @@ export const metadata: Metadata = {
     },
 }
 
-export default function AboutOrlandoRugbyPage() {
+export default async function AboutOrlandoRugbyPage() {
+    const schedule = await getPracticeSchedule()
     return (
         <div className="min-h-screen">
             <JsonLd data={organizationSchema} />
@@ -36,7 +38,10 @@ export default function AboutOrlandoRugbyPage() {
                         The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. Founded with a simple mission — build a competitive rugby program in Central Florida, by players, for players — the Claymores have grown from a handful of founding members into one of the most active rugby clubs in Orlando.
                     </p>
                     <p className="text-lg text-muted-foreground leading-relaxed">
-                        We train every Thursday evening, 8–10pm in the Orlando area and compete on Saturdays during the Florida Rugby Union season. The club is open to players of all backgrounds and skill levels, and our coaching staff is committed to developing players at every stage of their rugby journey.
+                        We currently train every {schedule.weekday} evening, {schedule.time} in the Orlando area and compete on Saturdays during the Florida Rugby Union season. The club is open to players of all backgrounds and skill levels, and our coaching staff is committed to developing players at every stage of their rugby journey.
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-3 italic">
+                        <Link href="/fixtures" className="text-[#fd80b5] hover:underline">{schedule.seasonalNote}</Link>
                     </p>
                 </section>
 
@@ -50,7 +55,7 @@ export default function AboutOrlandoRugbyPage() {
                         The Central Florida Claymores RFC reached the D4 state final in 2023 before earning promotion to D3, establishing themselves as one of the premier rugby clubs in the Florida Rugby Union. The club&apos;s trajectory — from founding in 2018 to state finalists in five years — reflects both the quality of the players and the strength of the Central Florida rugby community.
                     </p>
                     <p className="text-gray-300 leading-relaxed">
-                        The goal is a state championship. The Claymores are building toward it every Thursday in Orlando.
+                        The goal is a state championship. The Claymores are building toward it every {schedule.weekday} in Orlando.
                     </p>
                 </section>
 
@@ -94,7 +99,7 @@ export default function AboutOrlandoRugbyPage() {
                         Orlando and the broader Central Florida region have a growing rugby community. The Florida Rugby Union oversees competition across the state, with clubs competing from Tallahassee to Miami. Within Central Florida, the Claymores are the D3 option for serious adult club rugby — with year-round training taking advantage of Orlando&apos;s climate and growing player pool.
                     </p>
                     <p className="text-lg text-muted-foreground leading-relaxed">
-                        If you&apos;ve moved to Orlando, played rugby elsewhere, or are looking to start for the first time — the Claymores are Central Florida&apos;s club. Come to a Thursday practice and find out what Orlando rugby looks like.
+                        If you&apos;ve moved to Orlando, played rugby elsewhere, or are looking to start for the first time — the Claymores are Central Florida&apos;s club. Come to a {schedule.weekday} practice and find out what Orlando rugby looks like.
                     </p>
                 </section>
 

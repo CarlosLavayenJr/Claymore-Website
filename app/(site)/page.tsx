@@ -6,22 +6,25 @@ import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
-export const metadata: Metadata = {
-    title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
-    description: "Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. No experience needed. Join us Thursdays.",
-    alternates: {
-        canonical: '/',
-    },
-    openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+    const s = await getPracticeSchedule()
+    return {
         title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
-        description: "Orlando's USA Rugby D3 club. No experience needed. Join us Thursdays.",
-        url: '/',
-        images: ogImage(),
-    },
+        description: `Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. No experience needed. Join us ${s.weekday}s.`,
+        alternates: { canonical: '/' },
+        openGraph: {
+            title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
+            description: `Orlando's USA Rugby D3 club. No experience needed. Join us ${s.weekday}s.`,
+            url: '/',
+            images: ogImage(),
+        },
+    }
 }
 
-export default function Home() {
+export default async function Home() {
+    const schedule = await getPracticeSchedule()
     return (
         <main className="min-h-screen">
             <JsonLd data={organizationSchema} />
@@ -34,7 +37,11 @@ export default function Home() {
                         Orlando&apos;s Rugby Club — Central Florida Claymores RFC
                     </h1>
                     <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-                        The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. We practice every Thursday in the Orlando area and welcome players of all skill levels — no experience required.
+                        The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. We practice every {schedule.weekday} in the Orlando area and welcome players of all skill levels — no experience required.
+                    </p>
+                    <p className="text-sm text-[#555555] mb-8 max-w-xl mx-auto">
+                        <strong className="text-[#111111]">{schedule.seasonLabel}:</strong> {schedule.weekday}s {schedule.time} at {schedule.venueName}.{' '}
+                        <Link href="/fixtures" className="text-[#fd80b5] hover:underline">{schedule.seasonalNote}</Link>
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link

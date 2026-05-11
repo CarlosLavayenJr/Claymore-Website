@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
     } else if (type === 'match') {
         revalidatePath('/fixtures')
         revalidatePath('/results')
+    } else if (type === 'practice') {
+        revalidatePath('/fixtures')
+    } else if (type === 'practiceSchedule') {
+        // Schedule appears in copy/schema on virtually every page — revalidate everything.
+        revalidatePath('/', 'layout')
     } else {
         // Fallback: revalidate everything
         revalidatePath('/', 'layout')

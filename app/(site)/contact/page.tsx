@@ -5,23 +5,30 @@ import { teamPhotosQuery, type SanityTeamPhoto } from '@/sanity/lib/queries'
 import ContactForm from '@/components/contact-form'
 import TeamPhotoGrid from '@/components/team-photo-grid'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const revalidate = 3600
 
-export const metadata: Metadata = {
-    title: 'Contact the Orlando Claymores RFC — Rugby Near Me in Orlando',
-    description: 'Looking for rugby near you in Orlando or Central Florida? Contact the Claymores RFC. Practices every Thursday at Barnett Park. No experience required.',
-    alternates: { canonical: '/contact' },
-    openGraph: {
-        title: 'Contact the Orlando Claymores RFC | Rugby Near Me',
-        description: 'Reach out to join Orlando\'s USA Rugby D3 club. Practices every Thursday at Barnett Park.',
-        url: '/contact',
-        images: ogImage(),
-    },
+export async function generateMetadata(): Promise<Metadata> {
+    const s = await getPracticeSchedule()
+    return {
+        title: 'Contact the Orlando Claymores RFC — Rugby Near Me in Orlando',
+        description: `Looking for rugby near you in Orlando or Central Florida? Contact the Claymores RFC. Practices every ${s.weekday} at ${s.venueName}. No experience required.`,
+        alternates: { canonical: '/contact' },
+        openGraph: {
+            title: 'Contact the Orlando Claymores RFC | Rugby Near Me',
+            description: `Reach out to join Orlando's USA Rugby D3 club. Practices every ${s.weekday} at ${s.venueName}.`,
+            url: '/contact',
+            images: ogImage(),
+        },
+    }
 }
 
 export default async function ContactPage() {
-    const photos: SanityTeamPhoto[] = await client.fetch(teamPhotosQuery)
+    const [photos, schedule]: [SanityTeamPhoto[], Awaited<ReturnType<typeof getPracticeSchedule>>] = await Promise.all([
+        client.fetch(teamPhotosQuery),
+        getPracticeSchedule(),
+    ])
 
     return (
         <div className="min-h-screen">
@@ -33,7 +40,7 @@ export default async function ContactPage() {
                         Get in Touch
                     </h1>
                     <p className="text-xl text-gray-300">
-                        Ready to play rugby in Orlando? Send us a message below — we&apos;ll get back to you before the next Thursday practice.
+                        Ready to play rugby in Orlando? Send us a message below — we&apos;ll get back to you before the next {schedule.weekday} practice.
                     </p>
                 </div>
             </section>
@@ -63,14 +70,14 @@ export default async function ContactPage() {
                                     <dd className="font-semibold">Central Florida Claymores RFC</dd>
                                 </div>
                                 <div>
-                                    <dt className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">Practice</dt>
-                                    <dd className="font-semibold">Thursdays — 8:00–10:00 PM</dd>
+                                    <dt className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">Practice ({schedule.seasonLabel})</dt>
+                                    <dd className="font-semibold">{schedule.weekday}s — {schedule.time}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-1">Location</dt>
                                     <dd className="font-semibold">
-                                        Barnett Park<br />
-                                        <span className="text-muted-foreground font-normal">4801 W Colonial Dr, Orlando, FL 32808</span>
+                                        {schedule.venueName}<br />
+                                        <span className="text-muted-foreground font-normal">{schedule.venueAddress}</span>
                                     </dd>
                                 </div>
                                 <div>
@@ -94,7 +101,7 @@ export default async function ContactPage() {
                         <div className="bg-muted rounded-xl p-6">
                             <p className="font-claymore text-lg mb-2">No Experience Needed</p>
                             <p className="text-muted-foreground text-sm leading-relaxed">
-                                We welcome complete beginners and experienced players alike. Just show up to a Thursday practice in athletic clothes and cleats — we&apos;ll handle the rest.
+                                We welcome complete beginners and experienced players alike. Just show up to a {schedule.weekday} practice in athletic clothes and cleats — we&apos;ll handle the rest.
                             </p>
                             <Link
                                 href="/join"

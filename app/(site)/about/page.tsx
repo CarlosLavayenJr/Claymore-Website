@@ -148,7 +148,7 @@ export default function AboutUs() {
 
                         The Claymores began their inaugural season by winning their first match, and the coaches and players have not looked back since. The club reached the D4 state final in 2023 before earning promotion to D3, cementing the Claymores as one of Central Florida&apos;s most competitive rugby programs. The team&apos;s expectations are clear — win a state title and advance as far nationally as their spirit and camaraderie will take them.<br /><br />
 
-                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grow in strength and experience at a rate that is electrifying. Every Thursday, players come together from all over the Orlando area to practice and build the foundation of a long-lasting, winning culture. On Saturdays, the Claymores take the pitch to show that anything is possible with hard work, commitment, and heart.
+                        Despite the struggles all have encountered during the COVID pandemic, the Claymores brotherhood has continued to grow in strength and experience at a rate that is electrifying. Each week, players come together from all over the Orlando area to practice and build the foundation of a long-lasting, winning culture. On Saturdays, the Claymores take the pitch to show that anything is possible with hard work, commitment, and heart.
                     </p>
                 </section>
 

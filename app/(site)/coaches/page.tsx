@@ -6,6 +6,7 @@ import { coachesQuery, type SanityCoach } from '@/sanity/lib/queries'
 import Breadcrumbs from '@/components/breadcrumbs'
 import { features } from '@/lib/features'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const revalidate = 3600
 
@@ -24,7 +25,10 @@ export const metadata: Metadata = {
 
 export default async function CoachesPage() {
     if (!features.coaches) notFound()
-    const coaches: SanityCoach[] = await client.fetch(coachesQuery)
+    const [coaches, schedule]: [SanityCoach[], Awaited<ReturnType<typeof getPracticeSchedule>>] = await Promise.all([
+        client.fetch(coachesQuery),
+        getPracticeSchedule(),
+    ])
 
     return (
         <div className="container mx-auto px-4 py-12 max-w-5xl">
@@ -88,7 +92,7 @@ export default async function CoachesPage() {
             <div className="mt-16 text-center bg-[#F9F9F9] rounded-xl p-8">
                 <h2 className="text-2xl font-claymore text-[#111111] mb-3">Train with the Claymores</h2>
                 <p className="text-[#555555] mb-6 max-w-xl mx-auto">
-                    Practice every Thursday in Orlando. All skill levels welcome — our staff develop players from
+                    Practice every {schedule.weekday} in Orlando. All skill levels welcome — our staff develop players from
                     beginners to leaders.
                 </p>
                 <Link

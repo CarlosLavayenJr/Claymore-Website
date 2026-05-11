@@ -1,4 +1,38 @@
 import type { SanityCoach, SanityMatch, SanityPlayer, SanityPost, SanityTeam } from '@/sanity/lib/queries'
+import type { PracticeSchedule } from '@/lib/practice-schedule'
+
+const WEEKDAY_TO_SCHEMA: Record<string, string> = {
+    Sunday: 'https://schema.org/Sunday',
+    Monday: 'https://schema.org/Monday',
+    Tuesday: 'https://schema.org/Tuesday',
+    Wednesday: 'https://schema.org/Wednesday',
+    Thursday: 'https://schema.org/Thursday',
+    Friday: 'https://schema.org/Friday',
+    Saturday: 'https://schema.org/Saturday',
+}
+
+// "8–10pm" / "6:30 PM – 8:00 PM" -> { opens: "20:00", closes: "22:00" }
+// Best-effort; falls back to undefined for entries we can't parse.
+function parseTimeRange(time: string): { opens: string; closes: string } | undefined {
+    const normalized = time.replace(/[–—]/g, '-').replace(/\s+/g, '').toLowerCase()
+    const m = normalized.match(
+        /^(\d{1,2})(?::(\d{2}))?(am|pm)?-(\d{1,2})(?::(\d{2}))?(am|pm)?$/,
+    )
+    if (!m) return undefined
+    const to24 = (h: number, min: number, mer: string | undefined, fallbackMer: string) => {
+        const meridian = mer || fallbackMer
+        let hour = h
+        if (meridian === 'pm' && hour < 12) hour += 12
+        if (meridian === 'am' && hour === 12) hour = 0
+        return `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+    }
+    const endMer = m[6] || (m[3] ?? 'pm')
+    const startMer = m[3] || endMer
+    return {
+        opens: to24(parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 0, startMer, endMer),
+        closes: to24(parseInt(m[4], 10), m[5] ? parseInt(m[5], 10) : 0, endMer, endMer),
+    }
+}
 
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'
 export const CLUB_NAME = 'Central Florida Claymores RFC'
@@ -290,34 +324,37 @@ export function sportsTeamSchema(team: SanityTeam): Record<string, unknown> {
     }
 }
 
-// Sports facility (Barnett Park) — used on /location for "rugby fields Orlando" type queries.
-export function placeSchema(): Record<string, unknown> {
+// Sports facility used on /location for "rugby fields Orlando" type queries.
+// Sourced from the practiceSchedule singleton so it stays accurate when the
+// venue changes seasonally.
+export function placeSchema(schedule: PracticeSchedule): Record<string, unknown> {
+    const hours = parseTimeRange(schedule.time)
+    const dayOfWeek = WEEKDAY_TO_SCHEMA[schedule.weekday] ?? schedule.weekday
     return {
         '@context': 'https://schema.org',
         '@type': 'SportsActivityLocation',
-        name: 'Barnett Park — Central Florida Claymores RFC Practice Field',
+        name: `${schedule.venueName} — Central Florida Claymores RFC Practice Field`,
         url: abs('/location'),
         address: {
             '@type': 'PostalAddress',
-            streetAddress: '4801 W Colonial Dr',
-            addressLocality: 'Orlando',
-            addressRegion: 'FL',
-            postalCode: '32808',
+            streetAddress: schedule.venueStreet,
+            addressLocality: schedule.venueCity,
+            addressRegion: schedule.venueRegion,
+            postalCode: schedule.venuePostalCode,
             addressCountry: 'US',
         },
-        geo: {
-            '@type': 'GeoCoordinates',
-            latitude: 28.5567,
-            longitude: -81.4312,
-        },
         sport: 'Rugby Union',
-        openingHoursSpecification: [
-            {
-                '@type': 'OpeningHoursSpecification',
-                dayOfWeek: 'Thursday',
-                opens: '20:00',
-                closes: '22:00',
-            },
-        ],
+        ...(hours
+            ? {
+                  openingHoursSpecification: [
+                      {
+                          '@type': 'OpeningHoursSpecification',
+                          dayOfWeek,
+                          opens: hours.opens,
+                          closes: hours.closes,
+                      },
+                  ],
+              }
+            : {}),
     }
 }

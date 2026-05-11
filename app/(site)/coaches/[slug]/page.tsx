@@ -8,6 +8,7 @@ import Breadcrumbs from '@/components/breadcrumbs'
 import { breadcrumbSchema, coachSchema } from '@/lib/seo'
 import { features } from '@/lib/features'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const revalidate = 3600
 
@@ -44,7 +45,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function CoachPage({ params }: Params) {
     if (!features.coaches) notFound()
     const { slug } = await params
-    const coach: SanityCoach | null = await client.fetch(coachBySlugQuery, { slug })
+    const [coach, schedule]: [SanityCoach | null, Awaited<ReturnType<typeof getPracticeSchedule>>] = await Promise.all([
+        client.fetch(coachBySlugQuery, { slug }),
+        getPracticeSchedule(),
+    ])
     if (!coach) notFound()
 
     return (
@@ -111,7 +115,7 @@ export default async function CoachPage({ params }: Params) {
                     Train with {coach.name.split(' ')[0]} and the Claymores
                 </h2>
                 <p className="text-[#555555] mb-6">
-                    Practice every Thursday at Barnett Park, Orlando. All skill levels welcome.
+                    Practice every {schedule.weekday} at {schedule.venueName}, {schedule.venueCity}. All skill levels welcome.
                 </p>
                 <Link
                     href="/join"

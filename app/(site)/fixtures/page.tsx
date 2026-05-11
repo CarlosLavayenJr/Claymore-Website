@@ -1,10 +1,18 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
+import {
+    matchesQuery,
+    teamsQuery,
+    practicesQuery,
+    type SanityMatch,
+    type SanityTeam,
+    type SanityPractice,
+} from '@/sanity/lib/queries'
 import MatchCalendar from '@/components/match-calendar'
 import { matchSlug } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
+import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
 
 export const revalidate = 3600
 
@@ -40,12 +48,27 @@ function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
     return null
 }
 
+type UpcomingItem =
+    | { kind: 'match'; date: string; match: SanityMatch }
+    | { kind: 'practice'; date: string; instance: PracticeInstance }
+
+const MAX_UPCOMING = 10
+
 export default async function Fixtures() {
-    const [matches, teams]: [SanityMatch[], SanityTeam[]] = await Promise.all([
+    const [matches, teams, practices]: [SanityMatch[], SanityTeam[], SanityPractice[]] = await Promise.all([
         client.fetch(matchesQuery),
         client.fetch(teamsQuery),
+        client.fetch(practicesQuery),
     ])
-    const upcoming = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
+    const upcomingMatches = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
+    const upcomingPractices = upcomingPracticeInstances(practices, MAX_UPCOMING, 60)
+
+    const upcomingItems: UpcomingItem[] = [
+        ...upcomingMatches.map<UpcomingItem>(m => ({ kind: 'match', date: m.date, match: m })),
+        ...upcomingPractices.map<UpcomingItem>(p => ({ kind: 'practice', date: p.date, instance: p })),
+    ]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, MAX_UPCOMING)
 
     return (
         <div className="container mx-auto px-4 py-12 max-w-7xl">
@@ -61,42 +84,67 @@ export default async function Fixtures() {
 
                 {/* Left — custom calendar */}
                 <div>
-                    <h2 className="text-2xl font-claymore text-[#111111] mb-4">Match Calendar</h2>
-                    <MatchCalendar matches={matches} teams={teams} />
+                    <h2 className="text-2xl font-claymore text-[#111111] mb-4">Claymore Calendar</h2>
+                    <MatchCalendar matches={matches} teams={teams} practices={practices} />
                 </div>
 
-                {/* Right — Upcoming fixtures (hidden on mobile, calendar list covers it) */}
+                {/* Right — Upcoming matches & events (hidden on mobile, calendar list covers it) */}
                 <div className="hidden sm:block">
-                    <h2 className="text-2xl font-claymore text-[#111111] mb-4">Upcoming Matches</h2>
-                    {upcoming.length === 0 ? (
+                    <h2 className="text-2xl font-claymore text-[#111111] mb-4">Matches & Events</h2>
+                    {upcomingItems.length === 0 ? (
                         <div className="border border-[#EAEAEA] rounded-xl p-8 text-center text-[#555555]">
-                            No upcoming matches scheduled.
+                            No upcoming matches or events scheduled.
                         </div>
                     ) : (
                         <div className="border border-[#EAEAEA] rounded-xl overflow-hidden divide-y divide-[#EAEAEA]">
-                            {upcoming.map(m => {
-                                const opponent = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
-                                const isHome = isClaymores(m.homeTeam)
-                                const logo = findTeamLogo(opponent, teams)
+                            {upcomingItems.map(item => {
+                                if (item.kind === 'match') {
+                                    const m = item.match
+                                    const opponent = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
+                                    const isHome = isClaymores(m.homeTeam)
+                                    const logo = findTeamLogo(opponent, teams)
+                                    return (
+                                        <Link
+                                            key={`m-${m._id}`}
+                                            href={`/fixtures/${matchSlug(m)}`}
+                                            className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {logo
+                                                    ? <img src={logo} alt={`${opponent} logo`} className="w-8 h-8 object-contain shrink-0" />
+                                                    : <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />}
+                                                <div>
+                                                    <p className="text-sm font-semibold text-[#111111]">{opponent}</p>
+                                                    <p className="text-xs text-[#555555] mt-0.5">{isHome ? 'Home' : 'Away'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-medium text-[#77c3ef]">{formatDate(m.date)}</p>
+                                            </div>
+                                        </Link>
+                                    )
+                                }
+                                const p = item.instance.practice
                                 return (
-                                    <Link
-                                        key={m._id}
-                                        href={`/fixtures/${matchSlug(m)}`}
-                                        className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors"
+                                    <div
+                                        key={item.instance.key}
+                                        className="flex items-center justify-between px-5 py-4 bg-white"
                                     >
                                         <div className="flex items-center gap-3">
-                                            {logo
-                                                ? <img src={logo} alt={`${opponent} logo`} className="w-8 h-8 object-contain shrink-0" />
+                                            {p.iconUrl
+                                                ? <img src={p.iconUrl} alt={p.iconAlt ?? p.title} className="w-8 h-8 object-contain shrink-0" />
                                                 : <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />}
                                             <div>
-                                                <p className="text-sm font-semibold text-[#111111]">{opponent}</p>
-                                                <p className="text-xs text-[#555555] mt-0.5">{isHome ? 'Home' : 'Away'}</p>
+                                                <p className="text-sm font-semibold text-[#111111]">{p.title}</p>
+                                                <p className="text-xs text-[#fd80b5] uppercase tracking-widest font-semibold mt-0.5">
+                                                    Practice{p.time ? ` · ${p.time}` : ''}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-medium text-[#77c3ef]">{formatDate(m.date)}</p>
+                                            <p className="text-sm font-medium text-[#77c3ef]">{formatDate(item.date)}</p>
                                         </div>
-                                    </Link>
+                                    </div>
                                 )
                             })}
                         </div>

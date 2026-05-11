@@ -5,23 +5,30 @@ import { playersQuery } from '@/sanity/lib/queries'
 import type { SanityPlayer } from '@/sanity/lib/queries'
 import TeamGrid from '@/components/team-grid'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const revalidate = 0
 
-export const metadata: Metadata = {
-    title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
-    description: "Meet the players of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club. Forwards, backs, and everyone in between. Join us Thursdays.",
-    alternates: { canonical: '/team' },
-    openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+    const s = await getPracticeSchedule()
+    return {
         title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
-        description: "Meet the forwards, backs, and staff of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club.",
-        url: '/team',
-        images: ogImage(),
-    },
+        description: `Meet the players of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club. Forwards, backs, and everyone in between. Join us ${s.weekday}s.`,
+        alternates: { canonical: '/team' },
+        openGraph: {
+            title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
+            description: "Meet the forwards, backs, and staff of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club.",
+            url: '/team',
+            images: ogImage(),
+        },
+    }
 }
 
 export default async function TeamPage() {
-    const players: SanityPlayer[] = await client.fetch(playersQuery)
+    const [players, schedule]: [SanityPlayer[], Awaited<ReturnType<typeof getPracticeSchedule>>] = await Promise.all([
+        client.fetch(playersQuery),
+        getPracticeSchedule(),
+    ])
 
     return (
         <div>
@@ -53,7 +60,7 @@ export default async function TeamPage() {
                     Ready to Play?
                 </h2>
                 <p className="text-[#555555] text-sm mb-8 max-w-sm mx-auto">
-                    We practice every Thursday in Orlando. All skill levels welcome.
+                    We practice every {schedule.weekday} in Orlando. All skill levels welcome.
                 </p>
                 <Link
                     href="/join"

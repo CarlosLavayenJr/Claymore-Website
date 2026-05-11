@@ -4,53 +4,61 @@ import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
 import { ogImage } from '@/lib/og'
+import { getPracticeSchedule, type PracticeSchedule } from '@/lib/practice-schedule'
 
-export const metadata: Metadata = {
-    title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
-    description: 'Searching for rugby near me in Orlando or Central Florida? Join the Claymores RFC — USA Rugby D3. No experience required. Practices every Thursday. All ages 18+ welcome.',
-    alternates: { canonical: '/join' },
-    openGraph: {
-        title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
-        description: 'No experience needed. Practices every Thursday in Orlando. All skill levels welcome.',
-        url: '/join',
-        images: ogImage(),
-    },
+export async function generateMetadata(): Promise<Metadata> {
+    const s = await getPracticeSchedule()
+    return {
+        title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
+        description: `Searching for rugby near me in Orlando or Central Florida? Join the Claymores RFC — USA Rugby D3. No experience required. Practices every ${s.weekday}. All ages 18+ welcome.`,
+        alternates: { canonical: '/join' },
+        openGraph: {
+            title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
+            description: `No experience needed. Practices every ${s.weekday} in Orlando. All skill levels welcome.`,
+            url: '/join',
+            images: ogImage(),
+        },
+    }
 }
 
-const joinFaqs = [
-    {
-        question: 'Do I need rugby experience to try out with the Orlando Claymores?',
-        answer: 'Zero experience required. Many of our best players had never touched a rugby ball before joining. Our coaches will teach you everything you need to know.',
-    },
-    {
-        question: 'What are rugby tryouts like in Orlando?',
-        answer: "There's no formal tryout — just show up to a Thursday practice. We'll work with you on the basics and get you integrated into the team from day one.",
-    },
-    {
-        question: 'How fit do I need to be to join Orlando rugby?',
-        answer: "Whatever shape you're in, show up. Rugby has positions for every body type and fitness level. You'll get fitter as you go.",
-    },
-    {
-        question: 'Can I join the Central Florida Claymores mid-season?',
-        answer: 'Yes. We accept new players year-round. Come to a Thursday practice and we\'ll sort out the registration details from there.',
-    },
-    {
-        question: 'What gear do I need to start playing rugby in Orlando?',
-        answer: 'Just show up in athletic clothes and cleats if you have them. We\'ll sort out the rest. You\'ll need a mouthguard eventually, but not on day one.',
-    },
-]
-
-const faqSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: joinFaqs.map((faq) => ({
-        '@type': 'Question',
-        name: faq.question,
-        acceptedAnswer: { '@type': 'Answer', text: faq.answer },
-    })),
+function buildJoinFaqs(s: PracticeSchedule) {
+    return [
+        {
+            question: 'Do I need rugby experience to try out with the Orlando Claymores?',
+            answer: 'Zero experience required. Many of our best players had never touched a rugby ball before joining. Our coaches will teach you everything you need to know.',
+        },
+        {
+            question: 'What are rugby tryouts like in Orlando?',
+            answer: `There's no formal tryout — just show up to a ${s.weekday} practice. We'll work with you on the basics and get you integrated into the team from day one.`,
+        },
+        {
+            question: 'How fit do I need to be to join Orlando rugby?',
+            answer: "Whatever shape you're in, show up. Rugby has positions for every body type and fitness level. You'll get fitter as you go.",
+        },
+        {
+            question: 'Can I join the Central Florida Claymores mid-season?',
+            answer: `Yes. We accept new players year-round. Come to a ${s.weekday} practice and we'll sort out the registration details from there.`,
+        },
+        {
+            question: 'What gear do I need to start playing rugby in Orlando?',
+            answer: "Just show up in athletic clothes and cleats if you have them. We'll sort out the rest. You'll need a mouthguard eventually, but not on day one.",
+        },
+    ]
 }
 
-export default function JoinPage() {
+export default async function JoinPage() {
+    const schedule = await getPracticeSchedule()
+    const joinFaqs = buildJoinFaqs(schedule)
+    const faqSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: joinFaqs.map((faq) => ({
+            '@type': 'Question',
+            name: faq.question,
+            acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+        })),
+    }
+
     return (
         <div className="min-h-screen">
             <JsonLd data={organizationSchema} />
@@ -63,7 +71,7 @@ export default function JoinPage() {
                         Join Orlando Rugby — No Experience Needed
                     </h1>
                     <p className="text-xl text-gray-300 mb-8">
-                        The Central Florida Claymores RFC welcome players of all skill levels. Come to a Thursday practice in Orlando and see what rugby is all about.
+                        The Central Florida Claymores RFC welcome players of all skill levels. Come to a {schedule.weekday} practice in Orlando and see what rugby is all about.
                     </p>
                     <Link
                         href="/contact"
@@ -83,7 +91,7 @@ export default function JoinPage() {
                         {[
                             {
                                 title: 'Show Up',
-                                body: "Come to a Thursday evening, 8–10pm practice at our Orlando training ground. Wear athletic clothes and cleats if you have them — nothing else required.",
+                                body: `Come to a ${schedule.weekday} evening, ${schedule.time} practice at our Orlando training ground. Wear athletic clothes and cleats if you have them — nothing else required.`,
                             },
                             {
                                 title: 'Learn the Basics',
@@ -111,10 +119,16 @@ export default function JoinPage() {
                 {/* Practice schedule */}
                 <section className="mb-16 bg-black text-white rounded-xl p-10 text-center">
                     <h2 className="text-3xl font-claymore mb-4">Practice Schedule</h2>
-                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">Thursday Evening</strong></p>
-                    <p className="text-gray-400 mb-6">Orlando, FL — <Link href="/location" className="text-[#77c3ef] hover:underline">view location</Link></p>
+                    <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-3">{schedule.seasonLabel}</p>
+                    <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">{schedule.weekday} Evening</strong> · {schedule.time}</p>
+                    <p className="text-gray-400 mb-4">
+                        {schedule.venueName}, {schedule.venueAddress.replace(/, /, ', ')} — <Link href="/location" className="text-[#77c3ef] hover:underline">view location</Link>
+                    </p>
+                    <p className="text-sm text-gray-400 mb-6 italic">
+                        <Link href="/fixtures" className="text-[#77c3ef] hover:underline">{schedule.seasonalNote}</Link>
+                    </p>
                     <p className="text-gray-300 max-w-xl mx-auto">
-                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] hover:underline">fixtures page</Link> for the full 2025 schedule.
+                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] hover:underline">fixtures page</Link> for the full schedule.
                     </p>
                 </section>
 

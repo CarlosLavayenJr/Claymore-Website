@@ -2,8 +2,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa'
 import { features } from '@/lib/features'
+import { getPracticeSchedule } from '@/lib/practice-schedule'
 
-const Footer = () => {
+const Footer = async () => {
+    const schedule = await getPracticeSchedule()
     return (
         <footer className="text-gray-400" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, #1a3a4a 0%, #0f2535 30%, #111111 70%)' }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -65,8 +67,13 @@ const Footer = () => {
                     {/* Join CTA */}
                     <div>
                         <h3 className="text-white font-claymore text-lg mb-4">Play Rugby in Orlando</h3>
-                        <p className="text-sm leading-relaxed mb-4">
-                            No experience needed. We practice every Thursday at Barnett Park in Orlando and welcome players of all skill levels.
+                        <p className="text-sm leading-relaxed mb-2">
+                            No experience needed. We practice every {schedule.weekday} {schedule.time} at {schedule.venueName} in {schedule.venueCity}.
+                        </p>
+                        <p className="text-xs leading-relaxed mb-4 italic">
+                            <Link href="/fixtures" className="hover:text-white transition-colors">
+                                {schedule.seasonalNote}
+                            </Link>
                         </p>
                         <Link
                             href="/join"
@@ -79,7 +86,7 @@ const Footer = () => {
                 </div>
 
                 <div className="mt-10 pt-6 border-t border-gray-700/50 text-center text-xs text-gray-600 space-y-1">
-                    <p>Central Florida Claymores RFC — Barnett Park, 4801 W Colonial Dr, Orlando, FL 32808 — claymoresrfc@gmail.com</p>
+                    <p>Central Florida Claymores RFC — {schedule.venueName}, {schedule.venueAddress} — claymoresrfc@gmail.com</p>
                     <p>&copy; {new Date().getFullYear()} Central Florida Claymores RFC. All rights reserved.</p>
                 </div>
             </div>
