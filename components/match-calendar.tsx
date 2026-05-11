@@ -113,7 +113,7 @@ function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
             {/* Score / result */}
             <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
                 {isPlayed ? (
-                    <p className="font-mono text-base font-bold text-[#111111]">{ours} – {theirs}</p>
+                    <p className="font-mono text-base font-bold text-[#111111]">{m.homeScore} – {m.awayScore}</p>
                 ) : (
                     <p className="text-xs font-semibold text-[#77c3ef] uppercase tracking-widest">vs {opponent}</p>
                 )}
