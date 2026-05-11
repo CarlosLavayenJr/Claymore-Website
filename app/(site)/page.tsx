@@ -5,8 +5,19 @@ import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
+import UpcomingEvents from '@/components/upcoming-events'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
+import { features } from '@/lib/features'
+import { client } from '@/sanity/lib/client'
+import {
+    matchesQuery,
+    practicesQuery,
+    type SanityMatch,
+    type SanityPractice,
+} from '@/sanity/lib/queries'
+
+export const revalidate = 3600
 
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
@@ -24,44 +35,77 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-    const schedule = await getPracticeSchedule()
+    const showCalendar = features.homepageCalendar
+
+    const [schedule, matches, practices]: [
+        Awaited<ReturnType<typeof getPracticeSchedule>>,
+        SanityMatch[],
+        SanityPractice[],
+    ] = await Promise.all([
+        getPracticeSchedule(),
+        showCalendar ? client.fetch(matchesQuery) : Promise.resolve([] as SanityMatch[]),
+        showCalendar ? client.fetch(practicesQuery) : Promise.resolve([] as SanityPractice[]),
+    ])
+
     return (
         <main className="min-h-screen">
             <JsonLd data={organizationSchema} />
             <RugbyHero />
 
             {/* Location + CTA section — critical for local SEO H1 */}
-            <section className="bg-white py-16 px-4">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h1 className="text-4xl md:text-5xl font-claymore mb-6">
-                        Orlando&apos;s Rugby Club — Central Florida Claymores RFC
-                    </h1>
-                    <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-                        The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. We practice every {schedule.weekday} in the Orlando area and welcome players of all skill levels — no experience required.
-                    </p>
-                    <p className="text-sm text-[#555555] mb-8 max-w-xl mx-auto">
-                        <strong className="text-[#111111]">{schedule.seasonLabel}:</strong> {schedule.weekday}s {schedule.time} at {schedule.venueName}.{' '}
-                        <Link href="/fixtures" className="text-[#fd80b5] hover:underline">{schedule.seasonalNote}</Link>
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link
-                            href="/join"
-                            className="inline-block bg-[#77c3ef] text-white px-8 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity"
-                        >
-                            Join the Claymores
-                        </Link>
-                        <Link
-                            href="/location"
-                            className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
-                        >
-                            Find Us in Orlando
-                        </Link>
-                        <Link
-                            href="/about-orlando-rugby"
-                            className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
-                        >
-                            About Orlando Rugby
-                        </Link>
+            <section className="bg-white py-16">
+                <div className="px-4 sm:px-6 lg:px-32">
+                    <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
+                        {/*
+                          League table widget — placeholder for next iteration.
+                          Will live in this column once built.
+                          <div className="hidden lg:block w-96 shrink-0">
+                              <LeagueTable />
+                          </div>
+                        */}
+
+                        {/* Centered hero text + CTAs (matches the original section layout) */}
+                        <div className="flex-1 flex justify-center">
+                            <div className="max-w-4xl text-center">
+                                <h1 className="text-4xl md:text-5xl font-claymore mb-6">
+                                    Orlando&apos;s Rugby Club — Central Florida Claymores RFC
+                                </h1>
+                                <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+                                    The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. We practice every {schedule.weekday} in the Orlando area and welcome players of all skill levels — no experience required.
+                                </p>
+                                <p className="text-sm text-[#555555] mb-8 max-w-xl mx-auto">
+                                    <strong className="text-[#111111]">{schedule.seasonLabel}:</strong> {schedule.weekday}s {schedule.time} at {schedule.venueName}.{' '}
+                                    <Link href="/fixtures" className="text-[#fd80b5] hover:underline">{schedule.seasonalNote}</Link>
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                    <Link
+                                        href="/join"
+                                        className="inline-block bg-[#77c3ef] text-white px-8 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity"
+                                    >
+                                        Join the Claymores
+                                    </Link>
+                                    <Link
+                                        href="/location"
+                                        className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
+                                    >
+                                        Find Us in Orlando
+                                    </Link>
+                                    <Link
+                                        href="/about-orlando-rugby"
+                                        className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
+                                    >
+                                        About Orlando Rugby
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Upcoming events widget — desktop only, gated by feature flag */}
+                        {showCalendar && (
+                            <div className="hidden lg:block w-96 shrink-0">
+                                <UpcomingEvents matches={matches} practices={practices} />
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>
@@ -73,6 +117,15 @@ export default async function Home() {
                 </div>
                 <TeamPhotoStrip count={6} />
             </section>
+
+            {/* Mobile-only upcoming events placement — gated by feature flag */}
+            {showCalendar && (
+                <section className="lg:hidden px-4 mb-12">
+                    <div className="max-w-sm mx-auto">
+                        <UpcomingEvents matches={matches} practices={practices} />
+                    </div>
+                </section>
+            )}
 
             <InstagramFeed />
 
