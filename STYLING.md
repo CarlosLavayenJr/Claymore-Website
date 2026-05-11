@@ -12,8 +12,8 @@ Never mix these two modes.
 
 | Token | Hex | Usage |
 |---|---|---|
-| Pink (Primary) | `#fd80b5` | CTAs, links, draws, primary accent |
-| Steel Blue | `#77c3ef` | Wins, secondary CTAs — use `#77c3ef`, NOT `#78c3ef` |
+| Pink  | `#fd80b5` | CTAs, links, draws, primary accent |
+| Steel Blue (Primary) | `#77c3ef` | Wins, secondary CTAs — use `#77c3ef`, NOT `#78c3ef` |
 | Background | `#FFFFFF` | Page background |
 | Primary Text | `#111111` | Headings, body |
 | Secondary Text | `#555555` | Subtext, captions |
