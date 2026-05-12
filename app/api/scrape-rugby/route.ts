@@ -214,27 +214,22 @@ export async function GET(request: Request) {
         matches.map(m => {
           const existingDoc = existingByDate.get(m.date)
           if (existingDoc) {
-            // Manual override: editor has locked this doc — leave it completely alone
-            if (existingDoc.manualOverride) {
-              skippedLocked++
-              return Promise.resolve({ skipped: 'locked' as const })
-            }
-            // If already played and scores are set, preserve them (manual edits protected)
-            const scoresAlreadySet = existingDoc.status === 'played' &&
-              (existingDoc.homeScore != null || existingDoc.awayScore != null)
-            return sanity.patch(existingDoc._id).set({
-              homeTeam: m.homeTeam,
-              awayTeam: m.awayTeam,
-              status: m.status,
-              season: m.season,
-              matchType: m.matchType,
-              ...(scoresAlreadySet ? {} : { homeScore: m.homeScore, awayScore: m.awayScore }),
-              ...(m.competition ? { competition: m.competition } : {}),
-              ...(m.note ? { note: m.note } : {}),
-            }).commit()
+            // Existing match docs are NEVER updated by the scraper. They may
+            // have been hand-cleaned in Studio — preserve those edits in full.
+            // To re-scrape one, delete the doc in Studio and let the next run
+            // recreate it. `manualOverride` is no longer strictly needed (this
+            // skip is unconditional) but we keep the field/flag for clarity.
+            skippedLocked++
+            return Promise.resolve({ skipped: 'preserved' as const })
           }
-          // New match — create with scraped id and register in map for this run
-          existingByDate.set(m.date, { _id: m._id, status: m.status, homeScore: m.homeScore, awayScore: m.awayScore, manualOverride: false })
+          // New match — create with scraped id and register in map for this run.
+          existingByDate.set(m.date, {
+            _id: m._id,
+            status: m.status,
+            homeScore: m.homeScore,
+            awayScore: m.awayScore,
+            manualOverride: false,
+          })
           return sanity.createOrReplace(m)
         })
       )

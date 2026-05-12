@@ -4,7 +4,7 @@ import { visionTool } from '@sanity/vision'
 import { media } from 'sanity-plugin-media'
 import { schema } from '@/sanity/schema'
 
-const SINGLETON_TYPES = new Set(['practiceSchedule'])
+const SINGLETON_TYPES = new Set(['practiceSchedule', 'leagueChampionship'])
 
 const structure: StructureResolver = (S) =>
     S.list()
@@ -18,6 +18,15 @@ const structure: StructureResolver = (S) =>
                         .schemaType('practiceSchedule')
                         .documentId('practiceSchedule')
                         .title('Practice Schedule'),
+                ),
+            S.listItem()
+                .title('League Championship')
+                .id('leagueChampionship')
+                .child(
+                    S.document()
+                        .schemaType('leagueChampionship')
+                        .documentId('leagueChampionship')
+                        .title('League Championship'),
                 ),
             S.divider(),
             ...S.documentTypeListItems().filter(
