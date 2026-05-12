@@ -368,8 +368,9 @@ export interface SanityLeagueStandings {
 }
 
 // Active championship pointer (singleton) → the standings doc currently being scraped.
-// Falls back to the most-recently-updated standings doc if the singleton is missing
-// (useful before a singleton is published, or during backfills).
+// Falls back to the standings doc with the latest season label so the homepage
+// never points at an old backfilled season. seasonLabel is shaped like
+// "YYYY-YYYY" (e.g. "2025-2026"), which sorts correctly lexicographically.
 export const currentLeagueStandingsQuery = groq`
   coalesce(
     *[_type == "leagueChampionship" && _id == "leagueChampionship"][0] {
@@ -384,7 +385,7 @@ export const currentLeagueStandingsQuery = groq`
         playoffs
       }
     }.doc,
-    *[_type == "leagueStandings"] | order(lastUpdated desc) [0] {
+    *[_type == "leagueStandings"] | order(seasonLabel desc) [0] {
       _id,
       _updatedAt,
       championshipId,
