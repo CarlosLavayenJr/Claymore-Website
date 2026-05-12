@@ -87,7 +87,7 @@ function MobileList({
     )
 }
 
-// ── Calendar grid view ────────────────────────────────────────────────────────
+// ── Calendar grid view ───────────────────────────────────────────────────────────────────────────
 
 export default function MatchCalendar({
     matches,

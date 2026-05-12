@@ -114,8 +114,6 @@ export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] })
     const weHome = isClaymores(m.homeTeam)
     const opponent = weHome ? m.awayTeam : m.homeTeam
     const isPlayed = m.status !== 'upcoming' && m.status !== 'cancelled'
-    const ours = weHome ? m.homeScore : m.awayScore
-    const theirs = weHome ? m.awayScore : m.homeScore
     const homeLogo = findTeamLogo(m.homeTeam, teams)
     const awayLogo = findTeamLogo(m.awayTeam, teams)
 
@@ -139,7 +137,7 @@ export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] })
             <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
                 {isPlayed ? (
                     <p className="font-mono text-base font-bold text-[#111111]">
-                        {ours} – {theirs}
+                        {m.homeScore} – {m.awayScore}
                     </p>
                 ) : (
                     <p className="text-xs font-semibold text-[#77c3ef] uppercase tracking-widest">
