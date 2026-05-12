@@ -1,179 +1,22 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import Link from 'next/link'
+import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { SanityMatch, SanityTeam, SanityPractice } from '@/sanity/lib/queries'
 import { expandPractices, type PracticeInstance } from '@/lib/practices'
-
-const normalizeTeamName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-function findTeam(name: string, teams: SanityTeam[]): SanityTeam | null {
-    const n = normalizeTeamName(name)
-    for (const team of teams) {
-        const candidates = [team.name, ...(team.aliases ?? [])]
-        if (candidates.some(alias => n.includes(normalizeTeamName(alias)) || normalizeTeamName(alias).includes(n))) {
-            return team
-        }
-    }
-    return null
-}
-
-function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
-    return findTeam(name, teams)?.logoUrl ?? null
-}
-
-function findTeamSlug(name: string, teams: SanityTeam[]): string | null {
-    return findTeam(name, teams)?.slug ?? null
-}
-
-function isClaymores(name: string) {
-    return name.includes('Claymores') || name.includes('IR/Claymores')
-}
-
-type Result = 'W' | 'L' | 'D' | 'upcoming' | 'cancelled'
-
-function getResult(m: SanityMatch): Result {
-    if (m.status === 'upcoming') return 'upcoming'
-    if (m.status === 'cancelled') return 'cancelled'
-    if (m.status === 'forfeit_us') return 'L'
-    if (m.status === 'forfeit_them') return 'W'
-    const weHome = isClaymores(m.homeTeam)
-    const ours = weHome ? m.homeScore : m.awayScore
-    const theirs = weHome ? m.awayScore : m.homeScore
-    if (ours > theirs) return 'W'
-    if (ours < theirs) return 'L'
-    return 'D'
-}
-
-const DOT: Record<Result, string> = {
-    W: 'bg-[#77c3ef]',
-    L: 'bg-[#AAAAAA]',
-    D: 'bg-[#fd80b5]',
-    upcoming: 'bg-[#77c3ef]',
-    cancelled: 'bg-[#EAEAEA]',
-}
-
-const PILL: Record<Result, string> = {
-    W: 'bg-[#77c3ef] text-white',
-    L: 'bg-[#EAEAEA] text-[#555555]',
-    D: 'bg-[#fd80b5] text-white',
-    upcoming: 'bg-[#77c3ef]/10 text-[#77c3ef] border border-[#77c3ef]/30',
-    cancelled: 'bg-[#EAEAEA] text-[#999]',
-}
-
-const RESULT_LABEL: Record<Result, string> = {
-    W: 'W', L: 'L', D: 'D', upcoming: 'Upcoming', cancelled: 'Cancelled',
-}
+import {
+    MatchCard,
+    PracticeCard,
+    findTeamLogo,
+    isClaymores,
+    getResult,
+    RESULT_DOT as DOT,
+} from '@/components/event-cards'
 
 const MONTHS = ['January','February','March','April','May','June',
                  'July','August','September','October','November','December']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-
-function MatchCard({ m, teams }: { m: SanityMatch, teams: SanityTeam[] }) {
-    const result = getResult(m)
-    const weHome = isClaymores(m.homeTeam)
-    const opponent = weHome ? m.awayTeam : m.homeTeam
-    const isPlayed = m.status !== 'upcoming' && m.status !== 'cancelled'
-    const ours = weHome ? m.homeScore : m.awayScore
-    const theirs = weHome ? m.awayScore : m.homeScore
-    const homeLogo = findTeamLogo(m.homeTeam, teams)
-    const awayLogo = findTeamLogo(m.awayTeam, teams)
-
-    const homeSlug = m.homeTeamSlug ?? findTeamSlug(m.homeTeam, teams)
-    const awaySlug = m.awayTeamSlug ?? findTeamSlug(m.awayTeam, teams)
-    const homeHref = isClaymores(m.homeTeam) ? '/team' : homeSlug ? `/opponents/${homeSlug}` : null
-    const awayHref = isClaymores(m.awayTeam) ? '/team' : awaySlug ? `/opponents/${awaySlug}` : null
-
-    const HomeTeam = () => (
-        <div className="flex flex-col items-center gap-1 w-12 shrink-0">
-            {homeLogo
-                ? <img src={homeLogo} alt={m.homeTeam} className="w-8 h-8 object-contain" />
-                : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
-            <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.homeTeam}</p>
-        </div>
-    )
-    const AwayTeam = () => (
-        <div className="flex flex-col items-center gap-1 w-12 shrink-0">
-            {awayLogo
-                ? <img src={awayLogo} alt={m.awayTeam} className="w-8 h-8 object-contain" />
-                : <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />}
-            <p className="text-[9px] text-[#555555] text-center leading-tight truncate w-full">{m.awayTeam}</p>
-        </div>
-    )
-
-    return (
-        <div className="flex items-center gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white">
-            {/* Home */}
-            {homeHref
-                ? <Link href={homeHref} className="hover:opacity-75 transition-opacity cursor-pointer"><HomeTeam /></Link>
-                : <HomeTeam />}
-
-            {/* Score / result */}
-            <div className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                {isPlayed ? (
-                    <p className="font-mono text-base font-bold text-[#111111]">{ours} – {theirs}</p>
-                ) : (
-                    <p className="text-xs font-semibold text-[#77c3ef] uppercase tracking-widest">vs {opponent}</p>
-                )}
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${PILL[result]}`}>
-                    {RESULT_LABEL[result]}
-                </span>
-            </div>
-
-            {/* Away */}
-            {awayHref
-                ? <Link href={awayHref} className="hover:opacity-75 transition-opacity cursor-pointer"><AwayTeam /></Link>
-                : <AwayTeam />}
-        </div>
-    )
-}
-
-function AddressLink({ address }: { address: string }) {
-    const q = encodeURIComponent(address)
-    const googleUrl = `https://www.google.com/maps/search/?api=1&query=${q}`
-    const appleUrl = `https://maps.apple.com/?address=${q}`
-    // Default to Google Maps for SSR + non-Apple platforms; swap to Apple Maps
-    // after hydration when the visitor is on iOS / macOS so they land in their
-    // native map app instead of a Google redirect.
-    const [href, setHref] = useState(googleUrl)
-    useEffect(() => {
-        if (typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent)) {
-            setHref(appleUrl)
-        }
-    }, [appleUrl])
-    return (
-        <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-[#77c3ef] hover:underline"
-        >
-            {address}
-        </a>
-    )
-}
-
-function PracticeCard({ instance }: { instance: PracticeInstance }) {
-    const { practice } = instance
-    return (
-        <div className="flex items-start gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white">
-            {practice.iconUrl
-                ? <img src={practice.iconUrl} alt={practice.iconAlt ?? practice.title} className="w-10 h-10 object-contain shrink-0" />
-                : <div className="w-10 h-10 rounded-full bg-[#EAEAEA] shrink-0" />}
-            <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Practice</p>
-                <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.title}</p>
-                {practice.time && <p className="text-xs text-[#555555] mt-1">{practice.time}</p>}
-                {practice.address && <AddressLink address={practice.address} />}
-                {practice.description && (
-                    <p className="text-xs text-[#555555] mt-1 whitespace-pre-line">{practice.description}</p>
-                )}
-            </div>
-        </div>
-    )
-}
 
 // ── Mobile list view ─────────────────────────────────────────────────────────
 

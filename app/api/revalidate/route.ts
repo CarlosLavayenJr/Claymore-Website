@@ -25,6 +25,10 @@ export async function POST(req: NextRequest) {
     } else if (type === 'practiceSchedule') {
         // Schedule appears in copy/schema on virtually every page — revalidate everything.
         revalidatePath('/', 'layout')
+    } else if (type === 'leagueStandings' || type === 'leagueChampionship') {
+        // Standings render on the homepage (left rail) and /results/[season].
+        revalidatePath('/')
+        revalidatePath('/results/[season]', 'page')
     } else {
         // Fallback: revalidate everything
         revalidatePath('/', 'layout')

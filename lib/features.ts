@@ -17,9 +17,4 @@ export const features = {
     // Default OFF until the coach docs are seeded in Sanity (see
     // scripts/seed-coaches.ts) and have photos uploaded.
     coaches: flag(process.env.NEXT_PUBLIC_COACHES_ENABLED, false),
-
-    // Homepage Upcoming Events calendar widget (desktop right rail + mobile
-    // section after "From the Field"). Default OFF until the league table is
-    // built so the hero section doesn't ship lopsided.
-    homepageCalendar: flag(process.env.NEXT_PUBLIC_HOMEPAGE_CALENDAR_ENABLED, false),
 } as const

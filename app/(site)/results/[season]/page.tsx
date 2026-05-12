@@ -5,6 +5,8 @@ import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
+import LeagueTable from '@/components/league-table'
+import PlayoffBracket from '@/components/playoff-bracket'
 import {
     breadcrumbSchema,
     formatMatchDateLong,
@@ -91,6 +93,8 @@ export default async function SeasonPage({ params }: Params) {
 
     const played = wins + losses + draws
     const label = seasonLabel(seasonNum)
+    // Full-format label "YYYY-YYYY" used as the lookup key for league standings docs.
+    const fullSeasonLabel = `${seasonNum - 1}-${seasonNum}`
 
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
     function findTeam(name: string): SanityTeam | null {
@@ -132,9 +136,35 @@ export default async function SeasonPage({ params }: Params) {
                 </p>
                 <h1 className="text-5xl md:text-6xl font-claymore text-[#111111] mb-3">{label} Season</h1>
                 <div className="w-12 h-px bg-[#fd80b5] mx-auto mb-4" />
-                <p className="text-[#555555] max-w-2xl mx-auto">
+                <p className="text-[#555555] max-w-2xl mx-auto mb-6">
                     Match-by-match results for the Central Florida Claymores RFC in the {label} Florida Rugby Union season.
                 </p>
+
+                {/* Season selector — newest first */}
+                {allSeasons.length > 1 && (
+                    <nav
+                        aria-label="Select a season"
+                        className="flex flex-wrap gap-2 justify-center max-w-3xl mx-auto"
+                    >
+                        {[...allSeasons].reverse().map((s) => {
+                            const isCurrent = s === seasonNum
+                            return (
+                                <Link
+                                    key={s}
+                                    href={`/results/${s}`}
+                                    aria-current={isCurrent ? 'page' : undefined}
+                                    className={`text-xs font-semibold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${
+                                        isCurrent
+                                            ? 'bg-[#77c3ef] text-white border-[#77c3ef]'
+                                            : 'bg-white text-[#555555] border-[#EAEAEA] hover:border-[#77c3ef] hover:text-[#77c3ef]'
+                                    }`}
+                                >
+                                    {seasonLabel(s)}
+                                </Link>
+                            )
+                        })}
+                    </nav>
+                )}
             </div>
 
             {/* Stats */}
@@ -153,6 +183,17 @@ export default async function SeasonPage({ params }: Params) {
                     </div>
                 ))}
             </div>
+
+            {/* League standings — full table. Renders a fallback when no doc exists for this season. */}
+            <section className="mb-10" aria-labelledby="season-standings-heading">
+                <h2 id="season-standings-heading" className="text-xl font-claymore text-[#111111] mb-4">
+                    Florida Rugby Union Standings
+                </h2>
+                <LeagueTable seasonLabel={fullSeasonLabel} variant="full" />
+            </section>
+
+            {/* Playoff bracket — renders only when the season has playoff matches stored. */}
+            <PlayoffBracket seasonLabel={fullSeasonLabel} className="mb-10" />
 
             {/* Match list */}
             <div className="border border-[#EAEAEA] rounded-xl overflow-hidden divide-y divide-[#EAEAEA]">

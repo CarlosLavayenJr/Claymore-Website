@@ -4,12 +4,15 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { SanityMatch, SanityPractice } from '@/sanity/lib/queries'
-import { expandPractices } from '@/lib/practices'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import type { SanityMatch, SanityPractice, SanityTeam } from '@/sanity/lib/queries'
+import { expandPractices, type PracticeInstance } from '@/lib/practices'
+import { MatchCard, PracticeCard, isClaymores } from '@/components/event-cards'
 
 interface UpcomingEventsProps {
     matches: SanityMatch[]
     practices: SanityPractice[]
+    teams?: SanityTeam[]
     className?: string
 }
 
@@ -17,17 +20,23 @@ type CalEvent =
     | { kind: 'match'; date: string; key: string; label: string; time?: string | null }
     | { kind: 'practice'; date: string; key: string; label: string; time?: string | null }
 
+interface DayBucket {
+    matches: SanityMatch[]
+    practices: PracticeInstance[]
+}
+
 const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
 ]
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function isClaymores(name: string) {
-    return name.includes('Claymores') || name.includes('IR/Claymores')
-}
-
-export default function UpcomingEvents({ matches, practices, className = '' }: UpcomingEventsProps) {
+export default function UpcomingEvents({
+    matches,
+    practices,
+    teams = [],
+    className = '',
+}: UpcomingEventsProps) {
     const today = new Date()
     const [year, setYear] = useState(today.getFullYear())
     const [month, setMonth] = useState(today.getMonth())
@@ -42,12 +51,28 @@ export default function UpcomingEvents({ matches, practices, className = '' }: U
         else setMonth((m) => m + 1)
     }
 
-    const monthEvents = useMemo<CalEvent[]>(() => {
+    // Per-month bundle: raw matches + expanded practice instances, used both for
+    // the agenda list and the grid view's day-cell popovers.
+    const monthData = useMemo(() => {
         const firstIso = `${year}-${String(month + 1).padStart(2, '0')}-01`
         const lastDay = new Date(year, month + 1, 0).getDate()
         const lastIso = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-        const inMonth = matches.filter((m) => m.status === 'upcoming' && m.date >= firstIso && m.date <= lastIso)
+        // Include played + upcoming + cancelled — matches the fixtures calendar.
+        // Filtering happens via month range; status is reflected in the popup card.
+        const inMonth = matches.filter((m) => m.date >= firstIso && m.date <= lastIso)
         const instances = expandPractices(practices, firstIso, lastIso)
+
+        const byDate = new Map<string, DayBucket>()
+        const ensure = (date: string): DayBucket => {
+            const existing = byDate.get(date)
+            if (existing) return existing
+            const fresh: DayBucket = { matches: [], practices: [] }
+            byDate.set(date, fresh)
+            return fresh
+        }
+        for (const m of inMonth) ensure(m.date).matches.push(m)
+        for (const p of instances) ensure(p.date).practices.push(p)
+
         const evts: CalEvent[] = [
             ...inMonth.map<CalEvent>((m) => {
                 const opp = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
@@ -60,40 +85,41 @@ export default function UpcomingEvents({ matches, practices, className = '' }: U
                 label: p.practice.title,
                 time: p.practice.time,
             })),
-        ]
-        return evts.sort((a, b) => a.date.localeCompare(b.date))
+        ].sort((a, b) => a.date.localeCompare(b.date))
+
+        return { byDate, monthEvents: evts }
     }, [matches, practices, year, month])
 
     const eventsByDate = useMemo(() => {
         const map = new Map<string, CalEvent[]>()
-        for (const e of monthEvents) {
+        for (const e of monthData.monthEvents) {
             if (!map.has(e.date)) map.set(e.date, [])
             map.get(e.date)!.push(e)
         }
         return map
-    }, [monthEvents])
+    }, [monthData])
 
     return (
         <aside className={`border border-[#EAEAEA] rounded-xl bg-white aspect-square flex flex-col overflow-hidden shadow-sm ${className}`}>
             {/* Header: month nav + view toggle */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#EAEAEA] shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#fd80b5] text-white shrink-0">
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={prev}
                         aria-label="Previous month"
-                        className="p-1.5 rounded-md hover:bg-[#F4F4F4] transition-colors"
+                        className="p-1.5 rounded-md hover:bg-white/15 transition-colors"
                     >
-                        <ChevronLeft className="w-4 h-4 text-[#555]" />
+                        <ChevronLeft className="w-4 h-4 text-white" />
                     </button>
-                    <h2 className="font-claymore text-lg text-[#111] px-1 leading-none">
+                    <h2 className="font-claymore text-lg text-white px-1 leading-none">
                         {MONTHS[month]} {year}
                     </h2>
                     <button
                         onClick={next}
                         aria-label="Next month"
-                        className="p-1.5 rounded-md hover:bg-[#F4F4F4] transition-colors"
+                        className="p-1.5 rounded-md hover:bg-white/15 transition-colors"
                     >
-                        <ChevronRight className="w-4 h-4 text-[#555]" />
+                        <ChevronRight className="w-4 h-4 text-white" />
                     </button>
                 </div>
                 <div className="flex gap-1 relative">
@@ -102,13 +128,13 @@ export default function UpcomingEvents({ matches, practices, className = '' }: U
                         aria-label="Calendar view"
                         aria-pressed={view === 'grid'}
                         className={`relative p-1.5 rounded-md transition-colors ${
-                            view === 'grid' ? 'text-[#111]' : 'text-[#AAA] hover:text-[#555]'
+                            view === 'grid' ? 'text-white' : 'text-white/60 hover:text-white'
                         }`}
                     >
                         {view === 'grid' && (
                             <motion.span
                                 layoutId="view-toggle-pill"
-                                className="absolute inset-0 bg-[#F0F0F0] rounded-md"
+                                className="absolute inset-0 bg-white/25 rounded-md"
                                 transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                             />
                         )}
@@ -119,13 +145,13 @@ export default function UpcomingEvents({ matches, practices, className = '' }: U
                         aria-label="Agenda view"
                         aria-pressed={view === 'agenda'}
                         className={`relative p-1.5 rounded-md transition-colors ${
-                            view === 'agenda' ? 'text-[#111]' : 'text-[#AAA] hover:text-[#555]'
+                            view === 'agenda' ? 'text-white' : 'text-white/60 hover:text-white'
                         }`}
                     >
                         {view === 'agenda' && (
                             <motion.span
                                 layoutId="view-toggle-pill"
-                                className="absolute inset-0 bg-[#F0F0F0] rounded-md"
+                                className="absolute inset-0 bg-white/25 rounded-md"
                                 transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                             />
                         )}
@@ -146,9 +172,16 @@ export default function UpcomingEvents({ matches, practices, className = '' }: U
                         className="absolute inset-0"
                     >
                         {view === 'grid' ? (
-                            <GridView year={year} month={month} eventsByDate={eventsByDate} today={today} />
+                            <GridView
+                                year={year}
+                                month={month}
+                                eventsByDate={eventsByDate}
+                                bucketsByDate={monthData.byDate}
+                                teams={teams}
+                                today={today}
+                            />
                         ) : (
-                            <AgendaView events={monthEvents} />
+                            <AgendaView events={monthData.monthEvents} />
                         )}
                     </motion.div>
                 </AnimatePresence>
@@ -171,11 +204,15 @@ function GridView({
     year,
     month,
     eventsByDate,
+    bucketsByDate,
+    teams,
     today,
 }: {
     year: number
     month: number
     eventsByDate: Map<string, CalEvent[]>
+    bucketsByDate: Map<string, DayBucket>
+    teams: SanityTeam[]
     today: Date
 }) {
     const firstDay = new Date(year, month, 1).getDay()
@@ -202,15 +239,15 @@ function GridView({
                     }
                     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                     const events = eventsByDate.get(iso) ?? []
+                    const bucket = bucketsByDate.get(iso)
+                    const hasEvents = events.length > 0
                     const isToday =
                         today.getFullYear() === year &&
                         today.getMonth() === month &&
                         today.getDate() === day
-                    return (
-                        <div
-                            key={iso}
-                            className="bg-white px-1 py-1 flex flex-col items-center justify-start gap-1 overflow-hidden"
-                        >
+
+                    const cellContent = (
+                        <div className="h-full w-full bg-white px-1 py-1 flex flex-col items-center justify-start gap-1 overflow-hidden">
                             <span
                                 className={`text-xs font-medium leading-none flex items-center justify-center w-6 h-6 rounded-full shrink-0 ${
                                     isToday ? 'bg-[#77c3ef] text-white' : 'text-[#111]'
@@ -218,7 +255,7 @@ function GridView({
                             >
                                 {day}
                             </span>
-                            {events.length > 0 && (
+                            {hasEvents && (
                                 <div className="flex gap-0.5 flex-wrap justify-center">
                                     {events.slice(0, 3).map((e) => (
                                         <span
@@ -232,6 +269,41 @@ function GridView({
                                 </div>
                             )}
                         </div>
+                    )
+
+                    if (!hasEvents || !bucket) return <div key={iso}>{cellContent}</div>
+
+                    return (
+                        <Popover key={iso}>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="text-left h-full w-full cursor-pointer hover:bg-[#77c3ef]/5 transition-colors"
+                                    aria-label={`Events on ${iso}`}
+                                >
+                                    {cellContent}
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                                <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
+                                    {new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
+                                        weekday: 'long',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        timeZone: 'UTC',
+                                    })}
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    {bucket.matches.map((m) => (
+                                        <MatchCard key={m._id} m={m} teams={teams} />
+                                    ))}
+                                    {bucket.practices.map((inst) => (
+                                        <PracticeCard key={inst.key} instance={inst} />
+                                    ))}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     )
                 })}
             </div>

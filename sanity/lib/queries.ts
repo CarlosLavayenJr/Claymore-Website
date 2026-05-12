@@ -329,6 +329,88 @@ export const practicesQuery = groq`
   }
 `
 
+export interface SanityStandingRow {
+    position: number
+    teamName: string
+    pool: string | null
+    played: number
+    won: number
+    lost: number
+    drawn: number
+    pointsFor: number
+    pointsAgainst: number
+    pointsDifference: number
+    bonusPoints: number
+    totalPoints: number
+}
+
+export type PlayoffRound = 'quarter' | 'semi' | 'final' | 'third'
+
+export interface SanityPlayoffMatch {
+    round: PlayoffRound
+    label: string | null
+    date: string | null
+    homeTeam: string
+    awayTeam: string
+    homeScore: number | null
+    awayScore: number | null
+}
+
+export interface SanityLeagueStandings {
+    _id: string
+    _updatedAt?: string
+    championshipId: string
+    seasonLabel: string
+    divisionName: string | null
+    lastUpdated: string | null
+    rows: SanityStandingRow[]
+    playoffs: SanityPlayoffMatch[] | null
+}
+
+// Active championship pointer (singleton) → the standings doc currently being scraped.
+// Falls back to the most-recently-updated standings doc if the singleton is missing
+// (useful before a singleton is published, or during backfills).
+export const currentLeagueStandingsQuery = groq`
+  coalesce(
+    *[_type == "leagueChampionship" && _id == "leagueChampionship"][0] {
+      "doc": *[_type == "leagueStandings" && championshipId == ^.championshipId][0] {
+        _id,
+        _updatedAt,
+        championshipId,
+        seasonLabel,
+        divisionName,
+        lastUpdated,
+        rows,
+        playoffs
+      }
+    }.doc,
+    *[_type == "leagueStandings"] | order(lastUpdated desc) [0] {
+      _id,
+      _updatedAt,
+      championshipId,
+      seasonLabel,
+      divisionName,
+      lastUpdated,
+      rows,
+      playoffs
+    }
+  )
+`
+
+// Lookup by season label — used by /results/[season] for historical standings.
+export const leagueStandingsBySeasonQuery = groq`
+  *[_type == "leagueStandings" && seasonLabel == $seasonLabel] | order(_updatedAt desc) [0] {
+    _id,
+    _updatedAt,
+    championshipId,
+    seasonLabel,
+    divisionName,
+    lastUpdated,
+    rows,
+    playoffs
+  }
+`
+
 export interface SanityTeamPhoto {
     _id: string
     url: string
