@@ -329,6 +329,104 @@ export const practicesQuery = groq`
   }
 `
 
+export interface SanityStandingRow {
+    position: number
+    teamName: string
+    pool: string | null
+    played: number
+    won: number
+    lost: number
+    drawn: number
+    pointsFor: number
+    pointsAgainst: number
+    pointsDifference: number
+    bonusPoints: number
+    totalPoints: number
+}
+
+export type PlayoffRound = 'quarter' | 'semi' | 'final' | 'third'
+
+export interface SanityPlayoffMatch {
+    round: PlayoffRound
+    label: string | null
+    date: string | null
+    homeTeam: string
+    awayTeam: string
+    homeScore: number | null
+    awayScore: number | null
+}
+
+export interface SanityLeagueStandings {
+    _id: string
+    _updatedAt?: string
+    championshipId: string
+    seasonLabel: string
+    divisionName: string | null
+    lastUpdated: string | null
+    rows: SanityStandingRow[]
+    playoffs: SanityPlayoffMatch[] | null
+}
+
+// Active championship pointer (singleton) → the standings doc currently being scraped.
+// Falls back to the standings doc with the latest season label so the homepage
+// never points at an old backfilled season. seasonLabel is shaped like
+// "YYYY-YYYY" (e.g. "2025-2026"), which sorts correctly lexicographically.
+export const currentLeagueStandingsQuery = groq`
+  coalesce(
+    *[_type == "leagueChampionship" && _id == "leagueChampionship"][0] {
+      "doc": *[_type == "leagueStandings" && championshipId == ^.championshipId][0] {
+        _id,
+        _updatedAt,
+        championshipId,
+        seasonLabel,
+        divisionName,
+        lastUpdated,
+        rows,
+        playoffs
+      }
+    }.doc,
+    *[_type == "leagueStandings"] | order(seasonLabel desc) [0] {
+      _id,
+      _updatedAt,
+      championshipId,
+      seasonLabel,
+      divisionName,
+      lastUpdated,
+      rows,
+      playoffs
+    }
+  )
+`
+
+// Lookup by season label — used by /results/[season] for historical standings.
+export const leagueStandingsBySeasonQuery = groq`
+  *[_type == "leagueStandings" && seasonLabel == $seasonLabel] | order(_updatedAt desc) [0] {
+    _id,
+    _updatedAt,
+    championshipId,
+    seasonLabel,
+    divisionName,
+    lastUpdated,
+    rows,
+    playoffs
+  }
+`
+
+export interface SanitySeasonDivision {
+    seasonLabel: string
+    divisionName: string | null
+}
+
+// Lightweight lookup of every season's official division name. Powers the
+// per-match division badge ("D3" / "D4" / etc.) on the results table by
+// keying off the leagueStandings docs the scraper writes per championship.
+export const seasonDivisionsQuery = groq`
+  *[_type == "leagueStandings"] | order(seasonLabel desc) {
+    seasonLabel,
+    divisionName
+  }
+`
+
 export interface SanityTeamPhoto {
     _id: string
     url: string

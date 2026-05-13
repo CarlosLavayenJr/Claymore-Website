@@ -6,6 +6,7 @@ import { client } from '@/sanity/lib/client'
 import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
+import MatchTypeBadge from '@/components/match-type-badge'
 import {
     autoMatchSummary,
     breadcrumbSchema,
@@ -155,12 +156,15 @@ export default async function MatchPage({ params }: Params) {
 
             {/* Header card */}
             <div className="bg-white border border-[#EAEAEA] rounded-2xl p-6 md:p-10">
-                <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold">
-                        {match.competition ?? 'Florida Rugby Union'} · {seasonLabel(match.season)}
-                    </p>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold">
+                            {match.competition ?? 'Florida Rugby Union'} · {seasonLabel(match.season)}
+                        </p>
+                        <MatchTypeBadge matchType={match.matchType} size="compact" />
+                    </div>
                     <span
-                        className="inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider"
+                        className="inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider shrink-0"
                         style={{ backgroundColor: outcomeChip.bg, color: outcomeChip.fg }}
                     >
                         {outcomeChip.label}

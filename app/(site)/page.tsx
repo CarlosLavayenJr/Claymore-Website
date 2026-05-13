@@ -6,15 +6,17 @@ import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
 import UpcomingEvents from '@/components/upcoming-events'
+import LeagueTable from '@/components/league-table'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
-import { features } from '@/lib/features'
 import { client } from '@/sanity/lib/client'
 import {
     matchesQuery,
     practicesQuery,
+    teamsQuery,
     type SanityMatch,
     type SanityPractice,
+    type SanityTeam,
 } from '@/sanity/lib/queries'
 
 export const revalidate = 3600
@@ -35,16 +37,16 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-    const showCalendar = features.homepageCalendar
-
-    const [schedule, matches, practices]: [
+    const [schedule, matches, practices, teams]: [
         Awaited<ReturnType<typeof getPracticeSchedule>>,
         SanityMatch[],
         SanityPractice[],
+        SanityTeam[],
     ] = await Promise.all([
         getPracticeSchedule(),
-        showCalendar ? client.fetch(matchesQuery) : Promise.resolve([] as SanityMatch[]),
-        showCalendar ? client.fetch(practicesQuery) : Promise.resolve([] as SanityPractice[]),
+        client.fetch(matchesQuery),
+        client.fetch(practicesQuery),
+        client.fetch(teamsQuery),
     ])
 
     return (
@@ -56,13 +58,10 @@ export default async function Home() {
             <section className="bg-white py-16">
                 <div className="px-4 sm:px-6 lg:px-32">
                     <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
-                        {/*
-                          League table widget — placeholder for next iteration.
-                          Will live in this column once built.
-                          <div className="hidden lg:block w-96 shrink-0">
-                              <LeagueTable />
-                          </div>
-                        */}
+                        {/* League standings (compact) — desktop only */}
+                        <div className="hidden lg:block w-96 shrink-0">
+                            <LeagueTable variant="compact" />
+                        </div>
 
                         {/* Centered hero text + CTAs (matches the original section layout) */}
                         <div className="flex-1 flex justify-center">
@@ -100,12 +99,10 @@ export default async function Home() {
                             </div>
                         </div>
 
-                        {/* Upcoming events widget — desktop only, gated by feature flag */}
-                        {showCalendar && (
-                            <div className="hidden lg:block w-96 shrink-0">
-                                <UpcomingEvents matches={matches} practices={practices} />
-                            </div>
-                        )}
+                        {/* Upcoming events widget — desktop only */}
+                        <div className="hidden lg:block w-96 shrink-0">
+                            <UpcomingEvents matches={matches} practices={practices} teams={teams} />
+                        </div>
                     </div>
                 </div>
             </section>
@@ -118,14 +115,19 @@ export default async function Home() {
                 <TeamPhotoStrip count={6} />
             </section>
 
-            {/* Mobile-only upcoming events placement — gated by feature flag */}
-            {showCalendar && (
-                <section className="lg:hidden px-4 mb-12">
-                    <div className="max-w-sm mx-auto">
-                        <UpcomingEvents matches={matches} practices={practices} />
-                    </div>
-                </section>
-            )}
+            {/* Mobile-only upcoming events placement */}
+            <section className="lg:hidden px-4 mb-12">
+                <div className="max-w-sm mx-auto">
+                    <UpcomingEvents matches={matches} practices={practices} teams={teams} />
+                </div>
+            </section>
+
+            {/* Mobile-only league table placement — full variant since vertical scroll handles overflow */}
+            <section className="lg:hidden px-4 mb-12">
+                <div className="max-w-2xl mx-auto">
+                    <LeagueTable variant="full" />
+                </div>
+            </section>
 
             <InstagramFeed />
 

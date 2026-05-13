@@ -10,6 +10,7 @@ import {
     type SanityPractice,
 } from '@/sanity/lib/queries'
 import MatchCalendar from '@/components/match-calendar'
+import MatchTypeBadge from '@/components/match-type-badge'
 import { matchSlug } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
@@ -109,12 +110,15 @@ export default async function Fixtures() {
                                             href={`/fixtures/${matchSlug(m)}`}
                                             className="flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors"
                                         >
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
                                                 {logo
                                                     ? <img src={logo} alt={`${opponent} logo`} className="w-8 h-8 object-contain shrink-0" />
                                                     : <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />}
-                                                <div>
-                                                    <p className="text-sm font-semibold text-[#111111]">{opponent}</p>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold text-[#111111] flex items-center gap-2 flex-wrap">
+                                                        <span className="truncate">{opponent}</span>
+                                                        <MatchTypeBadge matchType={m.matchType} size="compact" />
+                                                    </p>
                                                     <p className="text-xs text-[#555555] mt-0.5">{isHome ? 'Home' : 'Away'}</p>
                                                 </div>
                                             </div>
