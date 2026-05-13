@@ -134,6 +134,14 @@ function FullTable({ doc, resolved, className }: InnerProps) {
                 </table>
             </div>
 
+            <footer className="px-4 py-2.5 border-t border-[#EAEAEA] text-right">
+                <Link
+                    href={`/results/${seasonYearForUrl(doc.seasonLabel)}`}
+                    className="text-[10px] font-semibold uppercase tracking-widest text-[#fd80b5] hover:underline"
+                >
+                    Full standings →
+                </Link>
+            </footer>
         </section>
     )
 }

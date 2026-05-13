@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -9,6 +9,8 @@ import { Check, ChevronDown } from 'lucide-react'
 import { Info } from 'lucide-react'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
+import { divisionCodeFromName } from '@/lib/divisions'
+import MatchTypeBadge from '@/components/match-type-badge'
 
 function FilterSelect({ value, onChange, options, width = 'w-[160px]' }: {
     value: string
@@ -54,6 +56,20 @@ function isClaymores(name: string): boolean {
     return name.includes('Claymores') || name.includes('IR/Claymores')
 }
 
+/**
+ * Resolves a match's division code. Prefers the match's own `competition`
+ * field (most accurate — set by the scraper from rugbyfl.com per game),
+ * then falls back to the season → division map (built from leagueStandings
+ * docs), then to scanning team-name suffixes like "(D4)".
+ */
+function divisionCode(m: SanityMatch, divisionsBySeason: Record<number, string | undefined>): string | undefined {
+    const fromCompetition = divisionCodeFromName(m.competition)
+    if (fromCompetition) return fromCompetition
+    const fromMap = divisionsBySeason[m.season]
+    if (fromMap) return fromMap
+    return divisionCodeFromName(`${m.homeTeam} ${m.awayTeam}`)
+}
+
 type Result = 'W' | 'L' | 'D' | null
 
 function getResult(m: SanityMatch): Result {
@@ -86,10 +102,32 @@ function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
     return null
 }
 
-export default function MatchResultsTable({ matches, teams }: { matches: SanityMatch[], teams: SanityTeam[] }) {
+interface MatchResultsTableProps {
+    matches: SanityMatch[]
+    teams: SanityTeam[]
+    /** Map of season number → division code (e.g. 2023 → "D4"). Built server-side from leagueStandings docs. */
+    divisionsBySeason?: Record<number, string | undefined>
+}
+
+export default function MatchResultsTable({ matches, teams, divisionsBySeason = {} }: MatchResultsTableProps) {
     const router = useRouter()
+    const dateColRef = useRef<HTMLTableCellElement>(null)
     const [selectedOpponent, setSelectedOpponent] = useState('all')
     const [selectedMatchType, setSelectedMatchType] = useState('all')
+
+    // On mobile (< sm = 640px) the table overflows horizontally. Scroll past
+    // the Date column on mount so Home is the first visible column; the
+    // shadcn `<Table>` renders its own scrolling `<div>` around the `<table>`
+    // so we have to look it up to set scrollLeft.
+    useEffect(() => {
+        const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+        if (!isMobile) return
+        const dateCell = dateColRef.current
+        const scroller = dateCell?.closest('div[class*="overflow"]') as HTMLDivElement | null
+        if (!scroller || !dateCell) return
+        scroller.scrollLeft = dateCell.offsetWidth
+    }, [])
+
     const [selectedSeason, setSelectedSeason] = useState(() => {
         const s = new Set<number>()
         matches.forEach(m => s.add(m.season))
@@ -127,6 +165,21 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
         })
     }, [matches, selectedSeason, selectedMatchType, selectedOpponent])
 
+    const leagueCodesPresent = useMemo(() => {
+        const set = new Set<string>()
+        for (const m of filtered) {
+            if (m.matchType === 'friendly') continue
+            const code = divisionCode(m, divisionsBySeason)
+            if (code) set.add(code)
+        }
+        return Array.from(set).sort()
+    }, [filtered, divisionsBySeason])
+
+    const hasFriendlies = useMemo(
+        () => filtered.some((m) => m.matchType === 'friendly'),
+        [filtered],
+    )
+
     const stats = useMemo(() => {
         let wins = 0, losses = 0, draws = 0, pf = 0, pa = 0, upcoming = 0, cancelled = 0
         filtered.forEach((m) => {
@@ -155,7 +208,7 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
     }
 
     const formatDate = (d: string) =>
-        new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+        new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit', timeZone: 'UTC' })
 
     return (
         <div className="w-full">
@@ -209,18 +262,45 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                 />
             </div>
 
+            {/* Legend */}
+            <div className="flex items-center justify-end gap-3 mb-2 text-[10px] uppercase tracking-widest text-[#555555] flex-wrap">
+                {leagueCodesPresent.length > 0 && (
+                    <span className="flex items-center gap-1.5">
+                        <span className="flex gap-1">
+                            {leagueCodesPresent.map((code) => (
+                                <span
+                                    key={code}
+                                    className="inline-block font-bold text-[9px] px-1.5 py-0.5 rounded border bg-[#77c3ef]/10 text-[#77c3ef] border-[#77c3ef]/30"
+                                >
+                                    {code}
+                                </span>
+                            ))}
+                        </span>
+                        League (division)
+                    </span>
+                )}
+                {hasFriendlies && (
+                    <span className="flex items-center gap-1.5">
+                        <span className="inline-block font-bold text-[9px] px-1.5 py-0.5 rounded border bg-[#fd80b5]/10 text-[#fd80b5] border-[#fd80b5]/30">
+                            Fr
+                        </span>
+                        Friendly
+                    </span>
+                )}
+            </div>
+
             {/* Table */}
             <div className="border border-[#EAEAEA] rounded-xl overflow-hidden">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-[#F9F9F9] hover:bg-[#F9F9F9]">
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold w-[110px]">Date</TableHead>
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold">Home</TableHead>
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center">Score</TableHead>
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold">Away</TableHead>
+                            <TableHead ref={dateColRef} className="text-xs uppercase tracking-widest text-[#555555] font-semibold w-[80px]">Date</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold min-w-[160px]">Home</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center min-w-[90px]">Score</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold min-w-[160px]">Away</TableHead>
                             <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center w-[60px]">Result</TableHead>
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center hidden sm:table-cell w-[90px]">Type</TableHead>
-                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-right hidden sm:table-cell">Note</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-center w-[60px]">Type</TableHead>
+                            <TableHead className="text-xs uppercase tracking-widest text-[#555555] font-semibold text-right min-w-[120px] hidden sm:table-cell">Note</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -244,9 +324,9 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.homeTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
                                             {(m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)) && (
-                                                <img src={m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)!} alt={m.homeTeam} className="w-5 h-5 object-contain" />
+                                                <img src={m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)!} alt={m.homeTeam} className="w-5 h-5 object-contain shrink-0" />
                                             )}
-                                            {m.homeTeam}
+                                            <span className="min-w-0">{m.homeTeam}</span>
                                         </span>
                                     </TableCell>
                                     <TableCell className="text-center font-mono font-semibold text-[#111111]">
@@ -255,9 +335,9 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                                     <TableCell className={`text-sm font-medium ${isClaymores(m.awayTeam) ? 'text-[#111111]' : 'text-[#555555]'}`}>
                                         <span className="flex items-center gap-2">
                                             {(m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)) && (
-                                                <img src={m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)!} alt={m.awayTeam} className="w-5 h-5 object-contain" />
+                                                <img src={m.awayTeamLogo ?? findTeamLogo(m.awayTeam, teams)!} alt={m.awayTeam} className="w-5 h-5 object-contain shrink-0" />
                                             )}
-                                            {m.awayTeam}
+                                            <span className="min-w-0">{m.awayTeam}</span>
                                         </span>
                                     </TableCell>
                                     <TableCell className="text-center">
@@ -267,12 +347,13 @@ export default function MatchResultsTable({ matches, teams }: { matches: SanityM
                                             </span>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-center hidden sm:table-cell">
-                                        {m.matchType === 'friendly' ? (
-                                            <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-[#fd80b5]/10 text-[#fd80b5] border border-[#fd80b5]/30">Friendly</span>
-                                        ) : (
-                                            <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-[#77c3ef]/10 text-[#77c3ef] border border-[#77c3ef]/30">League</span>
-                                        )}
+                                    <TableCell className="text-center">
+                                        <MatchTypeBadge
+                                            matchType={m.matchType}
+                                            variant="abbreviated"
+                                            size="compact"
+                                            leagueLabel={divisionCode(m, divisionsBySeason)}
+                                        />
                                     </TableCell>
                                     <TableCell className="text-right hidden sm:table-cell">
                                         {m.note && (

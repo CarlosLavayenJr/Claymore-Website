@@ -7,6 +7,7 @@ import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import LeagueTable from '@/components/league-table'
 import PlayoffBracket from '@/components/playoff-bracket'
+import MatchTypeBadge from '@/components/match-type-badge'
 import {
     breadcrumbSchema,
     formatMatchDateLong,
@@ -246,11 +247,14 @@ export default async function SeasonPage({ params }: Params) {
                                     <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />
                                 )}
                                 <div>
-                                    <p className="text-sm font-semibold text-[#111111]">
-                                        Claymores {weHome ? 'vs' : '@'}{' '}
-                                        {oppSlug
-                                            ? <Link href={`/opponents/${oppSlug}`} className="text-[#77c3ef] hover:underline">{opp}</Link>
-                                            : opp}
+                                    <p className="text-sm font-semibold text-[#111111] flex items-center gap-2 flex-wrap">
+                                        <span>
+                                            Claymores {weHome ? 'vs' : '@'}{' '}
+                                            {oppSlug
+                                                ? <Link href={`/opponents/${oppSlug}`} className="text-[#77c3ef] hover:underline relative z-10">{opp}</Link>
+                                                : opp}
+                                        </span>
+                                        <MatchTypeBadge matchType={m.matchType} size="compact" />
                                     </p>
                                     <p className="text-xs text-[#555555] mt-0.5">{formatMatchDateLong(m.date)}</p>
                                 </div>

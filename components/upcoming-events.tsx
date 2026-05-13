@@ -17,8 +17,8 @@ interface UpcomingEventsProps {
 }
 
 type CalEvent =
-    | { kind: 'match'; date: string; key: string; label: string; time?: string | null }
-    | { kind: 'practice'; date: string; key: string; label: string; time?: string | null }
+    | { kind: 'match'; date: string; key: string; label: string; time?: string | null; match: SanityMatch }
+    | { kind: 'practice'; date: string; key: string; label: string; time?: string | null; instance: PracticeInstance }
 
 interface DayBucket {
     matches: SanityMatch[]
@@ -40,7 +40,7 @@ export default function UpcomingEvents({
     const today = new Date()
     const [year, setYear] = useState(today.getFullYear())
     const [month, setMonth] = useState(today.getMonth())
-    const [view, setView] = useState<'grid' | 'agenda'>('grid')
+    const [view, setView] = useState<'grid' | 'agenda'>('agenda')
 
     function prev() {
         if (month === 0) { setMonth(11); setYear((y) => y - 1) }
@@ -76,7 +76,7 @@ export default function UpcomingEvents({
         const evts: CalEvent[] = [
             ...inMonth.map<CalEvent>((m) => {
                 const opp = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
-                return { kind: 'match', date: m.date, key: `m-${m._id}`, label: `vs ${opp}`, time: m.kickoffTime }
+                return { kind: 'match', date: m.date, key: `m-${m._id}`, label: `vs ${opp}`, time: m.kickoffTime, match: m }
             }),
             ...instances.map<CalEvent>((p) => ({
                 kind: 'practice',
@@ -84,6 +84,7 @@ export default function UpcomingEvents({
                 key: p.key,
                 label: p.practice.title,
                 time: p.practice.time,
+                instance: p,
             })),
         ].sort((a, b) => a.date.localeCompare(b.date))
 
@@ -124,23 +125,6 @@ export default function UpcomingEvents({
                 </div>
                 <div className="flex gap-1 relative">
                     <button
-                        onClick={() => setView('grid')}
-                        aria-label="Calendar view"
-                        aria-pressed={view === 'grid'}
-                        className={`relative p-1.5 rounded-md transition-colors ${
-                            view === 'grid' ? 'text-white' : 'text-white/60 hover:text-white'
-                        }`}
-                    >
-                        {view === 'grid' && (
-                            <motion.span
-                                layoutId="view-toggle-pill"
-                                className="absolute inset-0 bg-white/25 rounded-md"
-                                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                            />
-                        )}
-                        <CalendarDays className="w-4 h-4 relative z-10" />
-                    </button>
-                    <button
                         onClick={() => setView('agenda')}
                         aria-label="Agenda view"
                         aria-pressed={view === 'agenda'}
@@ -156,6 +140,23 @@ export default function UpcomingEvents({
                             />
                         )}
                         <List className="w-4 h-4 relative z-10" />
+                    </button>
+                    <button
+                        onClick={() => setView('grid')}
+                        aria-label="Calendar view"
+                        aria-pressed={view === 'grid'}
+                        className={`relative p-1.5 rounded-md transition-colors ${
+                            view === 'grid' ? 'text-white' : 'text-white/60 hover:text-white'
+                        }`}
+                    >
+                        {view === 'grid' && (
+                            <motion.span
+                                layoutId="view-toggle-pill"
+                                className="absolute inset-0 bg-white/25 rounded-md"
+                                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                            />
+                        )}
+                        <CalendarDays className="w-4 h-4 relative z-10" />
                     </button>
                 </div>
             </div>
@@ -181,7 +182,7 @@ export default function UpcomingEvents({
                                 today={today}
                             />
                         ) : (
-                            <AgendaView events={monthData.monthEvents} />
+                            <AgendaView events={monthData.monthEvents} teams={teams} />
                         )}
                     </motion.div>
                 </AnimatePresence>
@@ -311,7 +312,7 @@ function GridView({
     )
 }
 
-function AgendaView({ events }: { events: CalEvent[] }) {
+function AgendaView({ events, teams }: { events: CalEvent[]; teams: SanityTeam[] }) {
     if (events.length === 0) {
         return (
             <div className="h-full flex items-center justify-center px-4">
@@ -326,22 +327,49 @@ function AgendaView({ events }: { events: CalEvent[] }) {
                 const day = date.getUTCDate()
                 const mon = date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()
                 const wd = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }).toUpperCase()
+                const fullDate = date.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    timeZone: 'UTC',
+                })
                 return (
-                    <li key={e.key} className="px-4 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#555] mb-1">
-                            {day} {mon}, {wd}
-                        </p>
-                        <div className="flex items-start gap-2">
-                            <span
-                                className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                                    e.kind === 'match' ? 'bg-[#fd80b5]' : 'bg-[#77c3ef]'
-                                }`}
-                            />
-                            <div className="min-w-0 flex-1">
-                                {e.time && <p className="text-xs text-[#555]">{e.time}</p>}
-                                <p className="text-sm font-semibold text-[#111] truncate">{e.label}</p>
-                            </div>
-                        </div>
+                    <li key={e.key}>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="w-full text-left px-4 py-2.5 hover:bg-[#F9F9F9] transition-colors cursor-pointer"
+                                    aria-label={`${e.label} on ${fullDate}`}
+                                >
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#555] mb-1">
+                                        {day} {mon}, {wd}
+                                    </p>
+                                    <div className="flex items-start gap-2">
+                                        <span
+                                            className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                                                e.kind === 'match' ? 'bg-[#fd80b5]' : 'bg-[#77c3ef]'
+                                            }`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            {e.time && <p className="text-xs text-[#555]">{e.time}</p>}
+                                            <p className="text-sm font-semibold text-[#111] truncate">{e.label}</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                                <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
+                                    {fullDate}
+                                </p>
+                                {e.kind === 'match' ? (
+                                    <MatchCard m={e.match} teams={teams} />
+                                ) : (
+                                    <PracticeCard instance={e.instance} />
+                                )}
+                            </PopoverContent>
+                        </Popover>
                     </li>
                 )
             })}
