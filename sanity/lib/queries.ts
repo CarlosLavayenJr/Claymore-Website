@@ -412,6 +412,21 @@ export const leagueStandingsBySeasonQuery = groq`
   }
 `
 
+export interface SanitySeasonDivision {
+    seasonLabel: string
+    divisionName: string | null
+}
+
+// Lightweight lookup of every season's official division name. Powers the
+// per-match division badge ("D3" / "D4" / etc.) on the results table by
+// keying off the leagueStandings docs the scraper writes per championship.
+export const seasonDivisionsQuery = groq`
+  *[_type == "leagueStandings"] | order(seasonLabel desc) {
+    seasonLabel,
+    divisionName
+  }
+`
+
 export interface SanityTeamPhoto {
     _id: string
     url: string

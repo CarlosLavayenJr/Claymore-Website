@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import type { PracticeInstance } from '@/lib/practices'
 import { matchSlug } from '@/lib/seo'
+import MatchTypeBadge from '@/components/match-type-badge'
 
 // ── Team / match helpers ────────────────────────────────────────────────────
 
@@ -144,9 +145,12 @@ export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] })
                         vs {opponent}
                     </p>
                 )}
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${RESULT_PILL[result]}`}>
-                    {RESULT_LABEL[result]}
-                </span>
+                <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${RESULT_PILL[result]}`}>
+                        {RESULT_LABEL[result]}
+                    </span>
+                    <MatchTypeBadge matchType={m.matchType} size="compact" />
+                </div>
             </div>
 
             <div className="flex flex-col items-center gap-1 w-12 shrink-0">
