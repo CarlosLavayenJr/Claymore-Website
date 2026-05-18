@@ -80,6 +80,15 @@ export function seasonLabel(season: number): string {
     return `${season - 1}-${String(season).slice(-2)}`
 }
 
+// Convert a full Sanity season label like "2025-2026" to the closing year
+// ("2026") used as the URL segment for /standings/[season].
+export function seasonYearForUrl(label: string): string {
+    const range = label.match(/(\d{4})\s*-\s*(\d{4})/)
+    if (range) return range[2]
+    const single = label.match(/\d{4}/)
+    return single ? single[0] : label
+}
+
 export function opponentOf(m: { homeTeam: string; awayTeam: string }): string {
     return isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
 }

@@ -28,7 +28,7 @@ export const leagueChampionship = defineType({
             name: 'seasonLabel',
             title: 'Season Label',
             type: 'string',
-            description: 'e.g. "2025-2026". Shown on the table and used as the key for /results/[season] lookups.',
+            description: 'e.g. "2025-2026". Shown on the table and used as the key for /standings/[season] lookups.',
             validation: (rule) => rule.required(),
             initialValue: '2025-2026',
         }),

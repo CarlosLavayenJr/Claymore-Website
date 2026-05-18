@@ -22,6 +22,7 @@ const NavLink = ({ href, children }: NavLinkProps) => (
 const fixturesChildren = [
     { href: '/fixtures', label: 'Schedule' },
     { href: '/results', label: 'Results' },
+    { href: '/standings', label: 'Standings' },
     { href: '/opponents', label: 'Opponents' },
 ]
 
@@ -196,8 +197,7 @@ export const Navbar = () => {
                     <Link
                         href="/join"
                         onClick={closeMenu}
-                        className="block w-full text-center py-4 font-claymore text-2xl text-white rounded-md"
-                        style={{ backgroundColor: '#fd80b5' }}
+                        className="block w-full text-center py-4 font-claymore text-2xl text-white bg-[#77c3ef] hover:bg-[#a0d5f5] rounded-md transition-colors"
                     >
                         Join Us
                     </Link>

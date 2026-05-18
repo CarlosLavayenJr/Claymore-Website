@@ -9,6 +9,15 @@ const nextConfig = {
             },
         ],
     },
+    async redirects() {
+        return [
+            {
+                source: '/results/:season(\\d{4})',
+                destination: '/standings/:season',
+                permanent: true,
+            },
+        ]
+    },
 }
 
 module.exports = nextConfig

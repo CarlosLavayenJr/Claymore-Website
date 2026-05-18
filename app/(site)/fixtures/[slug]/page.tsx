@@ -288,7 +288,7 @@ export default async function MatchPage({ params }: Params) {
                     </Link>
                 )}
                 <Link
-                    href={`/results/${match.season}`}
+                    href={`/standings/${match.season}`}
                     className="block p-5 border border-[#EAEAEA] rounded-xl hover:border-[#77c3ef] transition-colors"
                 >
                     <p className="text-xs uppercase tracking-wider text-[#fd80b5] font-semibold mb-1">Season</p>

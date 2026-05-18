@@ -5,7 +5,7 @@ export const leagueStandings = defineType({
     title: 'League Standings',
     type: 'document',
     description:
-        'A scraped snapshot of a rugbyfl.com championship standings table. One document per Championship_ID — persists forever so /results/[season] can render historical standings. Created and updated by the weekly scraper; do not edit by hand.',
+        'A scraped snapshot of a rugbyfl.com championship standings table. One document per Championship_ID — persists forever so /standings/[season] can render historical standings. Created and updated by the weekly scraper; do not edit by hand.',
     fields: [
         defineField({
             name: 'championshipId',
@@ -18,7 +18,7 @@ export const leagueStandings = defineType({
             name: 'seasonLabel',
             title: 'Season Label',
             type: 'string',
-            description: 'e.g. "2025-2026". Used as the lookup key for /results/[season].',
+            description: 'e.g. "2025-2026". Used as the lookup key for /standings/[season].',
             validation: (rule) => rule.required(),
         }),
         defineField({
@@ -38,7 +38,7 @@ export const leagueStandings = defineType({
             name: 'playoffs',
             title: 'Playoff Matches',
             description:
-                'Auto-populated by the scraper from notes like "Semi-Final #1", "Final", "Third Place". Used to render the bracket on /results/[season]. Safe to hand-edit if rugbyfl misclassifies a match.',
+                'Auto-populated by the scraper from notes like "Semi-Final #1", "Final", "Third Place". Used to render the bracket on /standings/[season]. Safe to hand-edit if rugbyfl misclassifies a match.',
             type: 'array',
             of: [
                 defineField({

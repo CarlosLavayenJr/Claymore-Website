@@ -49,8 +49,8 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 | `/studio` | Sanity CMS (not public-facing) |
 
 ## Brand Colors
-- Pink Accent: `#fd80b5` (draws, links, CTAs primary)
-- Steel Blue: `#77c3ef` (wins, secondary CTAs — use this, NOT `#78c3ef`)
+- Pink Accent: `#fd80b5` (draws, links, eyebrows, accent dividers)
+- Steel Blue: `#77c3ef` (wins, **all CTAs** — use this, NOT `#78c3ef`; pair with `text-white font-claymore`, hover `#a0d5f5`)
 - Divider: `#EAEAEA`
 - Primary Text: `#111111`
 - Secondary Text: `#555555`
