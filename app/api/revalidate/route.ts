@@ -20,15 +20,18 @@ export async function POST(req: NextRequest) {
     } else if (type === 'match') {
         revalidatePath('/fixtures')
         revalidatePath('/results')
+        revalidatePath('/standings')
+        revalidatePath('/standings/[season]', 'page')
     } else if (type === 'practice') {
         revalidatePath('/fixtures')
     } else if (type === 'practiceSchedule') {
         // Schedule appears in copy/schema on virtually every page — revalidate everything.
         revalidatePath('/', 'layout')
     } else if (type === 'leagueStandings' || type === 'leagueChampionship') {
-        // Standings render on the homepage (left rail) and /results/[season].
+        // Standings render on the homepage (left rail), /standings, and /standings/[season].
         revalidatePath('/')
-        revalidatePath('/results/[season]', 'page')
+        revalidatePath('/standings')
+        revalidatePath('/standings/[season]', 'page')
     } else {
         // Fallback: revalidate everything
         revalidatePath('/', 'layout')

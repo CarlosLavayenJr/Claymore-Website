@@ -398,7 +398,7 @@ export const currentLeagueStandingsQuery = groq`
   )
 `
 
-// Lookup by season label — used by /results/[season] for historical standings.
+// Lookup by season label — used by /standings/[season] for historical standings.
 export const leagueStandingsBySeasonQuery = groq`
   *[_type == "leagueStandings" && seasonLabel == $seasonLabel] | order(_updatedAt desc) [0] {
     _id,
@@ -424,6 +424,26 @@ export const seasonDivisionsQuery = groq`
   *[_type == "leagueStandings"] | order(seasonLabel desc) {
     seasonLabel,
     divisionName
+  }
+`
+
+export interface SanityStandingsIndexEntry {
+    seasonLabel: string
+    divisionName: string | null
+    lastUpdated: string | null
+    teamCount: number
+    claymoresPosition: number | null
+}
+
+// Powers the /standings index page — one card per season's standings doc.
+// Returns the Claymores' final position if a row matches "*Claymore*".
+export const standingsIndexQuery = groq`
+  *[_type == "leagueStandings"] | order(seasonLabel desc) {
+    seasonLabel,
+    divisionName,
+    lastUpdated,
+    "teamCount": count(rows),
+    "claymoresPosition": rows[teamName match "*Claymore*"][0].position
   }
 `
 

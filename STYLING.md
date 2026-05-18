@@ -38,11 +38,13 @@ Never mix these two modes.
 
 ## Buttons
 
+All CTAs use Claymore blue. Pink is reserved for accents, eyebrows, and links — never for CTA fills.
+
 | Type | Style |
 |---|---|
-| Primary | `bg-[#fd80b5] text-white font-bold` |
-| Secondary | `border border-[#fd80b5] text-[#fd80b5]` |
-| Blue CTA | `bg-[#77c3ef] text-black font-bold` |
+| Primary CTA | `bg-[#77c3ef] text-white font-claymore rounded-md hover:bg-[#a0d5f5]` |
+| Secondary CTA | `border border-[#77c3ef] text-[#77c3ef] hover:bg-[#77c3ef] hover:text-white` |
+| Tertiary link | `text-[#fd80b5] hover:underline` |
 
 ---
 

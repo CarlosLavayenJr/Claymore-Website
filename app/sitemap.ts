@@ -58,7 +58,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const seasons = Array.from(new Set(matches.map((m) => m.season))).sort((a, b) => b - a)
     const seasonEntries: MetadataRoute.Sitemap = seasons.map((s) => ({
-        url: `${baseUrl}/results/${s}`,
+        url: `${baseUrl}/standings/${s}`,
         lastModified: new Date(),
         changeFrequency: 'weekly',
         priority: 0.7,
@@ -101,6 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ...coachesIndex,
         { url: `${baseUrl}/opponents`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
         { url: `${baseUrl}/results`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
+        { url: `${baseUrl}/standings`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.85 },
         { url: `${baseUrl}/location`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
         { url: `${baseUrl}/blog`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.75 },
         { url: `${baseUrl}/faq`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },

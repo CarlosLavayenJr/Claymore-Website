@@ -97,7 +97,7 @@ export default async function CoachesPage() {
                 </p>
                 <Link
                     href="/join"
-                    className="inline-block bg-[#77c3ef] text-white px-8 py-3 rounded-md font-semibold hover:opacity-90 transition-opacity"
+                    className="inline-block bg-[#77c3ef] text-white font-claymore text-lg px-8 py-3 rounded-md hover:bg-[#a0d5f5] transition-colors"
                 >
                     Join the Club
                 </Link>

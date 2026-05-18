@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, BarChart3 } from 'lucide-react'
 import { Info } from 'lucide-react'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
@@ -111,29 +111,9 @@ interface MatchResultsTableProps {
 
 export default function MatchResultsTable({ matches, teams, divisionsBySeason = {} }: MatchResultsTableProps) {
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
     const dateColRef = useRef<HTMLTableCellElement>(null)
-    const [selectedOpponent, setSelectedOpponent] = useState('all')
-    const [selectedMatchType, setSelectedMatchType] = useState('all')
-
-    // On mobile (< sm = 640px) the table overflows horizontally. Scroll past
-    // the Date column on mount so Home is the first visible column; the
-    // shadcn `<Table>` renders its own scrolling `<div>` around the `<table>`
-    // so we have to look it up to set scrollLeft.
-    useEffect(() => {
-        const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
-        if (!isMobile) return
-        const dateCell = dateColRef.current
-        const scroller = dateCell?.closest('div[class*="overflow"]') as HTMLDivElement | null
-        if (!scroller || !dateCell) return
-        scroller.scrollLeft = dateCell.offsetWidth
-    }, [])
-
-    const [selectedSeason, setSelectedSeason] = useState(() => {
-        const s = new Set<number>()
-        matches.forEach(m => s.add(m.season))
-        const latest = Math.max(...Array.from(s))
-        return isFinite(latest) ? latest.toString() : 'all'
-    })
 
     const seasons = useMemo(() => {
         const set = new Set<number>()
@@ -150,6 +130,70 @@ export default function MatchResultsTable({ matches, teams, divisionsBySeason = 
         })
         return Array.from(set).sort()
     }, [matches])
+
+    const latestSeason = useMemo(() => {
+        if (seasons.length === 0) return 'all'
+        return seasons[0].toString()
+    }, [seasons])
+
+    // Initialize state from URL query params so shared links land on the right view.
+    // Validate each param against known values; invalid values silently fall back
+    // to the sensible default so `/results?season=banana` doesn't show an empty page.
+    const initialSeason = useMemo(() => {
+        const fromUrl = searchParams.get('season')
+        if (fromUrl === 'all') return 'all'
+        if (fromUrl && seasons.some((s) => s.toString() === fromUrl)) return fromUrl
+        return latestSeason
+    }, [searchParams, seasons, latestSeason])
+
+    const initialType = useMemo(() => {
+        const fromUrl = searchParams.get('type')
+        return fromUrl === 'league' || fromUrl === 'friendly' ? fromUrl : 'all'
+    }, [searchParams])
+
+    const initialOpponent = useMemo(() => {
+        const fromUrl = searchParams.get('opponent')
+        return fromUrl && opponents.includes(fromUrl) ? fromUrl : 'all'
+    }, [searchParams, opponents])
+
+    const [selectedSeason, setSelectedSeason] = useState(initialSeason)
+    const [selectedMatchType, setSelectedMatchType] = useState(initialType)
+    const [selectedOpponent, setSelectedOpponent] = useState(initialOpponent)
+
+    // Skip the first effect run so we don't overwrite the URL on mount.
+    const isFirstSync = useRef(true)
+    useEffect(() => {
+        if (isFirstSync.current) {
+            isFirstSync.current = false
+            return
+        }
+        const params = new URLSearchParams()
+        if (selectedSeason !== latestSeason) params.set('season', selectedSeason)
+        if (selectedMatchType !== 'all') params.set('type', selectedMatchType)
+        if (selectedOpponent !== 'all') params.set('opponent', selectedOpponent)
+        const qs = params.toString()
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    }, [selectedSeason, selectedMatchType, selectedOpponent, latestSeason, pathname, router])
+
+    // On mobile (< sm = 640px) the table overflows horizontally. Scroll past
+    // the Date column on mount so Home is the first visible column; the
+    // shadcn `<Table>` renders its own scrolling `<div>` around the `<table>`
+    // so we have to look it up to set scrollLeft.
+    useEffect(() => {
+        const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+        if (!isMobile) return
+        const dateCell = dateColRef.current
+        const scroller = dateCell?.closest('div[class*="overflow"]') as HTMLDivElement | null
+        if (!scroller || !dateCell) return
+        scroller.scrollLeft = dateCell.offsetWidth
+    }, [])
+
+    const standingsHref =
+        selectedSeason !== 'all' ? `/standings/${selectedSeason}` : '/standings'
+    const standingsLabel =
+        selectedSeason !== 'all'
+            ? `${selectedSeason} Standings`
+            : 'Florida Rugby Union Standings'
 
     const filtered = useMemo(() => {
         return matches.filter((m) => {
@@ -231,35 +275,44 @@ export default function MatchResultsTable({ matches, teams, divisionsBySeason = 
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <FilterSelect
-                    value={selectedSeason}
-                    onChange={setSelectedSeason}
-                    width="w-[160px]"
-                    options={[
-                        { label: 'All Seasons', value: 'all' },
-                        ...seasons.map(s => ({ label: `${s} Season`, value: s.toString() })),
-                    ]}
-                />
-                <FilterSelect
-                    value={selectedMatchType}
-                    onChange={setSelectedMatchType}
-                    width="w-[160px]"
-                    options={[
-                        { label: 'All Types', value: 'all' },
-                        { label: 'League', value: 'league' },
-                        { label: 'Friendly', value: 'friendly' },
-                    ]}
-                />
-                <FilterSelect
-                    value={selectedOpponent}
-                    onChange={setSelectedOpponent}
-                    width="w-[200px]"
-                    options={[
-                        { label: 'All Opponents', value: 'all' },
-                        ...opponents.map(o => ({ label: o, value: o, logo: findTeamLogo(o, teams) })),
-                    ]}
-                />
+            <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <FilterSelect
+                        value={selectedSeason}
+                        onChange={setSelectedSeason}
+                        width="w-[160px]"
+                        options={[
+                            { label: 'All Seasons', value: 'all' },
+                            ...seasons.map(s => ({ label: `${s} Season`, value: s.toString() })),
+                        ]}
+                    />
+                    <FilterSelect
+                        value={selectedMatchType}
+                        onChange={setSelectedMatchType}
+                        width="w-[160px]"
+                        options={[
+                            { label: 'All Types', value: 'all' },
+                            { label: 'League', value: 'league' },
+                            { label: 'Friendly', value: 'friendly' },
+                        ]}
+                    />
+                    <FilterSelect
+                        value={selectedOpponent}
+                        onChange={setSelectedOpponent}
+                        width="w-[200px]"
+                        options={[
+                            { label: 'All Opponents', value: 'all' },
+                            ...opponents.map(o => ({ label: o, value: o, logo: findTeamLogo(o, teams) })),
+                        ]}
+                    />
+                </div>
+                <Link
+                    href={standingsHref}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-[#77c3ef] bg-white px-3 text-xs font-semibold uppercase tracking-widest text-[#77c3ef] hover:bg-[#77c3ef] hover:text-white transition-colors self-start sm:self-auto"
+                >
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    {standingsLabel}
+                </Link>
             </div>
 
             {/* Legend */}

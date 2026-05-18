@@ -3,7 +3,7 @@ import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
 import { brandedImageResponse, OG_CONTENT_TYPE, OG_SIZE } from '@/lib/og'
 import { isClaymores, matchOutcome } from '@/lib/seo'
 
-export const alt = 'Claymores Season Results'
+export const alt = 'Claymores Season Standings'
 export const size = OG_SIZE
 export const contentType = OG_CONTENT_TYPE
 

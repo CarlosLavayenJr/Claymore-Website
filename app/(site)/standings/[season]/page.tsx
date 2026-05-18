@@ -35,14 +35,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     if (!Number.isFinite(seasonNum)) return {}
     const label = seasonLabel(seasonNum)
     return {
-        title: `${label} Season Results | Central Florida Claymores RFC | Orlando Rugby`,
-        description: `Full ${label} season match results, standings, and fixtures for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`,
-        alternates: { canonical: `/results/${season}` },
+        title: `${label} Season Standings | Central Florida Claymores RFC | Orlando Rugby`,
+        description: `Full ${label} season standings, match results, and fixtures for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`,
+        alternates: { canonical: `/standings/${season}` },
         openGraph: {
-            title: `${label} Season Results | Central Florida Claymores RFC`,
-            description: `Match-by-match results from the Claymores' ${label} season in the Florida Rugby Union.`,
-            url: `/results/${season}`,
-            images: ogImage(`/results/${season}`),
+            title: `${label} Season Standings | Central Florida Claymores RFC`,
+            description: `Florida Rugby Union standings and match-by-match results from the Claymores' ${label} season.`,
+            url: `/standings/${season}`,
+            images: ogImage(`/standings/${season}`),
         },
     }
 }
@@ -118,16 +118,16 @@ export default async function SeasonPage({ params }: Params) {
             <JsonLd
                 data={breadcrumbSchema([
                     { name: 'Home', path: '/' },
-                    { name: 'Results', path: '/results' },
-                    { name: `${label} Season`, path: `/results/${season}` },
+                    { name: 'Standings', path: '/standings' },
+                    { name: `${label} Season`, path: `/standings/${season}` },
                 ])}
             />
 
             <Breadcrumbs
                 items={[
                     { name: 'Home', path: '/' },
-                    { name: 'Results', path: '/results' },
-                    { name: `${label} Season`, path: `/results/${season}` },
+                    { name: 'Standings', path: '/standings' },
+                    { name: `${label} Season`, path: `/standings/${season}` },
                 ]}
             />
 
@@ -152,7 +152,7 @@ export default async function SeasonPage({ params }: Params) {
                             return (
                                 <Link
                                     key={s}
-                                    href={`/results/${s}`}
+                                    href={`/standings/${s}`}
                                     aria-current={isCurrent ? 'page' : undefined}
                                     className={`text-xs font-semibold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${
                                         isCurrent
@@ -294,7 +294,7 @@ export default async function SeasonPage({ params }: Params) {
             <div className="mt-12 flex justify-between items-center">
                 {prevSeason ? (
                     <Link
-                        href={`/results/${prevSeason}`}
+                        href={`/standings/${prevSeason}`}
                         className="text-sm text-[#77c3ef] hover:underline"
                     >
                         &larr; {seasonLabel(prevSeason)} Season
@@ -302,12 +302,12 @@ export default async function SeasonPage({ params }: Params) {
                 ) : (
                     <div />
                 )}
-                <Link href="/results" className="text-sm text-[#555555] hover:text-[#fd80b5]">
-                    All Results
+                <Link href="/standings" className="text-sm text-[#555555] hover:text-[#fd80b5]">
+                    All Standings
                 </Link>
                 {nextSeason ? (
                     <Link
-                        href={`/results/${nextSeason}`}
+                        href={`/standings/${nextSeason}`}
                         className="text-sm text-[#77c3ef] hover:underline"
                     >
                         {seasonLabel(nextSeason)} Season &rarr;

@@ -77,7 +77,7 @@ const Footer = async () => {
                         </p>
                         <Link
                             href="/join"
-                            className="inline-block bg-claymore-blue text-black font-bold text-sm px-5 py-1 rounded hover:bg-white transition-colors"
+                            className="inline-block bg-[#77c3ef] text-white font-claymore px-5 py-2 rounded-md hover:bg-[#a0d5f5] transition-colors"
                         >
                             Join the Claymores
                         </Link>

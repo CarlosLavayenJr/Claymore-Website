@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { client } from '@/sanity/lib/client'
 import {
     matchesQuery,
@@ -41,7 +42,9 @@ export default async function ResultsPage() {
                 <h1 className="text-5xl md:text-6xl font-claymore text-[#111111] mb-3">Match Results</h1>
                 <div className="w-12 h-px bg-[#fd80b5] mx-auto" />
             </div>
-            <MatchResultsTable matches={matches} teams={teams} divisionsBySeason={divisionsBySeason} />
+            <Suspense fallback={null}>
+                <MatchResultsTable matches={matches} teams={teams} divisionsBySeason={divisionsBySeason} />
+            </Suspense>
         </div>
     )
 }

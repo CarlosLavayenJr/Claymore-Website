@@ -11,6 +11,7 @@ import {
     type SanityTeam,
 } from '@/sanity/lib/queries'
 import { resolveTeam, type ResolvedTeam } from '@/lib/teams'
+import { seasonYearForUrl } from '@/lib/seo'
 
 export const getCurrentStandings = cache(async (): Promise<SanityLeagueStandings | null> => {
     return client.fetch(currentLeagueStandingsQuery)
@@ -136,7 +137,7 @@ function FullTable({ doc, resolved, className }: InnerProps) {
 
             <footer className="px-4 py-2.5 border-t border-[#EAEAEA] text-right">
                 <Link
-                    href={`/results/${seasonYearForUrl(doc.seasonLabel)}`}
+                    href={`/standings/${seasonYearForUrl(doc.seasonLabel)}`}
                     className="text-[10px] font-semibold uppercase tracking-widest text-[#fd80b5] hover:underline"
                 >
                     Full standings →
@@ -273,7 +274,7 @@ function CompactTable({ doc, resolved, className }: InnerProps) {
 
             <footer className="px-3 py-2 border-t border-[#EAEAEA] text-right shrink-0">
                 <Link
-                    href={`/results/${seasonYearForUrl(doc.seasonLabel)}`}
+                    href={`/standings/${seasonYearForUrl(doc.seasonLabel)}`}
                     className="text-[10px] font-semibold uppercase tracking-widest text-[#fd80b5] hover:underline"
                 >
                     Full standings →
@@ -297,14 +298,5 @@ function PoolBadge({ pool }: { pool: string | null }) {
 function formatSigned(n: number): string {
     if (n > 0) return `+${n}`
     return String(n)
-}
-
-// Convert "2025-2026" → "2026" so links match the /results/[season] route which
-// uses the closing year as its URL segment.
-function seasonYearForUrl(seasonLabel: string): string {
-    const range = seasonLabel.match(/(\d{4})\s*-\s*(\d{4})/)
-    if (range) return range[2]
-    const single = seasonLabel.match(/\d{4}/)
-    return single ? single[0] : seasonLabel
 }
 

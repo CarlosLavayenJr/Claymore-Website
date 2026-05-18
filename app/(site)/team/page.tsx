@@ -64,8 +64,7 @@ export default async function TeamPage() {
                 </p>
                 <Link
                     href="/join"
-                    className="inline-block px-8 py-3 rounded-full text-sm font-bold text-white"
-                    style={{ backgroundColor: '#fd80b5' }}
+                    className="inline-block px-8 py-3 rounded-md font-claymore text-lg text-white bg-[#77c3ef] hover:bg-[#a0d5f5] transition-colors"
                 >
                     Get Involved
                 </Link>
