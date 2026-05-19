@@ -16,6 +16,12 @@ const nextConfig = {
                 destination: '/standings/:season',
                 permanent: true,
             },
+            {
+                source: '/shop',
+                destination: 'https://tytanrugby.com/collections/claymores-rfc',
+                permanent: true,
+                basePath: false,
+            },
         ]
     },
 }
