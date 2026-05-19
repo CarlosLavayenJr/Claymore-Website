@@ -63,7 +63,7 @@ export default async function TeamPage() {
                     We practice every {schedule.weekday} in Orlando. All skill levels welcome.
                 </p>
                 <Link
-                    href="/join"
+                    href="/contact"
                     className="inline-block px-8 py-3 rounded-md font-claymore text-lg text-white bg-[#77c3ef] hover:bg-[#a0d5f5] transition-colors"
                 >
                     Get Involved

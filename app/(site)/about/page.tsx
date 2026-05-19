@@ -192,7 +192,7 @@ export default function AboutUs() {
                             Join our community of athletes and be part of something special. We welcome players of all skill levels.
                         </p>
                         <Button asChild size="lg" variant="claymore" className="px-8 py-6 text-lg">
-                            <Link href="/join">Join the Claymores</Link>
+                            <Link href="/contact">Join the Claymores</Link>
                         </Button>
                     </div>
                 </section>

@@ -16,7 +16,7 @@ const quickLinks: { href: string; label: string; description: string }[] = [
     { href: '/results', label: 'Results', description: 'Match-by-match history' },
     { href: '/standings', label: 'Standings', description: 'Florida Rugby Union league tables' },
     { href: '/team', label: 'Team', description: 'Meet the Claymores roster' },
-    { href: '/join', label: 'Join Us', description: 'All skill levels welcome' },
+    { href: '/contact', label: 'Contact', description: 'All skill levels welcome — get in touch' },
 ]
 
 export default function NotFound() {
@@ -54,7 +54,7 @@ export default function NotFound() {
                     </div>
 
                     <Link
-                        href="/join"
+                        href="/contact"
                         className="inline-block px-6 py-3 bg-[#77c3ef] text-white font-claymore text-lg rounded-md hover:bg-[#a0d5f5] transition-colors"
                     >
                         Join the Claymores

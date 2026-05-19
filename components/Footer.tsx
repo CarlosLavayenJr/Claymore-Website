@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa'
+import { FaFacebook, FaInstagram } from 'react-icons/fa'
 import { features } from '@/lib/features'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
 
@@ -50,8 +50,10 @@ const Footer = async () => {
                                 ...(features.coaches ? [{ href: '/coaches', label: 'Coaches' }] : []),
                                 { href: '/fixtures', label: 'Fixtures' },
                                 { href: '/results', label: 'Results' },
+                                { href: '/standings', label: 'Standings' },
                                 { href: '/opponents', label: 'Opponents' },
                                 { href: '/blog', label: 'News' },
+                                { href: '/join', label: 'Join' },
                                 { href: '/faq', label: 'FAQ' },
                                 { href: '/contact', label: 'Contact' },
                             ].map(({ href, label }) => (
@@ -61,6 +63,16 @@ const Footer = async () => {
                                     </Link>
                                 </li>
                             ))}
+                            <li>
+                                <a
+                                    href="https://tytanrugby.com/collections/claymores-rfc"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:text-white transition-colors"
+                                >
+                                    Shop ↗
+                                </a>
+                            </li>
                         </ul>
                     </div>
 
@@ -76,7 +88,7 @@ const Footer = async () => {
                             </Link>
                         </p>
                         <Link
-                            href="/join"
+                            href="/contact"
                             className="inline-block bg-[#77c3ef] text-white font-claymore px-5 py-2 rounded-md hover:bg-[#a0d5f5] transition-colors"
                         >
                             Join the Claymores

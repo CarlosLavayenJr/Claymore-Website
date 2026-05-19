@@ -107,7 +107,7 @@ export default async function LocationPage() {
 
                 <div className="text-center">
                     <Link
-                        href="/join"
+                        href="/contact"
                         className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
                     >
                         Join the Claymores

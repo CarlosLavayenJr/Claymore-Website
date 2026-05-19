@@ -39,13 +39,21 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 | `/team` | Player roster (fed from Sanity) |
 | `/team/[slug]` | Individual player profile pages |
 | `/fixtures` | Upcoming fixtures (fed from Sanity match docs) |
-| `/results` | Match results (fed from Sanity match docs) |
+| `/fixtures/[slug]` | Individual fixture / match detail page |
+| `/results` | Match-by-match history with URL-synced filters (`?season=`, `?type=`, `?opponent=`); defaults to latest season |
+| `/standings` | Florida Rugby Union standings index — current season table + per-season cards |
+| `/standings/[season]` | Per-season standings, playoff bracket, and match list (closing year as URL segment, e.g. `/standings/2026`); old `/results/[season]` 301s here |
+| `/opponents` | All-time opponents directory with head-to-head records |
+| `/opponents/[slug]` | Per-opponent head-to-head page |
+| `/coaches` | Coaching staff (feature-flagged) |
+| `/coaches/[slug]` | Individual coach profile pages (feature-flagged) |
+| `/rugby-in/[city]` | City-specific SEO landing pages (Kissimmee, Winter Park, etc.) |
 | `/blog` | News/blog (fed from Sanity) |
 | `/blog/[slug]` | Individual blog post pages |
-| `/join` | Join the club CTA page |
+| `/join` | SEO landing page for "join Orlando rugby" — funnels visitors to `/contact` (CTAs site-wide also point to `/contact`) |
 | `/faq` | Frequently asked questions |
 | `/location` | Location / directions page |
-| `/contact` | Contact form (sends via Resend to claymoresrfc@gmail.com) |
+| `/contact` | Contact form (sends via Resend to claymoresrfc@gmail.com) — the primary conversion point and the blue navbar CTA |
 | `/studio` | Sanity CMS (not public-facing) |
 
 ## Brand Colors
