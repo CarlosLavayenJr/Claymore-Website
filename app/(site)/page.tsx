@@ -23,12 +23,16 @@ export const revalidate = 3600
 
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
+    // Use `absolute` to bypass the root layout's title template — otherwise
+    // " | Central Florida Claymores | Orlando, FL" gets appended and the
+    // homepage title blows past Google's ~60 char SERP limit.
+    const title = 'Central Florida Claymores RFC | Orlando Rugby Club'
     return {
-        title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
+        title: { absolute: title },
         description: `Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. No experience needed. Join us ${s.weekday}s.`,
         alternates: { canonical: '/' },
         openGraph: {
-            title: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
+            title,
             description: `Orlando's USA Rugby D3 club. No experience needed. Join us ${s.weekday}s.`,
             url: '/',
             images: ogImage(),
