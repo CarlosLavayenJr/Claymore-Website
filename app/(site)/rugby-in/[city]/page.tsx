@@ -135,7 +135,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <Link
-                        href="/join"
+                        href="/contact"
                         className="inline-block bg-[#77c3ef] text-white font-claymore text-lg px-8 py-3 rounded-md hover:bg-[#a0d5f5] transition-colors"
                     >
                         Join the Claymores

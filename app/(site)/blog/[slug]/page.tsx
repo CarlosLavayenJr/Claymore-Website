@@ -79,7 +79,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             <div className="mt-16 border-t border-[#EAEAEA] pt-8 text-center">
                 <p className="text-[#555555] mb-4">Want to be part of the story? Join the Claymores.</p>
                 <Link
-                    href="/join"
+                    href="/contact"
                     className="inline-block bg-[#77c3ef] text-white font-claymore text-lg px-8 py-3 rounded-md hover:bg-[#a0d5f5] transition-colors"
                 >
                     Join the Club

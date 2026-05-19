@@ -118,7 +118,7 @@ export default async function CoachPage({ params }: Params) {
                     Practice every {schedule.weekday} at {schedule.venueName}, {schedule.venueCity}. All skill levels welcome.
                 </p>
                 <Link
-                    href="/join"
+                    href="/contact"
                     className="inline-block bg-[#77c3ef] text-white font-claymore text-lg px-8 py-3 rounded-md hover:bg-[#a0d5f5] transition-colors"
                 >
                     Join the Club

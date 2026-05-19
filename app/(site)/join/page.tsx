@@ -75,7 +75,7 @@ export default async function JoinPage() {
                     </p>
                     <Link
                         href="/contact"
-                        className="inline-block bg-[#77c3ef] text-white font-bold px-10 py-4 rounded-md text-lg hover:opacity-90 transition-opacity"
+                        className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
                     >
                         Get in Touch
                     </Link>
@@ -169,7 +169,7 @@ export default async function JoinPage() {
                     </p>
                     <Link
                         href="/contact"
-                        className="inline-block bg-[#77c3ef] text-white px-10 py-4 rounded-md font-semibold text-lg hover:opacity-90 transition-opacity"
+                        className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
                     >
                         Contact the Claymores
                     </Link>

@@ -19,6 +19,20 @@ const NavLink = ({ href, children }: NavLinkProps) => (
     </Link>
 )
 
+const ExternalNavLink = ({ href, children }: NavLinkProps) => (
+    <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative group px-3 py-2 text-gray-600 hover:text-white text-lg font-claymore"
+    >
+        <span className="relative z-10">{children}</span>
+        <span className="absolute inset-0 bg-claymore-blue transform -skew-x-12 origin-left scale-x-0 transition-transform group-hover:scale-x-100"></span>
+    </a>
+)
+
+const SHOP_URL = 'https://tytanrugby.com/collections/claymores-rfc'
+
 const fixturesChildren = [
     { href: '/fixtures', label: 'Schedule' },
     { href: '/results', label: 'Results' },
@@ -30,7 +44,6 @@ const navLinks = [
     { href: '/about', label: 'About' },
     { href: '/team', label: 'Team' },
     { href: '/blog', label: 'News' },
-    { href: '/contact', label: 'Contact' },
 ]
 
 export const Navbar = () => {
@@ -110,8 +123,10 @@ export const Navbar = () => {
                                 <NavLink key={href} href={href}>{label}</NavLink>
                             ))}
 
-                            <Link href="/join" className="relative group px-3 py-2 text-white font-claymore text-lg">
-                                <span className="relative z-10">Join Us</span>
+                            <ExternalNavLink href={SHOP_URL}>Shop</ExternalNavLink>
+
+                            <Link href="/contact" className="relative group px-3 py-2 text-white font-claymore text-lg">
+                                <span className="relative z-10">Contact</span>
                                 <span className="absolute inset-0 bg-[#77c3ef] group-hover:bg-[#a0d5f5] transform -skew-x-12 transition-colors"></span>
                             </Link>
                         </div>
@@ -191,15 +206,25 @@ export const Navbar = () => {
                             {label}
                         </Link>
                     ))}
+
+                    <a
+                        href={SHOP_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={closeMenu}
+                        className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
+                    >
+                        Shop ↗
+                    </a>
                 </div>
 
                 <div className="px-8 mt-8">
                     <Link
-                        href="/join"
+                        href="/contact"
                         onClick={closeMenu}
                         className="block w-full text-center py-4 font-claymore text-2xl text-white bg-[#77c3ef] hover:bg-[#a0d5f5] rounded-md transition-colors"
                     >
-                        Join Us
+                        Contact
                     </Link>
                 </div>
             </div>

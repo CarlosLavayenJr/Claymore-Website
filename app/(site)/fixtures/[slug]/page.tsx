@@ -311,7 +311,7 @@ export default async function MatchPage({ params }: Params) {
                         Full Fixture List
                     </Link>
                     <Link
-                        href="/join"
+                        href="/contact"
                         className="inline-block border border-[#77c3ef] text-[#77c3ef] px-8 py-3 rounded-md font-semibold hover:bg-[#77c3ef]/10 transition-colors"
                     >
                         Join the Claymores
