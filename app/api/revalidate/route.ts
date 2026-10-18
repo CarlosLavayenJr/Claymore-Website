@@ -22,7 +22,8 @@ const MATCH_PATHS: PathSpec[] = [
 // Practices render in the fixtures calendar *and* the homepage events rail.
 const PRACTICE_PATHS: PathSpec[] = [['/'], ['/fixtures']]
 
-const POST_PATHS: PathSpec[] = [['/blog'], ['/blog/[slug]', 'page'], ['/sitemap.xml']]
+// Fixture pages link to their match report post (matchReportQuery).
+const POST_PATHS: PathSpec[] = [['/blog'], ['/blog/[slug]', 'page'], ['/fixtures/[slug]', 'page'], ['/sitemap.xml']]
 
 const PLAYER_PATHS: PathSpec[] = [['/team'], ['/team/[slug]', 'page'], ['/sitemap.xml']]
 

@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         coach.bio?.slice(0, 200) ??
         `${coach.name} — ${coach.role} for the Central Florida Claymores RFC, Orlando's USA Rugby D3 club.`
     return {
-        title: `${coach.name} — ${coach.role} | Central Florida Claymores RFC`,
+        title: `${coach.name} — ${coach.role}`,
         description,
         alternates: { canonical: `/coaches/${slug}` },
         openGraph: {

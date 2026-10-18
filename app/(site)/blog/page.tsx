@@ -7,7 +7,7 @@ import { ogImage } from '@/lib/og'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'News & Updates | Central Florida Claymores RFC',
+    title: 'Orlando Rugby News & Match Reports',
     description: 'Latest news, match recaps, and season updates from the Central Florida Claymores RFC — Orlando\'s USA Rugby D3 club.',
     alternates: {
         canonical: '/blog',

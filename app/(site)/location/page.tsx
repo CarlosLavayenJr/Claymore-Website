@@ -9,7 +9,7 @@ import { getPracticeSchedule } from '@/lib/practice-schedule'
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
     return {
-        title: 'Orlando Rugby Club Location — Where We Practice',
+        title: 'Where We Practice — Orlando Rugby',
         description: `Find the Central Florida Claymores RFC practice location in Orlando, FL. We train every ${s.weekday} evening, ${s.time} in the Orlando area. All skill levels welcome.`,
         alternates: { canonical: '/location' },
         openGraph: {

@@ -3,14 +3,15 @@ import Link from 'next/link'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
+import VideoHero from '@/components/video-hero'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule, type PracticeSchedule } from '@/lib/practice-schedule'
 
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
     return {
-        title: 'Join a Rugby Club Near You in Orlando, FL — No Experience Needed',
-        description: `Searching for rugby near me in Orlando or Central Florida? Join the Claymores RFC — USA Rugby D3. No experience required. Practices every ${s.weekday}. All ages 18+ welcome.`,
+        title: 'Join Orlando Rugby — No Experience Needed',
+        description: `Looking for rugby near you in Orlando? Join the Claymores RFC, a USA Rugby D3 club. No experience needed — practice every ${s.weekday}. Ages 18+.`,
         alternates: { canonical: '/join' },
         openGraph: {
             title: 'Rugby Near Me in Orlando | Join the Central Florida Claymores',
@@ -65,22 +66,17 @@ export default async function JoinPage() {
             <JsonLd data={faqSchema} />
 
             {/* Hero */}
-            <section className="bg-black text-white py-20 px-4 text-center">
-                <div className="max-w-3xl mx-auto">
-                    <h1 className="text-4xl md:text-5xl font-claymore mb-6">
-                        Join Orlando Rugby — No Experience Needed
-                    </h1>
-                    <p className="text-xl text-gray-300 mb-8">
-                        The Central Florida Claymores RFC welcome players of all skill levels. Come to a {schedule.weekday} practice in Orlando and see what rugby is all about.
-                    </p>
-                    <Link
-                        href="/contact"
-                        className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
-                    >
-                        Get in Touch
-                    </Link>
-                </div>
-            </section>
+            <VideoHero title="Join Orlando Rugby — No Experience Needed">
+                <p className="text-xl text-gray-300 mb-8">
+                    The Central Florida Claymores RFC welcome players of all skill levels. Come to a {schedule.weekday} practice in Orlando and see what rugby is all about.
+                </p>
+                <Link
+                    href="/contact"
+                    className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
+                >
+                    Get in Touch
+                </Link>
+            </VideoHero>
 
             <div className="container mx-auto px-4 py-16 max-w-4xl">
 
@@ -122,13 +118,13 @@ export default async function JoinPage() {
                     <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-3">{schedule.seasonLabel}</p>
                     <p className="text-xl text-gray-300 mb-2">Every <strong className="text-white">{schedule.weekday} Evening</strong> · {schedule.time}</p>
                     <p className="text-gray-400 mb-4">
-                        {schedule.venueName}, {schedule.venueAddress.replace(/, /, ', ')} — <Link href="/location" className="text-[#77c3ef] hover:underline">view location</Link>
+                        {schedule.venueName}, {schedule.venueAddress.replace(/, /, ', ')} — <Link href="/location" className="text-[#77c3ef] underline underline-offset-2">view location</Link>
                     </p>
                     <p className="text-sm text-gray-400 mb-6 italic">
-                        <Link href="/fixtures" className="text-[#77c3ef] hover:underline">{schedule.seasonalNote}</Link>
+                        <Link href="/fixtures" className="text-[#77c3ef] underline underline-offset-2">{schedule.seasonalNote}</Link>
                     </p>
                     <p className="text-gray-300 max-w-xl mx-auto">
-                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] hover:underline">fixtures page</Link> for the full schedule.
+                        Matches are played on Saturdays during the Florida Rugby Union season. Check our <Link href="/fixtures" className="text-[#77c3ef] underline underline-offset-2">fixtures page</Link> for the full schedule.
                     </p>
                 </section>
 

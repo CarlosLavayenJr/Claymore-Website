@@ -4,7 +4,7 @@ import { client } from "@/sanity/lib/client"
 import { playerBySlugQuery, playerPhotosQuery, playersQuery } from "@/sanity/lib/queries"
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
 import JsonLd from "@/components/json-ld"
-import { athleteSchema, breadcrumbSchema } from "@/lib/seo"
+import { athleteSchema, breadcrumbSchema, metaDescription } from "@/lib/seo"
 import { ogImage } from "@/lib/og"
 
 import PlayerProfile from "./player-profile"
@@ -19,10 +19,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
     const player: SanityPlayer | null = await client.fetch(playerBySlugQuery, { slug })
     if (!player) return {}
-    const description = player.description
-        || `${player.name} plays ${player.position} for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`
+    // Short bios ("Flyhalf, Mizzou.") make weak meta descriptions — pad them with club context.
+    const clubLine = `${player.name} plays ${player.position} for the Central Florida Claymores RFC, Orlando's USA Rugby D3 club.`
+    const description = metaDescription(
+        player.description && player.description.length >= 70
+            ? player.description
+            : [clubLine, player.description].filter(Boolean).join(' '),
+    )
     return {
-        title: `${player.name} | Orlando Rugby | Central Florida Claymores RFC`,
+        title: `${player.name} — Orlando Rugby Player`,
         description,
         alternates: { canonical: `/team/${slug}` },
         openGraph: {

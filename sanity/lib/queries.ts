@@ -53,12 +53,14 @@ export interface SanityPlayerPhoto {
     _id: string
     url: string
     aspectRatio: number
+    altText?: string | null // set per-image in the Media plugin
 }
 
 export const playerPhotosQuery = groq`
   *[_type == "sanity.imageAsset" && $tag in opt.media.tags[]->name.current] {
     _id,
     url,
+    altText,
     "aspectRatio": metadata.dimensions.aspectRatio
   }
 `
@@ -188,6 +190,7 @@ export interface SanityPost {
     coverImageAlt?: string | null
     body: unknown[]
     mediaTag: string | null
+    match?: { date: string; homeTeam: string; awayTeam: string } | null
 }
 
 export const postsQuery = groq`
@@ -217,7 +220,16 @@ export const postBySlugQuery = groq`
       ...,
       asset->
     },
-    "mediaTag": mediaTag->name.current
+    "mediaTag": mediaTag->name.current,
+    "match": match->{ date, homeTeam, awayTeam }
+  }
+`
+
+// Match report (blog post) linked to a given match doc, if one exists.
+export const matchReportQuery = groq`
+  *[_type == "post" && match._ref == $matchId] | order(publishedAt desc)[0] {
+    title,
+    "slug": slug.current
   }
 `
 

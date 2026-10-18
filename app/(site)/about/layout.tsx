@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { ogImage } from '@/lib/og'
 
 export const metadata: Metadata = {
-    title: 'About the Central Florida Claymores RFC | Orlando Rugby',
+    title: 'About the Club — Orlando Rugby Since 2018',
     description:
         "The story of the Central Florida Claymores — Orlando's USA Rugby D3 club. Coaches, history, and how rugby grew in Central Florida since 2018.",
     keywords: [
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     alternates: { canonical: '/about' },
     openGraph: {
         type: 'website',
-        title: 'About the Central Florida Claymores RFC | Orlando Rugby',
+        title: 'About the Club — Orlando Rugby Since 2018',
         description:
             "The story of the Central Florida Claymores — Orlando's USA Rugby D3 club since 2018.",
         url: '/about',

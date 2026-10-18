@@ -1,3 +1,12 @@
+export const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Central Florida Claymores RFC',
+    alternateName: 'Claymores RFC',
+    url: 'https://www.claymoresrfc.com',
+    inLanguage: 'en-US',
+}
+
 export const organizationSchema = {
     '@context': 'https://schema.org',
     '@type': ['SportsOrganization', 'LocalBusiness'],
@@ -20,8 +29,8 @@ export const organizationSchema = {
     },
     geo: {
         '@type': 'GeoCoordinates',
-        latitude: 28.5567,
-        longitude: -81.4312,
+        latitude: 28.5626,
+        longitude: -81.4422,
     },
     areaServed: [
         { '@type': 'City', name: 'Orlando' },

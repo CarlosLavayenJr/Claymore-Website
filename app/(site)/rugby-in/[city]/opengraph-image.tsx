@@ -22,7 +22,7 @@ export default async function Image({ params }: { params: Promise<{ city: string
     return brandedImageResponse({
         eyebrow: `Rugby in ${city.name}`,
         title: `Play Rugby in ${city.name}`,
-        subtitle: `${city.driveMinutes} min from ${city.fullName} to practice at ${schedule.venueName}, ${schedule.venueCity}.`,
+        subtitle: `${city.driveMiles} miles from ${city.fullName} to practice at ${schedule.venueName}, ${schedule.venueCity}.`,
         footerRight: `Practice every ${schedule.weekday}`,
     })
 }

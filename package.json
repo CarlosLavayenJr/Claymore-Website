@@ -10,6 +10,7 @@
     "@sanity/image-url": "^2.0.3",
     "@sanity/vision": "^5.14.1",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -6,17 +6,19 @@ import type { SanityPlayer } from '@/sanity/lib/queries'
 import TeamGrid from '@/components/team-grid'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
+import JsonLd from '@/components/json-ld'
+import { rosterSchema } from '@/lib/seo'
 
 export const revalidate = 0
 
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
     return {
-        title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
+        title: 'Orlando Rugby Roster — Meet the Players',
         description: `Meet the players of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club. Forwards, backs, and everyone in between. Join us ${s.weekday}s.`,
         alternates: { canonical: '/team' },
         openGraph: {
-            title: 'Orlando Rugby Players | Central Florida Claymores RFC Roster',
+            title: 'Orlando Rugby Roster — Meet the Players',
             description: "Meet the forwards, backs, and staff of the Central Florida Claymores RFC — Orlando's USA Rugby D3 club.",
             url: '/team',
             images: ogImage(),
@@ -32,6 +34,7 @@ export default async function TeamPage() {
 
     return (
         <div>
+            {players.length > 0 && <JsonLd data={rosterSchema(players)} />}
             {/* Hero — white */}
             <div className="bg-gradient-to-b from-white from-70% to-[#111111] py-16 md:py-24 text-center">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#fd80b5] mb-3">

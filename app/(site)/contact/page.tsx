@@ -4,6 +4,7 @@ import { client } from '@/sanity/lib/client'
 import { teamPhotosQuery, type SanityTeamPhoto } from '@/sanity/lib/queries'
 import ContactForm from '@/components/contact-form'
 import TeamPhotoGrid from '@/components/team-photo-grid'
+import VideoHero from '@/components/video-hero'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
 
@@ -12,7 +13,7 @@ export const revalidate = 3600
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
     return {
-        title: 'Contact the Orlando Claymores RFC — Rugby Near Me in Orlando',
+        title: 'Contact Us — Play Rugby in Orlando',
         description: `Looking for rugby near you in Orlando or Central Florida? Contact the Claymores RFC. Practices every ${s.weekday} at ${s.venueName}. No experience required.`,
         alternates: { canonical: '/contact' },
         openGraph: {
@@ -34,24 +35,20 @@ export default async function ContactPage() {
         <div className="min-h-screen">
 
             {/* Hero */}
-            <section className="bg-black text-white py-20 px-4 text-center">
-                <div className="max-w-3xl mx-auto">
-                    <h1 className="text-4xl md:text-5xl font-claymore mb-6">
-                        Get in Touch
-                    </h1>
-                    <p className="text-xl text-gray-300">
-                        Ready to play rugby in Orlando? Send us a message below — we&apos;ll get back to you before the next {schedule.weekday} practice.
-                    </p>
-                </div>
-            </section>
-
-            {/* Team photos — random 3, clickable lightbox */}
-            {photos.length > 0 && (
-                <TeamPhotoGrid photos={photos} count={3} />
-            )}
+            <VideoHero title="Get in Touch">
+                <p className="text-xl text-gray-300 mb-8">
+                    Ready to play rugby in Orlando? Send us a message below — we&apos;ll get back to you before the next {schedule.weekday} practice.
+                </p>
+                <a
+                    href="#send-message"
+                    className="inline-block bg-[#77c3ef] text-white font-claymore text-xl px-10 py-4 rounded-md hover:bg-[#a0d5f5] transition-colors"
+                >
+                    Send a Message
+                </a>
+            </VideoHero>
 
             {/* Main content */}
-            <div className="container mx-auto px-4 py-16 max-w-5xl">
+            <div id="send-message" className="container mx-auto px-4 py-16 max-w-5xl scroll-mt-24">
                 <div className="grid md:grid-cols-2 gap-12 items-start">
 
                     {/* Left — contact form */}
@@ -113,6 +110,11 @@ export default async function ContactPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Team photos — random 3, clickable lightbox */}
+            {photos.length > 0 && (
+                <TeamPhotoGrid photos={photos} count={3} />
+            )}
         </div>
     )
 }

@@ -16,7 +16,7 @@ import { buildDivisionsBySeason } from '@/lib/divisions'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Match Results & History | Central Florida Claymores RFC',
+    title: 'Match Results & History — Orlando Rugby',
     description: 'Full match history and results for the Central Florida Claymores RFC — Orlando rugby. Scores, standings, and season records.',
     alternates: { canonical: '/results' },
     openGraph: {

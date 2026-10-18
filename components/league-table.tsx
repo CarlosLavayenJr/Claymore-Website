@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { sanityThumb } from '@/lib/utils'
 import Link from 'next/link'
 import { cache } from 'react'
 import { client } from '@/sanity/lib/client'
@@ -158,8 +159,8 @@ function Row({ row, team }: { row: SanityStandingRow; team: ResolvedTeam }) {
                 <div className="flex items-center gap-2.5 min-w-0">
                     {team.logoUrl ? (
                         <Image
-                            src={team.logoUrl}
-                            alt={team.logoAlt ?? `${team.name} logo`}
+                            src={sanityThumb(team.logoUrl, 24)}
+                            alt=""
                             width={24}
                             height={24}
                             className="w-6 h-6 shrink-0 object-contain"
@@ -228,8 +229,8 @@ function CompactTable({ doc, resolved, className }: InnerProps) {
                                 <div className="flex items-center gap-1.5 min-w-0">
                                     {team.logoUrl ? (
                                         <Image
-                                            src={team.logoUrl}
-                                            alt={team.logoAlt ?? `${team.name} logo`}
+                                            src={sanityThumb(team.logoUrl, 18)}
+                                            alt=""
                                             width={18}
                                             height={18}
                                             className="w-4.5 h-4.5 shrink-0 object-contain"

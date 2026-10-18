@@ -35,8 +35,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     if (!Number.isFinite(seasonNum)) return {}
     const label = seasonLabel(seasonNum)
     return {
-        title: `${label} Season Standings | Central Florida Claymores RFC | Orlando Rugby`,
-        description: `Full ${label} season standings, match results, and fixtures for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`,
+        title: `${label} Florida Rugby Union Standings`,
+        description: `${label} Florida Rugby Union standings, results and fixtures for the Central Florida Claymores RFC, Orlando's USA Rugby D3 club.`,
         alternates: { canonical: `/standings/${season}` },
         openGraph: {
             title: `${label} Season Standings | Central Florida Claymores RFC`,

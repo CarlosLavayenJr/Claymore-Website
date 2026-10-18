@@ -110,7 +110,7 @@ export default function AboutUs() {
         <div className="flex flex-col min-h-screen">
             {/* Hero Section */}
             <section className="relative w-full h-[50vh] overflow-hidden">
-                <Image src="/homepage/bg1.jpg" alt="Team Banner" fill className="object-cover" priority />
+                <Image src="/homepage/bg1.jpg" alt="Central Florida Claymores RFC players in light-blue kits posing in front of the rugby posts" fill sizes="100vw" className="object-cover" preload />
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-center text-white p-6 max-w-4xl">
                         <h1 className="text-4xl md:text-5xl font-claymore mb-4">A club built by players, for players</h1>
@@ -120,7 +120,7 @@ export default function AboutUs() {
             </section>
 
             {/* Main Content */}
-            <main className="flex-1 container mx-auto px-4 py-12">
+            <div className="flex-1 container mx-auto px-4 py-12">
                 {/* Team Members */}
                 <section className="mb-16">
                     <h2 className="text-3xl font-claymore mb-10 text-center">Meet Our Club</h2>
@@ -129,7 +129,7 @@ export default function AboutUs() {
                             <Card key={index}>
                                 <CardContent className="pt-6">
                                     <div className="relative w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden">
-                                        <Image src={member.image || "/placeholder.svg"} alt={member.name} fill className="object-cover" />
+                                        <Image src={member.image || "/placeholder.svg"} alt={`${member.name}, ${member.role}`} fill sizes="128px" className="object-cover" />
                                     </div>
                                     <h3 className="text-xl font-claymore text-center">{member.name}</h3>
                                     <p className="text-primary font-medium mb-2 text-center">{member.role}</p>
@@ -196,7 +196,7 @@ export default function AboutUs() {
                         </Button>
                     </div>
                 </section>
-            </main>
+            </div>
         </div>
     )
 }

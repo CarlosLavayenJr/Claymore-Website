@@ -66,6 +66,11 @@ export function findMatchBySlug<T extends { date: string; homeTeam: string; away
     return matches.find((m) => matchSlug(m) === slug)
 }
 
+// "Mar 21, 2026" — compact form for <title> tags.
+export function formatMatchDateShort(d: string): string {
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
 export function formatMatchDateLong(d: string): string {
     return new Date(d).toLocaleDateString('en-US', {
         weekday: 'long',
@@ -244,7 +249,7 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
     const url = abs(`/fixtures/${slug}`)
     const opp = opponentOf(m)
     const dateStr = formatMatchDateLong(m.date)
-    const startDate = m.kickoffTime ? `${m.date}T${parseKickoff(m.kickoffTime)}-04:00` : m.date
+    const startDate = m.kickoffTime ? `${m.date}T${parseKickoff(m.kickoffTime)}${easternOffset(m.date)}` : m.date
 
     const eventStatus =
         m.status === 'cancelled'
@@ -301,6 +306,15 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
     }
 }
 
+// Florida's UTC offset on a given date: "-05:00" in winter (EST), "-04:00" in summer (EDT).
+function easternOffset(date: string): string {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' })
+        .formatToParts(new Date(`${date}T12:00:00Z`))
+        .find((p) => p.type === 'timeZoneName')?.value // "GMT-5"
+    const hours = Number(part?.replace('GMT', '') || -5)
+    return `${hours < 0 ? '-' : '+'}${String(Math.abs(hours)).padStart(2, '0')}:00`
+}
+
 // "1:00 PM" -> "13:00:00"
 function parseKickoff(s: string): string {
     const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i)
@@ -330,6 +344,38 @@ export function sportsTeamSchema(team: SanityTeam): Record<string, unknown> {
               }
             : {}),
         ...(team.description ? { description: team.description } : {}),
+    }
+}
+
+// Upcoming fixtures as an ItemList of SportsEvents for /fixtures.
+export function upcomingEventsSchema(matches: SanityMatch[]): Record<string, unknown> {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name: `${CLUB_NAME} upcoming fixtures`,
+        itemListElement: matches.map((m, i) => {
+            const { '@context': _ctx, ...event } = sportsEventSchema(m)
+            return { '@type': 'ListItem', position: i + 1, item: event }
+        }),
+    }
+}
+
+// Roster for /team: the club's SportsTeam with each active player as an athlete.
+export function rosterSchema(players: SanityPlayer[]): Record<string, unknown> {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'SportsTeam',
+        name: CLUB_NAME,
+        sport: 'Rugby Union',
+        url: abs('/team'),
+        memberOf: { '@type': 'SportsOrganization', name: 'Florida Rugby Union', url: 'https://rugbyfl.com' },
+        athlete: players.map((p) => ({
+            '@type': 'Person',
+            name: p.name,
+            url: abs(`/team/${p.slug}`),
+            ...(p.position ? { jobTitle: p.position } : {}),
+            ...(p.imageUrl ? { image: p.imageUrl } : {}),
+        })),
     }
 }
 
@@ -366,4 +412,12 @@ export function placeSchema(schedule: PracticeSchedule): Record<string, unknown>
               }
             : {}),
     }
+}
+
+// Trim meta descriptions to what Google displays (~155 chars), cutting on a word boundary.
+export function metaDescription(text: string, max = 155): string {
+    const clean = text.replace(/\s+/g, ' ').trim()
+    if (clean.length <= max) return clean
+    const cut = clean.slice(0, max - 1)
+    return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:—–-]+$/, '')}…`
 }

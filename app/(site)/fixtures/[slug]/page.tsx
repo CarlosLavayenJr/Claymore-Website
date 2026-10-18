@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
+import { matchesQuery, matchReportQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import MatchTypeBadge from '@/components/match-type-badge'
@@ -12,6 +12,7 @@ import {
     breadcrumbSchema,
     claymoresScore,
     formatMatchDateLong,
+    formatMatchDateShort,
     isClaymores,
     isHomeMatch,
     matchOutcome,
@@ -19,6 +20,7 @@ import {
     opponentOf,
     seasonLabel,
     sportsEventSchema,
+    metaDescription,
 } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 
@@ -44,9 +46,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     if (!match) return {}
     const opp = opponentOf(match)
     const home = isHomeMatch(match)
-    const date = formatMatchDateLong(match.date)
+    const date = formatMatchDateShort(match.date)
     const outcome = matchOutcome(match)
-    const score = match.status === 'played' ? ` ${match.homeScore}–${match.awayScore}` : ''
+    // Claymores' score first so "Defeat Lakeland 82–12" reads naturally regardless of home/away.
+    const ours = claymoresScore(match)
+    const score = match.status === 'played' ? ` ${ours.ours}–${ours.theirs}` : ''
     const titleVerb =
         outcome === 'win'
             ? 'Claymores Defeat'
@@ -59,12 +63,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         ? `${titleVerb} ${opp}${score} — ${date}`
         : `Claymores vs ${opp} — ${date} (${home ? 'Home' : 'Away'})`
     return {
-        title: `${baseTitle} | Orlando Rugby`,
-        description: autoMatchSummary(match).slice(0, 200),
+        title: baseTitle,
+        description: metaDescription(autoMatchSummary(match)),
         alternates: { canonical: `/fixtures/${slug}` },
         openGraph: {
             title: baseTitle,
-            description: autoMatchSummary(match).slice(0, 200),
+            description: metaDescription(autoMatchSummary(match)),
             url: `/fixtures/${slug}`,
             type: 'article',
             images: ogImage(`/fixtures/${slug}`),
@@ -101,6 +105,7 @@ export default async function MatchPage({ params }: Params) {
         client.fetch(teamsQuery),
     ])
     if (!match) notFound()
+    const report: { title: string; slug: string } | null = await client.fetch(matchReportQuery, { matchId: match._id })
 
     const opp = opponentOf(match)
     const oppSlug = (isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug)
@@ -277,6 +282,16 @@ export default async function MatchPage({ params }: Params) {
 
             {/* Cross-links */}
             <div className="mt-12 pt-8 border-t border-[#EAEAEA] grid sm:grid-cols-2 gap-4 text-sm">
+                {report && (
+                    <Link
+                        href={`/blog/${report.slug}`}
+                        className="sm:col-span-2 block p-5 border border-[#EAEAEA] rounded-xl hover:border-[#77c3ef] transition-colors"
+                    >
+                        <p className="text-xs uppercase tracking-wider text-[#fd80b5] font-semibold mb-1">Match report</p>
+                        <p className="text-[#111111] font-bold">{report.title}</p>
+                        <p className="text-[#555555] text-xs mt-1">Read the full report &rarr;</p>
+                    </Link>
+                )}
                 {oppSlug && (
                     <Link
                         href={`/opponents/${oppSlug}`}

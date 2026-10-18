@@ -1,13 +1,15 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import AnalyticsEvents from '@/components/analytics-events'
 import Script from 'next/script'
 
 export const metadata: Metadata = {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'),
     title: {
         default: 'Central Florida Claymores RFC | Orlando Rugby Club | USA Rugby D3',
-        template: '%s | Central Florida Claymores | Orlando, FL',
+        template: '%s | Claymores RFC',
     },
     description: "Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union since 2018. All skill levels welcome. Join us in Orlando.",
     keywords: [
@@ -61,8 +63,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     strategy="afterInteractive"
                 />
             </head>
-            <body className="overflow-x-hidden">{children}</body>
-            <Analytics />
+            <body className="overflow-x-hidden">
+                {children}
+                <Analytics />
+                <SpeedInsights />
+                <AnalyticsEvents />
+            </body>
         </html>
     )
 }

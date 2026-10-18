@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { sanityThumb } from '@/lib/utils'
 import Link from 'next/link'
 import { cache } from 'react'
 import { client } from '@/sanity/lib/client'
@@ -178,8 +179,8 @@ function TeamRow({
         <div className={`flex items-center gap-2.5 px-3 py-2.5 ${bg} ${fontWeight}`}>
             {team.logoUrl ? (
                 <Image
-                    src={team.logoUrl}
-                    alt={team.logoAlt ?? `${team.name} logo`}
+                    src={sanityThumb(team.logoUrl, 24)}
+                    alt=""
                     width={24}
                     height={24}
                     className="w-6 h-6 shrink-0 object-contain"

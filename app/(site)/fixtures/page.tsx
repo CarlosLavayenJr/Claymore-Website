@@ -11,14 +11,15 @@ import {
 } from '@/sanity/lib/queries'
 import MatchCalendar from '@/components/match-calendar'
 import MatchTypeBadge from '@/components/match-type-badge'
-import { matchSlug } from '@/lib/seo'
+import { matchSlug, upcomingEventsSchema } from '@/lib/seo'
+import JsonLd from '@/components/json-ld'
 import { ogImage } from '@/lib/og'
 import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
 
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Fixtures & Schedule | Central Florida Claymores RFC',
+    title: 'Fixtures & Schedule — Orlando Rugby',
     description: 'Full match schedule and results for the Central Florida Claymores RFC. Upcoming fixtures and past results for Orlando rugby.',
     alternates: { canonical: '/fixtures' },
     openGraph: {
@@ -73,6 +74,7 @@ export default async function Fixtures() {
 
     return (
         <div className="container mx-auto px-4 py-12 max-w-7xl">
+            {upcomingMatches.length > 0 && <JsonLd data={upcomingEventsSchema(upcomingMatches)} />}
             {/* Page header */}
             <div className="mb-10 text-center">
                 <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-2">Central Florida Claymores RFC</p>

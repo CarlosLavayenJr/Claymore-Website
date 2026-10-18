@@ -30,11 +30,11 @@ const Footer = async () => {
                             </a>
                         </p>
                         <div className="flex gap-4 mt-1">
-                            <a href="https://www.facebook.com/claymoresrugby/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-claymore-blue transition-colors">
-                                <FaFacebook size={20} />
+                            <a href="https://www.facebook.com/claymoresrugby/" target="_blank" rel="noopener noreferrer" aria-label="Claymores Rugby on Facebook" className="text-gray-400 hover:text-claymore-blue transition-colors">
+                                <FaFacebook size={20} aria-hidden="true" />
                             </a>
-                            <a href="https://www.instagram.com/claymoresrugby_/" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-claymore-blue transition-colors">
-                                <FaInstagram size={20} />
+                            <a href="https://www.instagram.com/claymoresrugby_/" target="_blank" rel="noopener noreferrer" aria-label="Claymores Rugby on Instagram" className="text-gray-400 hover:text-claymore-blue transition-colors">
+                                <FaInstagram size={20} aria-hidden="true" />
                             </a>
                         </div>
                     </div>

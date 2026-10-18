@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PortableText } from 'next-sanity'
 import Lightbox from '@/components/Lightbox'
+import { sanityWidth } from '@/lib/utils'
 
 type BodyBlock = { _type: string; asset?: { url?: string }; alt?: string; caption?: string }
 
@@ -11,9 +12,10 @@ interface Props {
     coverImageAlt: string
     body: unknown[]
     excerpt: string | null
+    title: string
 }
 
-export default function BlogContent({ coverImageUrl, coverImageAlt, body, excerpt }: Props) {
+export default function BlogContent({ coverImageUrl, coverImageAlt, body, excerpt, title }: Props) {
     // Collect all zoomable image URLs in order: cover first, then inline body images
     const allImages: string[] = [
         ...(coverImageUrl ? [coverImageUrl] : []),
@@ -29,10 +31,16 @@ export default function BlogContent({ coverImageUrl, coverImageAlt, body, excerp
         if (idx !== -1) setIndex(idx)
     }
 
+    let imageCount = 0
     const portableTextComponents = {
+        // The page already renders the post title as the H1 — demote any H1 typed in the editor.
+        block: {
+            h1: ({ children }: { children?: React.ReactNode }) => <h2>{children}</h2>,
+        },
         types: {
             image: ({ value }: { value: BodyBlock }) => {
                 if (!value.asset?.url) return null
+                imageCount += 1
                 return (
                     <figure className="my-8">
                         <button
@@ -41,8 +49,10 @@ export default function BlogContent({ coverImageUrl, coverImageAlt, body, excerp
                             aria-label="Zoom image"
                         >
                             <img
-                                src={value.asset.url}
-                                alt={value.alt ?? ''}
+                                src={sanityWidth(value.asset.url, 1200)}
+                                alt={value.alt || value.caption || `${title} — photo ${imageCount}`}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-full rounded-lg cursor-zoom-in transition-opacity hover:opacity-90"
                             />
                         </button>

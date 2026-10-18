@@ -6,11 +6,11 @@ import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
 
 export const metadata: Metadata = {
-    title: 'Orlando Rugby — About the Central Florida Claymores RFC',
-    description: 'The Central Florida Claymores RFC are Orlando\'s USA Rugby D3 club. Founded in 2018, 2023 state finalists, and growing. Learn about rugby in Orlando and Central Florida.',
+    title: 'Orlando Rugby Club — About the Claymores',
+    description: 'Orlando\'s USA Rugby D3 club since 2018 and 2023 state finalists. Learn about the Central Florida Claymores RFC and rugby in Orlando.',
     alternates: { canonical: '/about-orlando-rugby' },
     openGraph: {
-        title: 'Orlando Rugby — About the Central Florida Claymores RFC',
+        title: 'Orlando Rugby Club — About the Claymores',
         description: 'Founded 2018. 2023 state finalists. Orlando\'s USA Rugby D3 club.',
         url: '/about-orlando-rugby',
         images: ogImage(),

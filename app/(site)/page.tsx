@@ -3,7 +3,7 @@ import Link from 'next/link'
 import RugbyHero from '@/components/Hero'
 import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
-import { organizationSchema } from '@/lib/schema'
+import { organizationSchema, websiteSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
 import UpcomingEvents from '@/components/upcoming-events'
 import LeagueTable from '@/components/league-table'
@@ -54,11 +54,12 @@ export default async function Home() {
     ])
 
     return (
-        <main className="min-h-screen">
+        <div className="min-h-screen">
             <JsonLd data={organizationSchema} />
-            <RugbyHero />
+            <JsonLd data={websiteSchema} />
+            <RugbyHero weekday={schedule.weekday} />
 
-            {/* Location + CTA section — critical for local SEO H1 */}
+            {/* Location + CTA section — local SEO copy (the H1 lives in the hero) */}
             <section className="bg-white py-16">
                 <div className="px-4 sm:px-6 lg:px-32">
                     <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
@@ -70,9 +71,9 @@ export default async function Home() {
                         {/* Centered hero text + CTAs (matches the original section layout) */}
                         <div className="flex-1 flex justify-center">
                             <div className="max-w-4xl text-center">
-                                <h1 className="text-4xl md:text-5xl font-claymore mb-6">
-                                    Orlando&apos;s Rugby Club — Central Florida Claymores RFC
-                                </h1>
+                                <h2 className="text-4xl md:text-5xl font-claymore mb-6">
+                                    Central Florida Claymores RFC — Rugby in Orlando
+                                </h2>
                                 <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
                                     The Central Florida Claymores RFC are Orlando&apos;s USA Rugby D3 club, competing in the Florida Rugby Union since 2018. We practice every {schedule.weekday} in the Orlando area and welcome players of all skill levels — no experience required.
                                 </p>
@@ -160,6 +161,6 @@ export default async function Home() {
                     </div>
                 </div>
             </section>
-        </main>
+        </div>
     )
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState, ChangeEvent, FormEvent } from 'react'
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
+import { track } from '@vercel/analytics'
 
 interface FormData {
     name: string
@@ -42,15 +43,23 @@ export default function ContactForm() {
         }
 
         setLoading(true)
-        const res = await fetch('/api/contact', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...formData, turnstileToken: token }),
-        })
+        let ok = false
+        try {
+            const res = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...formData, turnstileToken: token }),
+            })
+            ok = res.ok
+        } catch {
+            // Network failure — fall through to the error state below.
+        }
         setLoading(false)
-        if (res.ok) {
+        if (ok) {
+            track('contact_submit')
             setSubmitted(true)
         } else {
+            track('contact_error')
             setError('Something went wrong. Please try again or email us directly.')
             setToken(null)
             turnstileRef.current?.reset()

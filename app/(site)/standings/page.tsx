@@ -14,7 +14,7 @@ import { ogImage } from '@/lib/og'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Florida Rugby Union Standings | Central Florida Claymores RFC | Orlando Rugby',
+    title: 'Florida Rugby Union D3 Standings',
     description:
         'Season-by-season Florida Rugby Union league standings featuring the Central Florida Claymores RFC — Orlando rugby in the USA Rugby D3 South competition.',
     alternates: { canonical: '/standings' },

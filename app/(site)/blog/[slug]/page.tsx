@@ -7,7 +7,7 @@ import PostGallery from './PostGallery'
 import BlogContent from './BlogContent'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
-import { articleSchema } from '@/lib/seo'
+import { articleSchema, matchSlug, metaDescription } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
@@ -22,8 +22,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const post: SanityPost | null = await client.fetch(postBySlugQuery, { slug })
     if (!post) return {}
     return {
-        title: `${post.title} | Central Florida Claymores RFC`,
-        description: post.excerpt ?? `${post.title} — Central Florida Claymores RFC Orlando rugby news.`,
+        // Some post titles already carry the club name — don't append the template suffix twice.
+        title: /claymores rfc/i.test(post.title) ? { absolute: post.title } : post.title,
+        description: metaDescription(post.excerpt ?? `${post.title} — Central Florida Claymores RFC Orlando rugby news.`),
         alternates: {
             canonical: `/blog/${slug}`,
         },
@@ -72,9 +73,21 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                 coverImageAlt={post.coverImageAlt ?? `${post.title} — Central Florida Claymores RFC`}
                 body={post.body ?? []}
                 excerpt={post.excerpt}
+                title={post.title}
             />
 
-            {galleryPhotos.length > 0 && <PostGallery photos={galleryPhotos} />}
+            {post.match && (
+                <Link
+                    href={`/fixtures/${matchSlug(post.match)}`}
+                    className="mt-10 block p-5 border border-[#EAEAEA] rounded-xl hover:border-[#77c3ef] transition-colors"
+                >
+                    <p className="text-xs uppercase tracking-wider text-[#fd80b5] font-semibold mb-1">Match details</p>
+                    <p className="text-[#111111] font-bold">{post.match.homeTeam} vs {post.match.awayTeam}</p>
+                    <p className="text-[#555555] text-xs mt-1">Score, venue and season record &rarr;</p>
+                </Link>
+            )}
+
+            {galleryPhotos.length > 0 && <PostGallery photos={galleryPhotos} title={post.title} />}
 
             <div className="mt-16 border-t border-[#EAEAEA] pt-8 text-center">
                 <p className="text-[#555555] mb-4">Want to be part of the story? Join the Claymores.</p>

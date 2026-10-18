@@ -40,11 +40,14 @@ const fixturesChildren = [
     { href: '/opponents', label: 'Opponents' },
 ]
 
+// Links before the Fixtures dropdown; NEWS_INDEX onward render after it.
 const navLinks = [
+    { href: '/join', label: 'Join' },
     { href: '/about', label: 'About' },
     { href: '/team', label: 'Team' },
     { href: '/blog', label: 'News' },
 ]
+const NEWS_INDEX = 3
 
 export const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false)
@@ -89,7 +92,7 @@ export const Navbar = () => {
                         </div>
 
                         <div className="hidden md:flex items-center space-x-1">
-                            {navLinks.slice(0, 2).map(({ href, label }) => (
+                            {navLinks.slice(0, NEWS_INDEX).map(({ href, label }) => (
                                 <NavLink key={href} href={href}>{label}</NavLink>
                             ))}
 
@@ -97,6 +100,8 @@ export const Navbar = () => {
                             <div ref={dropdownRef} className="relative">
                                 <button
                                     onClick={() => setFixturesOpen(o => !o)}
+                                    aria-expanded={fixturesOpen}
+                                    aria-haspopup="true"
                                     className="relative group px-3 py-2 text-gray-600 hover:text-white text-lg font-claymore flex items-center gap-1"
                                 >
                                     <span className="relative z-10">Fixtures</span>
@@ -119,7 +124,7 @@ export const Navbar = () => {
                                 )}
                             </div>
 
-                            {navLinks.slice(2).map(({ href, label }) => (
+                            {navLinks.slice(NEWS_INDEX).map(({ href, label }) => (
                                 <NavLink key={href} href={href}>{label}</NavLink>
                             ))}
 
@@ -134,6 +139,7 @@ export const Navbar = () => {
                         <div className="md:hidden">
                             <Button
                                 onClick={toggleMenu}
+                                aria-expanded={isOpen}
                                 variant="ghost"
                                 size="icon"
                                 className="text-gray-700 hover:bg-gray-100 relative z-50"
@@ -151,7 +157,7 @@ export const Navbar = () => {
                 className={`md:hidden fixed top-16 left-0 right-0 bottom-0 z-20 bg-white transition-opacity duration-200 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             >
                 <div className="flex flex-col items-center px-8 mt-4">
-                    {navLinks.slice(0, 2).map(({ href, label }) => (
+                    {navLinks.slice(0, NEWS_INDEX).map(({ href, label }) => (
                         <Link
                             key={href}
                             href={href}
@@ -165,6 +171,7 @@ export const Navbar = () => {
                     {/* Fixtures accordion */}
                     <button
                         onClick={() => setMobileFixturesOpen(o => !o)}
+                        aria-expanded={mobileFixturesOpen}
                         className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors flex items-center justify-center gap-2"
                     >
                         Fixtures
@@ -196,7 +203,7 @@ export const Navbar = () => {
                         )}
                     </AnimatePresence>
 
-                    {navLinks.slice(2).map(({ href, label }) => (
+                    {navLinks.slice(NEWS_INDEX).map(({ href, label }) => (
                         <Link
                             key={href}
                             href={href}

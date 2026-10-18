@@ -6,8 +6,8 @@ import { getPracticeSchedule, type PracticeSchedule } from '@/lib/practice-sched
 export async function generateMetadata(): Promise<Metadata> {
     const s = await getPracticeSchedule()
     return {
-        title: 'Orlando Rugby FAQ — Joining the Claymores',
-        description: `FAQ about joining the Central Florida Claymores RFC in Orlando, FL. Practice schedule, costs, experience needed, USA Rugby D3 season info, and more. Join us ${s.weekday}s.`,
+        title: 'Orlando Rugby FAQ — Joining the Club',
+        description: `Joining the Central Florida Claymores RFC in Orlando: practice schedule, costs, experience needed and the USA Rugby D3 season. Join us ${s.weekday}s.`,
         alternates: { canonical: '/faq' },
         openGraph: {
             title: 'Orlando Rugby FAQ — Joining the Claymores | Central Florida Claymores',

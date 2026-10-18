@@ -50,6 +50,14 @@ export const post = defineType({
             of: [{ type: 'block' }, { type: 'image' }],
         }),
         defineField({
+            name: 'match',
+            title: 'Match Report For',
+            type: 'reference',
+            to: [{ type: 'match' }],
+            description:
+                'Optional. If this post is a match report, pick the match — the fixture page will link to this post and vice versa.',
+        }),
+        defineField({
             name: 'mediaTag',
             title: 'Gallery Tag',
             type: 'reference',

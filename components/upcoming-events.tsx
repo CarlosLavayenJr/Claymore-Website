@@ -341,7 +341,6 @@ function AgendaView({ events, teams }: { events: CalEvent[]; teams: SanityTeam[]
                                 <button
                                     type="button"
                                     className="w-full text-left px-4 py-2.5 hover:bg-[#F9F9F9] transition-colors cursor-pointer"
-                                    aria-label={`${e.label} on ${fullDate}`}
                                 >
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-[#555] mb-1">
                                         {day} {mon}, {wd}

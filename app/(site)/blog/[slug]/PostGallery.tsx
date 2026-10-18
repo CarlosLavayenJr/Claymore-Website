@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import Lightbox from '@/components/Lightbox'
 import type { SanityPlayerPhoto } from '@/sanity/lib/queries'
+import { sanityWidth } from '@/lib/utils'
 
-export default function PostGallery({ photos }: { photos: SanityPlayerPhoto[] }) {
+export default function PostGallery({ photos, title }: { photos: SanityPlayerPhoto[]; title: string }) {
     const [index, setIndex] = useState(-1)
     const urls = photos.map(p => p.url)
 
@@ -21,11 +22,14 @@ export default function PostGallery({ photos }: { photos: SanityPlayerPhoto[] })
                         <button
                             key={photo._id}
                             onClick={() => setIndex(i)}
+                            aria-label={`Enlarge photo ${i + 1} of ${photos.length}`}
                             className="block w-full overflow-hidden rounded-lg group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#78c3ef]"
                         >
                             <img
-                                src={photo.url}
-                                alt=""
+                                src={sanityWidth(photo.url, 600)}
+                                alt={photo.altText || `${title} — photo ${i + 1}`}
+                                loading="lazy"
+                                decoding="async"
                                 className="w-full object-cover transition-transform duration-300 group-hover:scale-105"
                             />
                         </button>

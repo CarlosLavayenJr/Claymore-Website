@@ -18,6 +18,7 @@ import {
     matchSlug,
     seasonLabel,
     sportsTeamSchema,
+    metaDescription,
 } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 
@@ -47,10 +48,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const { slug } = await params
     const team: SanityTeam | null = await client.fetch(teamBySlugQuery, { slug })
     if (!team) return {}
-    const title = `${team.name} vs Central Florida Claymores RFC | Florida Rugby Union`
-    const description = `Head-to-head record, match history, and results between the Central Florida Claymores RFC (Orlando) and ${team.name}${
+    const title = team.name.length > 28 ? `Claymores vs ${team.name}` : `Claymores vs ${team.name} — Head-to-Head`
+    const description = metaDescription(`Head-to-head record, match history, and results between the Central Florida Claymores RFC (Orlando) and ${team.name}${
         team.city ? ` (${team.city})` : ''
-    } in the Florida Rugby Union.`
+    } in the Florida Rugby Union.`)
     return {
         title,
         description,

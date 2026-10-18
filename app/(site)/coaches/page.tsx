@@ -11,7 +11,7 @@ import { getPracticeSchedule } from '@/lib/practice-schedule'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Coaches & Staff | Central Florida Claymores RFC | Orlando Rugby',
+    title: 'Coaches & Staff — Orlando Rugby',
     description:
         'Meet the coaches and staff of the Central Florida Claymores RFC — the people building Orlando rugby. Coaching credentials, backgrounds, and the brains behind the Claymores.',
     alternates: { canonical: '/coaches' },

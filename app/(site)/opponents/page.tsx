@@ -9,12 +9,12 @@ import { ogImage } from '@/lib/og'
 export const revalidate = 3600
 
 export const metadata: Metadata = {
-    title: 'Florida Rugby Union Opponents | Central Florida Claymores RFC',
+    title: 'Florida Rugby Union Opponents',
     description:
-        "Every team the Central Florida Claymores RFC have played in the Florida Rugby Union. Head-to-head records, match histories, and opponent profiles for Orlando rugby's D3 club.",
+        "Every Florida Rugby Union team the Central Florida Claymores RFC have played, with head-to-head records and match histories for Orlando's D3 club.",
     alternates: { canonical: '/opponents' },
     openGraph: {
-        title: 'Florida Rugby Union Opponents | Central Florida Claymores RFC',
+        title: 'Florida Rugby Union Opponents',
         description: 'Every Florida Rugby Union opponent the Claymores have played, with head-to-head records.',
         url: '/opponents',
         images: ogImage(),
