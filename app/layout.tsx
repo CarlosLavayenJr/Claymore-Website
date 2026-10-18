@@ -4,6 +4,18 @@ import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import AnalyticsEvents from '@/components/analytics-events'
 import Script from 'next/script'
+import localFont from 'next/font/local'
+
+// Self-hosted display font. next/font preloads it in <head> and generates a
+// metric-matched fallback, so above-the-fold headings don't hold up first paint.
+// (The file stays in public/fonts because lib/og.tsx also reads it for OG images.)
+const claymore = localFont({
+    src: '../public/fonts/VIKING-N.woff',
+    variable: '--font-claymore',
+    display: 'swap',
+    weight: '400',
+    style: 'normal',
+})
 
 export const metadata: Metadata = {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.claymoresrfc.com'),
@@ -47,7 +59,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en">
+        <html lang="en" className={claymore.variable}>
             <head>
                 <Script async src="https://www.googletagmanager.com/gtag/js?id=AW-18065227807" strategy="afterInteractive" />
                 <Script id="google-ads-tag" strategy="afterInteractive">{`

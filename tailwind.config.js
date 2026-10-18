@@ -18,7 +18,7 @@ module.exports = {
 		},
 		extend: {
 			fontFamily: {
-				claymore: ['Claymore', 'sans-serif'],
+				claymore: ['var(--font-claymore)', 'sans-serif'],
 			},
 			colors: {
 				'claymore-blue': '#78c3ef',

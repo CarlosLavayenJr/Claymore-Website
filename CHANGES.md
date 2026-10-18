@@ -2,7 +2,7 @@
 
 Branch off `main` (4299292). Built and checked locally against a production build; **not merged or deployed**.
 
-> ⚠️ **Open issue — fix before merging:** a local A/B Lighthouse test (3 runs each, median) shows the home page renders *slower* than current `main`. See [Known issues](#known-issues).
+> ✅ **Home-page slowdown fixed** (the display font now loads through `next/font`). Under real network/CPU throttling the home page now reaches LCP in 3.8 s vs 8.8 s on `main`. See [Known issues](#known-issues).
 
 ---
 
@@ -135,11 +135,20 @@ Lighthouse accessibility on a local build: home 91 → 96, `/join` 88 → 96.
 
 ## Known issues
 
-1. **Home page renders slower than `main`** (FCP 1.7 → 3.1 s, LCP 3.3 → 6.3 s) even though it downloads less than half the bytes.
-   - The hero image itself now arrives fast (~180 ms delay, ~240 ms load). The time is spent in "render delay".
-   - Ruled out: the font. `@font-face` already uses `font-display: swap`.
-   - Root cause **not yet identified**. Candidates to test one at a time: the new hero markup (text now paints over the image), the Speed Insights script, and the analytics click listener.
-2. `/join` is slightly slower too (LCP 5.1 → 5.7 s). It now has the video thumbnail as its main image.
+1. ~~Home page renders slower than `main`~~ — **fixed.**
+   - **Cause:** the `Claymore` font was declared with `@font-face` in `globals.css`, so the browser only found it after parsing the CSS. The new hero puts the H1 and CTA (both in that font) above the fold, and first paint waited on it. Isolated with one-change-at-a-time builds: the old hero, `<picture>` alone, and the new hero without the font were all at `main`'s speed; only the new hero with the CSS-declared font was slow.
+   - **Fix:** load it with `next/font/local` (`app/layout.tsx`). It is preloaded in `<head>` and gets a size-matched fallback, and is exposed as `--font-claymore` for Tailwind's `font-claymore`. The file stays in `public/fonts` because `lib/og.tsx` reads it.
+   - **Re-test** (production builds, both servers up, runs interleaved, median of 4–5):
+
+     | Home page | Score | FCP | LCP |
+     |---|---|---|---|
+     | `main`, real throttling | 48 | 1.96 s | 8.82 s |
+     | branch, real throttling | **68** | 2.15 s | **3.82 s** |
+     | `main`, simulated (Lighthouse default) | 91 | 1.57 s | 3.04 s |
+     | branch, simulated | 85 | 1.58 s | 3.76 s |
+
+     The simulated model still scores the branch ~6 points lower, but the measured loads, both throttled and unthrottled (LCP ≈144 ms vs 167 ms), are faster on the branch.
+2. `/join`: simulated score 93 vs 92 on `main`. LCP 2.98 s vs 2.67 s, but layout shift went from 0.105 to 0.
 3. Best Practices stays at 75 because of a third-party cookie set by the **Google Ads tag** (`googleads.g.doubleclick.net`).
    - Correction to the first audit: this is *not* the Elfsight widget.
 4. 16 titles are still 66–71 characters, all because of long team names.
