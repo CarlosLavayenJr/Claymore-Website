@@ -65,7 +65,7 @@ function parseStandings(html: string): ScrapedRow[] {
     if (!standingsTable) return rows
 
     $(standingsTable).find('tr').each((_i, tr) => {
-        const cells = $(tr).find('td')
+        const cells = $(tr).children('td')
         if (cells.length < 19) return
 
         // Only club links are team rows; the page title also contains an anchor.
