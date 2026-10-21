@@ -68,7 +68,9 @@ function parseStandings(html: string): ScrapedRow[] {
         const cells = $(tr).find('td')
         if (cells.length < 19) return
 
-        const teamAnchor = cells.eq(2).find('a').first()
+        // Only club links are team rows; the page title also contains an anchor.
+        const teamAnchor = cells.eq(2).find('a[href*="Team.asp"]').first()
+        if (teamAnchor.length === 0) return
         const teamName = (teamAnchor.text() || cells.eq(2).text())
             .replace(/\u00a0/g, '')
             .replace(/\s+/g, ' ')

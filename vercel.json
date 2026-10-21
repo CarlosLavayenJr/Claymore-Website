@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/scrape-rugby?seasonId=27",
+      "path": "/api/scrape-rugby?seasonId=28",
       "schedule": "0 3 * * 1"
     },
     {

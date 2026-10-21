@@ -149,7 +149,11 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const all = searchParams.get('all') === 'true'
-  const seasonIds = all ? Array.from({ length: 18 }, (_, i) => String(i + 10)) : ['27']
+  const seasonId = searchParams.get('seasonId') ?? '28' // 2026–2027
+  if (!/^[1-9]\d*$/.test(seasonId)) {
+    return Response.json({ error: 'seasonId must be a positive integer' }, { status: 400 })
+  }
+  const seasonIds = all ? Array.from({ length: 19 }, (_, i) => String(i + 10)) : [seasonId]
   const clubIds = all ? CLUB_IDS : ['117']
 
   const sanity = createClient({
