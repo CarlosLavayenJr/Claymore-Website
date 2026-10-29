@@ -73,6 +73,28 @@ export const player = defineType({
             ],
         }),
         defineField({
+            name: 'graphicName',
+            title: 'Name on graphics',
+            type: 'string',
+            description: 'Optional short display name. Falls back to Name; does not change the website player name.',
+            validation: (rule) => rule.max(32),
+        }),
+        defineField({
+            name: 'cutout',
+            title: 'Body-shot cutout for graphics',
+            type: 'image',
+            options: { accept: 'image/png,image/webp' },
+            description: 'Upload a transparent PNG or WebP with the whole player visible, including boots. The original website photo is kept separately.',
+        }),
+        defineField({
+            name: 'eligiblePositions',
+            title: 'Eligible position numbers',
+            type: 'array',
+            of: [{ type: 'number', validation: (rule) => rule.integer().min(1).max(15) }],
+            validation: (rule) => rule.unique(),
+            description: 'Optional 1–15 position numbers. The graphics preview warns when a player is selected outside these positions.',
+        }),
+        defineField({
             name: 'description',
             title: 'Bio',
             type: 'text',
