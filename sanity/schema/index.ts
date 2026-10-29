@@ -8,6 +8,7 @@ import { practiceSchedule } from './practiceSchedule'
 import { leagueChampionship } from './leagueChampionship'
 import { leagueStandings } from './leagueStandings'
 import { qrCode } from './qrCode'
+import { matchGraphics } from './matchGraphics'
 
 export const schema = {
     types: [
@@ -21,5 +22,6 @@ export const schema = {
         leagueChampionship,
         leagueStandings,
         qrCode,
+        matchGraphics,
     ],
 }
