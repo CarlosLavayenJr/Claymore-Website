@@ -4,18 +4,21 @@ The website's existing players, matches and teams are the source of truth for gr
 
 ## One-time player setup
 
-In **Player**, upload **Body-shot cutout for graphics**: a transparent PNG or WebP with the entire player visible. This is separate from the website profile photo. Add a short **Name on graphics** if needed, and optional **Eligible position numbers** (1–15). Transparency is an editorial requirement; the upload field restricts file types but does not automatically remove backgrounds or prove an alpha channel exists.
+A player can have several **Body-shot cutouts for graphics**: transparent PNG or WebP shots with the entire player visible, separate from the website profile photo. The first one is the default. You don't have to fill these in up front: transparent images uploaded to the media library can be claimed for a player while building a graphic (step 4). Add a short **Name on graphics** if needed, and optional **Eligible position numbers** (1–15).
+
+Transparency is checked using Sanity's `hasAlpha` image metadata: a photo without an alpha channel blocks export. This cannot tell whether the background was actually removed, only that the file supports transparency, so still check the preview.
 
 ## Match setup
 
 1. Complete the existing **Match**: date, kickoff, venue, home/away teams, and linked team records. Each opponent's Team record needs a logo.
 2. Create **Match Graphics**. Give it an internal name, link the match, and explicitly select whether Claymores are home or away. This controls opponent name, logos and scores; it does not guess from team-name spelling.
 3. Choose a design under **Match & design**. Optionally upload a team/match background photo.
-4. Under **Lineup & photos**, use **Add missing starting XV slots**. Choose a player for each position. Add 16–23 for optional replacements, and mark captain/vice-captain where needed. Use the player picker to open a player record and upload/change their cutout.
-5. Choose one featured player for the **Featured player** design or exactly three for **Three players**. They must be in this lineup. The **Position map** uses the cutout for each starting player.
-6. Open **Preview & download** and resolve the listed issues. Download PNG (1080 × 1350) or self-contained SVG. Preview uses the current graphics draft and prefers drafts of linked records, so review draft changes before exporting. Downloads do not publish Sanity content or post to social media.
+4. Under **Lineup & photos**, use **Add missing starting XV slots**. Choose a player for each position. Add 16–23 for optional replacements, and mark captain/vice-captain where needed.
+5. In each slot, pick the **Photo**. You see that player's cutouts; leave it empty to use the first. **Browse unassigned photos** lists transparent images not yet linked to any player or team (logos excluded), newest first. Picking one adds it to the player's cutouts (their draft if one is open, otherwise the published record) and selects it for this slot.
+6. Turn on **Feature this player** for one slot (**Featured player** design) or three (**Three players**, shown in position order). The **Position map** uses each starting player's chosen photo.
+7. Open **Preview & download** and resolve the listed issues. Download PNG (1080 × 1350) or self-contained SVG. Preview uses the current graphics draft and prefers drafts of linked records, so review draft changes before exporting. Downloads do not publish Sanity content or post to social media.
 
-For a **Final score**, use the same graphic document or create another linked to the same match. Set the match status to **Played** and enter its final scores. This layout needs crests and match details but no lineup, featured players, or kickoff. Upcoming/cancelled/forfeit statuses cannot export a final-score graphic; they need a separate announcement treatment.
+For a **Final score**, use the same graphic document or create another linked to the same match. Set the match status to **Played** and enter its final scores. This layout needs crests and match details but no lineup, photos, or kickoff. Upcoming/cancelled/forfeit statuses cannot export a final-score graphic; they need a separate announcement treatment.
 
 ## Validation and export
 
@@ -30,8 +33,8 @@ For a **Final score**, use the same graphic document or create another linked to
 ## Implementation
 
 - `sanity/schema/matchGraphics.ts`: match reference, design choices, lineup, and preview input.
-- `sanity/schema/player.ts`: graphic display name, separate cutout, and eligibility.
-- `sanity/components/graphics/`: Studio input, draft-aware source loading, asset preparation and browser downloads.
+- `sanity/schema/player.ts`: graphic display name, cutout list, and eligibility.
+- `sanity/components/graphics/`: lineup and photo-picker inputs, draft-aware source loading, asset preparation and browser downloads.
 - `lib/graphics/model.ts`: mapping and export validation.
 - `lib/graphics/render.ts`: shared brand treatment and the four layouts.
 
