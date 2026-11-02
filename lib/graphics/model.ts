@@ -8,7 +8,7 @@ export const GRAPHIC_TEMPLATES = [
 export type GraphicTemplate = (typeof GRAPHIC_TEMPLATES)[number]['value']
 export type Reference = { _ref?: string }
 export type SanityImage = { asset?: Reference }
-export type LineupSlot = { _key?: string; number?: number; player?: Reference; role?: 'captain' | 'viceCaptain' }
+export type LineupSlot = { _key?: string; number?: number; player?: Reference; photo?: SanityImage; featured?: boolean; role?: 'captain' | 'viceCaptain' }
 export type GraphicsDocument = {
     _id?: string
     title?: string
@@ -16,7 +16,6 @@ export type GraphicsDocument = {
     clubSide?: 'home' | 'away'
     template?: GraphicTemplate
     lineup?: LineupSlot[]
-    featuredPlayers?: Reference[]
     background?: SanityImage
 }
 export type PlayerRecord = {
@@ -25,8 +24,10 @@ export type PlayerRecord = {
     graphicName?: string
     active?: boolean
     eligiblePositions?: number[]
-    cutoutUrl?: string
+    cutouts?: PhotoRecord[]
 }
+/** A transparent body shot. `hasAlpha` comes from Sanity's asset metadata. */
+export type PhotoRecord = { assetId?: string; url?: string; hasAlpha?: boolean }
 export type TeamRecord = { _id?: string; name?: string; logoUrl?: string }
 export type MatchRecord = {
     _id: string
@@ -49,6 +50,7 @@ export type GraphicPlayer = {
     role?: LineupSlot['role']
     photo?: string
 }
+type ResolvedPhoto = { photo?: PhotoRecord; missing: boolean }
 export type GraphicData = {
     template: GraphicTemplate
     date: string
@@ -98,7 +100,7 @@ export function lineupProblems(slots: LineupSlot[] = [], requireStartingXV = fal
     return [...new Set(issues)]
 }
 
-export function buildGraphicData(doc: GraphicsDocument, match: MatchRecord | undefined, players: PlayerRecord[], background?: string) {
+export function buildGraphicData(doc: GraphicsDocument, match: MatchRecord | undefined, players: PlayerRecord[], background?: string, photos: PhotoRecord[] = []) {
     const errors: string[] = []
     const warnings: string[] = []
     const template = doc.template ?? 'featured'
@@ -116,17 +118,32 @@ export function buildGraphicData(doc: GraphicsDocument, match: MatchRecord | und
     if (!opponent?.trim()) errors.push('The linked match needs an opponent name.')
     if (!opponentTeam?.logoUrl) errors.push('Link the opponent team and its logo on the match.')
     const byId = new Map(players.map(p => [publishedId(p._id), p]))
-    const playerData = (ref?: Reference, number?: number, role?: LineupSlot['role']): GraphicPlayer => {
-        const p = byId.get(publishedId(ref?._ref ?? ''))
-        return { id: ref?._ref ?? '', name: p?.graphicName?.trim() || p?.name?.trim() || 'UNASSIGNED', photo: p?.cutoutUrl, number, role }
+    const photoById = new Map(photos.filter(p => p.assetId).map(p => [p.assetId!, p]))
+    // A slot's chosen photo wins; otherwise the player's first cutout is used.
+    const resolvePhoto = (slot: LineupSlot, p?: PlayerRecord): ResolvedPhoto => {
+        const ref = slot.photo?.asset?._ref
+        if (!ref) return { photo: p?.cutouts?.find(c => c.url), missing: false }
+        const photo = photoById.get(ref) ?? p?.cutouts?.find(c => c.assetId === ref)
+        return { photo: photo?.url ? photo : undefined, missing: !photo?.url }
     }
     const slots = doc.lineup ?? []
-    const lineup = slots.map(s => playerData(s.player, s.number, s.role)).sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-    const featured = (doc.featuredPlayers ?? []).map(p => playerData(p))
+    const resolved = slots.map(slot => {
+        const p = byId.get(publishedId(slot.player?._ref ?? ''))
+        const { photo, missing } = resolvePhoto(slot, p)
+        const player: GraphicPlayer = { id: slot.player?._ref ?? '', name: p?.graphicName?.trim() || p?.name?.trim() || 'UNASSIGNED', photo: photo?.url, number: slot.number, role: slot.role }
+        return { slot, record: p, player, photo, missing }
+    }).sort((a, b) => (a.slot.number ?? 0) - (b.slot.number ?? 0))
+    const lineup = resolved.map(r => r.player)
+    const featuredSlots = resolved.filter(r => r.slot.featured)
+    const featured = featuredSlots.map(r => r.player)
+    const requirePhoto = ({ player, photo, missing }: (typeof resolved)[number]) => {
+        if (missing) errors.push(`The photo selected for ${player.name} could not be loaded. Choose another.`)
+        else if (!photo) errors.push(`Choose a transparent body shot for ${player.name}.`)
+        else if (photo.hasAlpha === false) errors.push(`The photo for ${player.name} has a background. Choose a transparent cutout.`)
+    }
     if (template !== 'finalScore') {
         errors.push(...lineupProblems(slots, true))
-        for (const s of slots) {
-            const p = byId.get(publishedId(s.player?._ref ?? ''))
+        for (const { slot: s, record: p } of resolved) {
             if (s.player?._ref && !p) errors.push(`Player at position ${s.number} could not be loaded.`)
             if (p?.active === false) warnings.push(`${p.name} is marked inactive.`)
             if (s.number && s.number <= 15 && p?.eligiblePositions?.length && !p.eligiblePositions.includes(s.number)) {
@@ -134,16 +151,11 @@ export function buildGraphicData(doc: GraphicsDocument, match: MatchRecord | und
             }
         }
         if (template === 'pitch') {
-            for (const p of lineup.filter(p => (p.number ?? 0) <= 15)) if (!p.photo) errors.push(`Upload a transparent body shot for ${p.name}.`)
+            for (const r of resolved.filter(r => (r.slot.number ?? 0) <= 15)) requirePhoto(r)
         } else {
             const count = template === 'threePlayers' ? 3 : 1
-            if (featured.length !== count) errors.push(`Select exactly ${count} featured player${count === 1 ? '' : 's'}.`)
-            const ids = featured.map(p => publishedId(p.id))
-            if (new Set(ids).size !== ids.length) errors.push('Featured players must be different.')
-            for (const p of featured) {
-                if (!lineup.some(l => publishedId(l.id) === publishedId(p.id))) errors.push(`${p.name} must be in this match lineup to be featured.`)
-                if (!p.photo) errors.push(`Upload a transparent body shot for ${p.name}.`)
-            }
+            if (featured.length !== count) errors.push(`Mark exactly ${count} lineup player${count === 1 ? '' : 's'} as featured (currently ${featured.length}).`)
+            for (const r of featuredSlots) requirePhoto(r)
         }
     }
     const clubScore = away ? match?.awayScore : match?.homeScore

@@ -1,5 +1,6 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
 import { LineupInput } from '@/sanity/components/graphics/LineupInput'
+import { PhotoPickerInput } from '@/sanity/components/graphics/PhotoPickerInput'
 import { MatchGraphicsPreview } from '@/sanity/components/graphics/MatchGraphicsPreview'
 import { GRAPHIC_TEMPLATES, lineupProblems, type LineupSlot } from '@/lib/graphics/model'
 
@@ -41,20 +42,24 @@ export const matchGraphics = defineType({
                 fields: [
                     defineField({ name: 'number', title: 'Jersey / position number', type: 'number', validation: r => r.required().integer().min(1).max(23) }),
                     defineField({ name: 'player', title: 'Player', type: 'reference', to: [{ type: 'player' }], options: { disableNew: true }, validation: r => r.required() }),
+                    defineField({
+                        name: 'photo', title: 'Photo', type: 'image', components: { input: PhotoPickerInput },
+                        hidden: ({ parent }) => !parent?.player,
+                        description: 'Pick one of this player’s transparent cutouts, or an unassigned one (it is then saved to the player). Empty uses their first cutout.',
+                    }),
+                    defineField({ name: 'featured', title: 'Feature this player', type: 'boolean', initialValue: false, description: 'Featured player design uses one; Three players uses three.' }),
                     defineField({ name: 'role', title: 'Leadership', type: 'string', options: { list: [{ title: 'Captain', value: 'captain' }, { title: 'Vice-captain', value: 'viceCaptain' }] } }),
                 ],
                 preview: {
-                    select: { number: 'number', name: 'player.name', media: 'player.cutout', role: 'role' },
-                    prepare: ({ number, name, media, role }) => ({ title: `${number ?? '?'} · ${name ?? 'Select player'}`, subtitle: role === 'captain' ? 'Captain' : role === 'viceCaptain' ? 'Vice-captain' : undefined, media }),
+                    select: { number: 'number', name: 'player.name', photo: 'photo', cutout: 'player.cutouts.0', role: 'role', featured: 'featured' },
+                    prepare: ({ number, name, photo, cutout, role, featured }) => ({
+                        title: `${number ?? '?'} · ${name ?? 'Select player'}`,
+                        subtitle: [featured && '★ Featured', role === 'captain' ? 'Captain' : role === 'viceCaptain' ? 'Vice-captain' : undefined].filter(Boolean).join(' · ') || undefined,
+                        media: photo?.asset ? photo : cutout,
+                    }),
                 },
             })],
             validation: r => r.max(23).custom(value => lineupProblems(value as LineupSlot[] | undefined).join(' ') || true),
-        }),
-        defineField({
-            name: 'featuredPlayers', title: 'Featured players', type: 'array', group: 'lineup',
-            description: 'Pick one for Featured player or three for Three players. These must be selected in the lineup and have a body-shot cutout. Position map uses each starting player’s cutout.',
-            of: [defineArrayMember({ type: 'reference', to: [{ type: 'player' }], options: { disableNew: true } })],
-            validation: r => r.max(3).unique(),
         }),
         defineField({
             name: 'graphicPreview', title: 'Graphic preview', type: 'string', readOnly: true, group: 'preview',

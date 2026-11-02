@@ -4,19 +4,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { useClient, useFormValue } from 'sanity'
 import { Button, Card, Flex, Stack, Text } from '@sanity/ui'
 import { DownloadIcon } from '@sanity/icons'
-import { buildGraphicData, publishedId, type GraphicsDocument, type MatchRecord, type PlayerRecord, type Reference, type TeamRecord } from '@/lib/graphics/model'
+import { buildGraphicData, publishedId, type GraphicsDocument, type MatchRecord, type PhotoRecord, type PlayerRecord, type Reference, type TeamRecord } from '@/lib/graphics/model'
 import { renderGraphic } from '@/lib/graphics/render'
 import { downloadBlob, graphicPng, inlineGraphicAssets, loadGraphicFont } from './assets'
 
 const API_VERSION = '2025-01-01'
 const SOURCE_QUERY = `{
     "matches": *[_type == "match" && _id in $ids]{_id,date,kickoffTime,venue,homeTeam,awayTeam,homeScore,awayScore,status,competition,homeTeamRef,awayTeamRef},
-    "players": *[_type == "player" && _id in $ids]{_id,name,graphicName,active,eligiblePositions,"cutoutUrl":cutout.asset->url},
+    "players": *[_type == "player" && _id in $ids]{_id,name,graphicName,active,eligiblePositions,"cutouts":cutouts[]{"assetId":asset._ref,"url":asset->url,"hasAlpha":asset->metadata.hasAlpha}},
+    "photos": *[_type == "sanity.imageAsset" && _id in $photos]{"assetId":_id,url,"hasAlpha":metadata.hasAlpha},
     "teams": *[_type == "team"]{_id,name,"logoUrl":image.asset->url},
     "background": *[_type == "sanity.imageAsset" && _id == $background][0].url
 }`
 type RawMatch = Omit<MatchRecord, 'homeTeamRef' | 'awayTeamRef'> & { homeTeamRef?: Reference; awayTeamRef?: Reference }
-type Sources = { matches: RawMatch[]; players: PlayerRecord[]; teams: TeamRecord[]; background?: string }
+type Sources = { matches: RawMatch[]; players: PlayerRecord[]; photos: PhotoRecord[]; teams: TeamRecord[]; background?: string }
 function preferDrafts<T extends { _id?: string }>(records: T[]): T[] {
     const selected = new Map<string, T>()
     for (const record of records) {
@@ -32,7 +33,8 @@ export function MatchGraphicsPreview() {
     const client = useClient({ apiVersion: API_VERSION })
     const sourceKey = JSON.stringify({
         match: doc.match?._ref,
-        players: [...new Set([...(doc.lineup ?? []).map(s => s.player?._ref), ...(doc.featuredPlayers ?? []).map(p => p._ref)].filter(Boolean))].sort(),
+        players: [...new Set((doc.lineup ?? []).map(s => s.player?._ref).filter(Boolean))].sort(),
+        photos: [...new Set((doc.lineup ?? []).map(s => s.photo?.asset?._ref).filter(Boolean))].sort(),
         background: doc.background?.asset?._ref,
     })
     const [source, setSource] = useState<{ key: string; value: Sources }>()
@@ -48,11 +50,11 @@ export function MatchGraphicsPreview() {
     useEffect(() => {
         let current = true
         const controller = new AbortController()
-        const selection = JSON.parse(sourceKey) as { match?: string; players: string[]; background?: string }
+        const selection = JSON.parse(sourceKey) as { match?: string; players: string[]; photos: string[]; background?: string }
         const baseIds = [selection.match, ...selection.players].filter((id): id is string => Boolean(id)).map(publishedId)
         const ids = [...new Set(baseIds.flatMap(id => [id, `drafts.${id}`]))]
         setLoadingSource(true); setSourceError(''); setExportError('')
-        client.withConfig({ useCdn: false, perspective: 'raw' }).fetch<Sources>(SOURCE_QUERY, { ids, background: selection.background ?? '' }, { signal: controller.signal })
+        client.withConfig({ useCdn: false, perspective: 'raw' }).fetch<Sources>(SOURCE_QUERY, { ids, photos: selection.photos, background: selection.background ?? '' }, { signal: controller.signal })
             .then(value => {
                 if (!current) return
                 setSource({ key: sourceKey, value }); setSourceRevision(r => r + 1); setLoadingSource(false)
@@ -84,7 +86,7 @@ export function MatchGraphicsPreview() {
             homeTeamRef: teams.find(t => publishedId(t._id ?? '') === publishedId(raw.homeTeamRef?._ref ?? '')),
             awayTeamRef: teams.find(t => publishedId(t._id ?? '') === publishedId(raw.awayTeamRef?._ref ?? '')),
         } : undefined
-        return buildGraphicData(doc, match, preferDrafts(value?.players ?? []), value?.background)
+        return buildGraphicData(doc, match, preferDrafts(value?.players ?? []), value?.background, value?.photos)
     }, [doc, source, sourceKey])
     const renderKey = JSON.stringify({ data: resolved.data, revision: sourceRevision })
     useEffect(() => {

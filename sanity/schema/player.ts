@@ -80,11 +80,11 @@ export const player = defineType({
             validation: (rule) => rule.max(32),
         }),
         defineField({
-            name: 'cutout',
-            title: 'Body-shot cutout for graphics',
-            type: 'image',
-            options: { accept: 'image/png,image/webp' },
-            description: 'Upload a transparent PNG or WebP with the whole player visible, including boots. The original website photo is kept separately.',
+            name: 'cutouts',
+            title: 'Body-shot cutouts for graphics',
+            type: 'array',
+            of: [{ type: 'image', options: { accept: 'image/png,image/webp' } }],
+            description: 'Transparent PNG or WebP shots with the whole player visible, including boots. Pick which one to use per graphic in Match Graphics; the first is the default. Photos picked there are added here automatically. The website photo is kept separately.',
         }),
         defineField({
             name: 'eligiblePositions',

@@ -12,7 +12,7 @@ export function LineupInput(props: ArrayOfObjectsInputProps) {
     ]))
     return <Stack space={3}>
         {missing.length > 0 && <Button text="Add missing starting XV slots" mode="ghost" disabled={props.readOnly} onClick={addStartingSlots} />}
-        <Text size={1} muted>Numbers 1–15 are the starting XV; 16–23 are replacements. Open each slot to choose its player and leadership role.</Text>
+        <Text size={1} muted>Numbers 1–15 are the starting XV; 16–23 are replacements. Open each slot to choose its player, their photo, whether they are featured, and leadership role.</Text>
         {props.renderDefault(props)}
     </Stack>
 }
