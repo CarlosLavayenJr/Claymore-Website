@@ -41,6 +41,7 @@ const PATHS_BY_TYPE: Record<string, PathSpec[]> = {
     player: PLAYER_PATHS,
     match: MATCH_PATHS,
     practice: PRACTICE_PATHS,
+    festival: [...PRACTICE_PATHS, ['/fixtures/[slug]', 'page'], ['/sitemap.xml']],
     practiceSchedule: EVERYTHING,
     leagueStandings: STANDINGS_PATHS,
     leagueChampionship: STANDINGS_PATHS,

@@ -20,17 +20,27 @@ import {
     seasonLabel,
     sportsEventSchema,
 } from '@/lib/seo'
+import FestivalDetails from '@/components/festival-details'
+import { festivalsQuery, festivalSlug } from '@/lib/festivals'
+import type { SanityPractice } from '@/sanity/lib/queries'
 import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
 
 interface Params {
     params: Promise<{ slug: string }>
+    searchParams: Promise<{ preview?: string }>
 }
 
 export async function generateStaticParams() {
     const matches: SanityMatch[] = await client.fetch(matchesQuery)
-    return matches.map((m) => ({ slug: matchSlug(m) }))
+    const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
+    return [...matches.map((m) => ({ slug: matchSlug(m) })), ...festivals.map(event => ({ slug: festivalSlug(event) }))]
+}
+
+async function getFestival(slug: string): Promise<SanityPractice | null> {
+    const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
+    return festivals.find(event => festivalSlug(event) === slug) ?? null
 }
 
 async function getMatch(slug: string): Promise<SanityMatch | null> {
@@ -41,7 +51,16 @@ async function getMatch(slug: string): Promise<SanityMatch | null> {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const { slug } = await params
     const match = await getMatch(slug)
-    if (!match) return {}
+    if (!match) {
+        const event = await getFestival(slug)
+        if (!event) return {}
+        return {
+            title: `${event.title} — ${formatMatchDateLong(event.startDate)} | Orlando Rugby`,
+            description: `${event.title}: Central Florida Claymores festival details and results. ${event.venue ?? ''}`,
+            alternates: { canonical: `/fixtures/${slug}` },
+            openGraph: { title: event.title, url: `/fixtures/${slug}`, images: ogImage(`/fixtures/${slug}`) },
+        }
+    }
     const opp = opponentOf(match)
     const home = isHomeMatch(match)
     const date = formatMatchDateLong(match.date)
@@ -94,13 +113,24 @@ function findTeam(name: string, teams: SanityTeam[]): SanityTeam | null {
     return null
 }
 
-export default async function MatchPage({ params }: Params) {
+export default async function MatchPage({ params, searchParams }: Params) {
     const { slug } = await params
     const [match, teams]: [SanityMatch | null, SanityTeam[]] = await Promise.all([
         getMatch(slug),
         client.fetch(teamsQuery),
     ])
-    if (!match) notFound()
+    if (!match) {
+        const event = await getFestival(slug)
+        if (!event) notFound()
+        const query = await searchParams
+        const preview = process.env.NODE_ENV === 'development' && query.preview === 'results'
+        const previewEvent = preview ? { ...event, results: [
+            { _key: 'sample-1', label: 'Round robin · Game 1', homeTeam: 'Claymores', awayTeam: 'Sarasota', homeScore: 24, awayScore: 12 },
+            { _key: 'sample-2', label: 'Round robin · Game 2', homeTeam: 'Claymores', awayTeam: 'Lakeland', homeScore: 17, awayScore: 17 },
+            { _key: 'sample-3', label: 'Placement game', homeTeam: 'Claymores', awayTeam: 'Tampa', homeScore: 21, awayScore: 14 },
+        ] } : event
+        return <FestivalDetails event={previewEvent} teams={teams} preview={preview} />
+    }
 
     const opp = opponentOf(match)
     const oppSlug = (isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug)

@@ -297,7 +297,14 @@ export const practiceScheduleQuery = groq`
   }
 `
 
+// Calendar activities share date/time fields; festivals remain separate CMS documents.
 export interface SanityPractice {
+    eventType?: 'practice' | 'festival'
+    results?: { _key: string; label?: string; homeTeam: string; awayTeam: string; homeScore?: number | null; awayScore?: number | null }[]
+    venue?: string | null
+    participants?: string[] | null
+    socialVenue?: string | null
+    socialAddress?: string | null
     _id: string
     _updatedAt?: string
     title: string
@@ -313,7 +320,7 @@ export interface SanityPractice {
 }
 
 export const practicesQuery = groq`
-  *[_type == "practice" && active == true] | order(startDate asc) {
+  *[_type in ["practice", "festival"] && active == true] | order(startDate asc) {
     _id,
     _updatedAt,
     title,
@@ -325,7 +332,12 @@ export const practicesQuery = groq`
     address,
     description,
     recurring,
-    weekdays
+    weekdays,
+    "eventType": _type,
+    venue,
+    participants,
+    socialVenue,
+    socialAddress
   }
 `
 

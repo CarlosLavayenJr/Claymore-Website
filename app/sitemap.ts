@@ -12,6 +12,8 @@ import {
     type SanityPost,
     type SanityTeam,
 } from '@/sanity/lib/queries'
+import { festivalsQuery, festivalSlug } from '@/lib/festivals'
+import type { SanityPractice } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
 import { CITIES } from '@/lib/cities'
 import { features } from '@/lib/features'
@@ -34,6 +36,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             ? client.fetch(coachesQuery).catch(() => [] as SanityCoach[])
             : Promise.resolve([] as SanityCoach[]),
     ])
+
+    const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
+    const festivalEntries: MetadataRoute.Sitemap = festivals.map(event => ({
+        url: `${baseUrl}/fixtures/${festivalSlug(event)}`,
+        lastModified: new Date(event._updatedAt ?? event.startDate),
+        changeFrequency: 'weekly',
+        priority: 0.8,
+    }))
 
     const playerEntries: MetadataRoute.Sitemap = players.map((p) => ({
         url: `${baseUrl}/team/${p.slug}`,
@@ -109,6 +119,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ...cityEntries,
         ...seasonEntries,
         ...matchEntries,
+        ...festivalEntries,
         ...opponentEntries,
         ...coachEntries,
         ...postEntries,

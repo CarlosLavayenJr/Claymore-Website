@@ -251,7 +251,7 @@ export default function MatchCalendar({
                                 <PopoverTrigger asChild>
                                     <button className="text-left w-full">{cell}</button>
                                 </PopoverTrigger>
-                                <PopoverContent side="top" align="center" className="w-72 p-3">
+                                <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                     <p className="text-xs uppercase tracking-widest text-[#555555] font-semibold mb-2">
                                         {new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                                     </p>

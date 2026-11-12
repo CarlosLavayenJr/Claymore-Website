@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import type { SanityMatch, SanityTeam, SanityPractice } from '@/sanity/lib/queries'
+import { PracticeCard } from '@/components/event-cards'
 import MatchCalendar from '@/components/match-calendar'
 import MatchTypeBadge from '@/components/match-type-badge'
 import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
@@ -40,7 +41,7 @@ export default function FixturesSchedule({ matches, teams, practices }: {
     practices: SanityPractice[]
 }) {
     const [filter, setFilter] = useScheduleFilter()
-    const visiblePractices = filter === 'games' ? [] : practices
+    const visiblePractices = filter === 'games' ? practices.filter(p => p.eventType === 'festival') : practices
     const upcomingMatches = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
     const upcomingPractices = upcomingPracticeInstances(visiblePractices, MAX_UPCOMING, 60)
 
@@ -103,6 +104,12 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                                     )
                                 }
                                 const p = item.instance.practice
+                                if (p.eventType === 'festival') return (
+                                    <div key={item.instance.key} className="px-5 py-4">
+                                        <p className="text-sm font-medium text-[#77c3ef] mb-2">{formatDate(item.date)}</p>
+                                        <PracticeCard instance={item.instance} />
+                                    </div>
+                                )
                                 return (
                                     <div
                                         key={item.instance.key}

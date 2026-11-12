@@ -62,7 +62,7 @@ export default function UpcomingEvents({
         // Include played + upcoming + cancelled — matches the fixtures calendar.
         // Filtering happens via month range; status is reflected in the popup card.
         const inMonth = matches.filter((m) => m.date >= firstIso && m.date <= lastIso)
-        const instances = filter === 'games' ? [] : expandPractices(practices, firstIso, lastIso)
+        const instances = expandPractices(filter === 'games' ? practices.filter(p => p.eventType === 'festival') : practices, firstIso, lastIso)
 
         const byDate = new Map<string, DayBucket>()
         const ensure = (date: string): DayBucket => {
@@ -291,7 +291,7 @@ function GridView({
                                     {cellContent}
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                            <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                 <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
                                     {new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
                                         weekday: 'long',
@@ -365,7 +365,7 @@ function AgendaView({ events, teams }: { events: CalEvent[]; teams: SanityTeam[]
                                     </div>
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                            <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                 <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
                                     {fullDate}
                                 </p>

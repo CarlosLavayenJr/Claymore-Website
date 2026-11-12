@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import type { PracticeInstance } from '@/lib/practices'
+import { festivalSlug } from '@/lib/festivals'
 import { matchSlug } from '@/lib/seo'
 import MatchTypeBadge from '@/components/match-type-badge'
 
@@ -181,14 +182,22 @@ export function PracticeCard({ instance }: { instance: PracticeInstance }) {
                 <div className="w-10 h-10 rounded-full bg-[#EAEAEA] shrink-0" />
             )}
             <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Practice</p>
-                <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.title}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">{practice.eventType === 'festival' ? 'Rugby festival' : 'Practice'}</p>
+                <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.eventType === 'festival' ? <Link href={`/fixtures/${festivalSlug(practice)}`} className="hover:text-[#77c3ef] hover:underline">{practice.title} →</Link> : practice.title}</p>
                 {practice.time && <p className="text-xs text-[#555555] mt-1">{practice.time}</p>}
+                {practice.venue && <p className="text-xs font-semibold text-[#111111] mt-1">{practice.venue}</p>}
                 {practice.address && <AddressLink address={practice.address} />}
                 {practice.description && (
                     <p className="text-xs text-[#555555] mt-1 whitespace-pre-line">
                         {practice.description}
                     </p>
+                )}
+                {practice.eventType === 'festival' && (
+                    <div className="mt-3 space-y-2 text-xs text-[#555555]">
+                        {!!practice.participants?.length && <p><span className="font-semibold text-[#111111]">Sides:</span> {practice.participants.join(', ')}</p>}
+                        {practice.socialVenue && <p className="font-semibold text-[#111111]">Post tournament social · {practice.socialVenue}</p>}
+                        {practice.socialAddress && <AddressLink address={practice.socialAddress} />}
+                    </div>
                 )}
             </div>
         </div>
