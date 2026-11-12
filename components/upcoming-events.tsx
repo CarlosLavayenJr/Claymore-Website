@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { SanityMatch, SanityPractice, SanityTeam } from '@/sanity/lib/queries'
 import { expandPractices, type PracticeInstance } from '@/lib/practices'
+import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { MatchCard, PracticeCard, isClaymores } from '@/components/event-cards'
 
 interface UpcomingEventsProps {
@@ -37,6 +38,7 @@ export default function UpcomingEvents({
     teams = [],
     className = '',
 }: UpcomingEventsProps) {
+    const [filter, setFilter] = useScheduleFilter()
     const today = new Date()
     const [year, setYear] = useState(today.getFullYear())
     const [month, setMonth] = useState(today.getMonth())
@@ -60,7 +62,7 @@ export default function UpcomingEvents({
         // Include played + upcoming + cancelled — matches the fixtures calendar.
         // Filtering happens via month range; status is reflected in the popup card.
         const inMonth = matches.filter((m) => m.date >= firstIso && m.date <= lastIso)
-        const instances = expandPractices(practices, firstIso, lastIso)
+        const instances = filter === 'games' ? [] : expandPractices(practices, firstIso, lastIso)
 
         const byDate = new Map<string, DayBucket>()
         const ensure = (date: string): DayBucket => {
@@ -89,7 +91,7 @@ export default function UpcomingEvents({
         ].sort((a, b) => a.date.localeCompare(b.date))
 
         return { byDate, monthEvents: evts }
-    }, [matches, practices, year, month])
+    }, [matches, practices, year, month, filter])
 
     const eventsByDate = useMemo(() => {
         const map = new Map<string, CalEvent[]>()
@@ -159,6 +161,10 @@ export default function UpcomingEvents({
                         <CalendarDays className="w-4 h-4 relative z-10" />
                     </button>
                 </div>
+            </div>
+
+            <div className="px-4 border-b border-[#EAEAEA] shrink-0">
+                <ScheduleFilter value={filter} onChange={setFilter} />
             </div>
 
             {/* Body */}

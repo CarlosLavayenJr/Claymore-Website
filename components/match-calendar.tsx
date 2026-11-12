@@ -72,6 +72,9 @@ function MobileList({
 
     return (
         <div className="divide-y divide-[#EAEAEA]">
+            {sections.length === 0 && (
+                <p className="py-8 text-center text-sm text-[#555555]">No upcoming games or events scheduled.</p>
+            )}
             {sections.map(([date, bucket]) => (
                 <div key={date} className="py-4">
                     <p className="text-xs uppercase tracking-widest text-[#555555] font-semibold mb-2">
