@@ -28,7 +28,7 @@ export default function FestivalDetails({ event, teams, preview = false }: { eve
         <main className="container mx-auto px-4 py-12 max-w-4xl">
             <Breadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'Fixtures', path: '/fixtures' }, { name: event.title, path: `/fixtures/${festivalSlug(event)}` }]} />
             <header className="text-center bg-white border border-[#EAEAEA] rounded-2xl p-6 md:p-10">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#fd80b5] mb-4">Rugby festival</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#fd80b5] mb-4">{event.eventType === 'event' ? 'Club event' : 'Rugby festival'}</p>
                 {event.iconUrl && <img src={event.iconUrl} alt={event.iconAlt ?? 'Central Florida Claymores'} className="w-20 h-20 object-contain mx-auto mb-5" />}
                 <h1 className="font-claymore text-4xl sm:text-6xl text-[#111111]">{event.title}</h1>
                 <p className="text-xs uppercase tracking-widest text-[#555555] mt-5">Central Florida Claymores RFC · Orlando Rugby</p>
@@ -45,7 +45,7 @@ export default function FestivalDetails({ event, teams, preview = false }: { eve
                     </div>}
                 </dl>
             </header>
-            <section className="py-8 border-b border-[#EAEAEA]">
+            {event.eventType !== 'event' && <section className="py-8 border-b border-[#EAEAEA]">
                 <h2 className="font-claymore text-2xl text-[#111111] mb-4">Festival results</h2>
                 {preview && <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-[#555555] border-l-2 border-[#fd80b5] pl-3">Preview · Sample scores only · Not official results</p>}
                 {event.results?.length ? <div className="space-y-4">
@@ -75,10 +75,10 @@ export default function FestivalDetails({ event, teams, preview = false }: { eve
                         )
                     })}
                 </div> : <p className="text-sm text-[#555555]">Results will be posted after the festival.</p>}
-            </section>
+            </section>}
             <div className="grid sm:grid-cols-[1.4fr_1fr] gap-10 py-10">
                 <section>
-                    <h2 className="font-claymore text-2xl text-[#111111] mb-4">Festival format</h2>
+                    <h2 className="font-claymore text-2xl text-[#111111] mb-4">{event.eventType === 'event' ? 'Event details' : 'Festival format'}</h2>
                     {event.description && <p className="text-sm leading-7 whitespace-pre-line text-[#555555]">{event.description}</p>}
                     {!!event.participants?.length && <>
                         <h2 className="font-claymore text-2xl text-[#111111] mt-8 mb-4">Participating sides</h2>

@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         if (!event) return {}
         return {
             title: `${event.title} — ${formatMatchDateLong(event.startDate)} | Orlando Rugby`,
-            description: `${event.title}: Central Florida Claymores festival details and results. ${event.venue ?? ''}`,
+            description: `${event.title}: Central Florida Claymores event details. ${event.venue ?? ''}`,
             alternates: { canonical: `/fixtures/${slug}` },
             openGraph: { title: event.title, url: `/fixtures/${slug}`, images: ogImage(`/fixtures/${slug}`) },
         }
@@ -123,7 +123,7 @@ export default async function MatchPage({ params, searchParams }: Params) {
         const event = await getFestival(slug)
         if (!event) notFound()
         const query = await searchParams
-        const preview = process.env.NODE_ENV === 'development' && query.preview === 'results'
+        const preview = event.eventType === 'festival' && process.env.NODE_ENV === 'development' && query.preview === 'results'
         const previewEvent = preview ? { ...event, results: [
             { _key: 'sample-1', label: 'Round robin · Game 1', homeTeam: 'Claymores', awayTeam: 'Sarasota', homeScore: 24, awayScore: 12 },
             { _key: 'sample-2', label: 'Round robin · Game 2', homeTeam: 'Claymores', awayTeam: 'Lakeland', homeScore: 17, awayScore: 17 },

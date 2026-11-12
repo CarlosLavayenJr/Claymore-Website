@@ -43,7 +43,7 @@ export default function FixturesSchedule({ matches, teams, practices }: {
     const [filter, setFilter] = useScheduleFilter()
     const visiblePractices = filter === 'games' ? practices.filter(p => p.eventType === 'festival') : practices
     const upcomingMatches = matches.filter(m => m.status === 'upcoming').sort((a, b) => a.date.localeCompare(b.date))
-    const upcomingPractices = upcomingPracticeInstances(visiblePractices, MAX_UPCOMING, 60)
+    const upcomingPractices = upcomingPracticeInstances(visiblePractices, MAX_UPCOMING, 365)
 
     const upcomingItems: UpcomingItem[] = [
         ...upcomingMatches.map<UpcomingItem>(m => ({ kind: 'match', date: m.date, match: m })),
@@ -104,7 +104,7 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                                     )
                                 }
                                 const p = item.instance.practice
-                                if (p.eventType === 'festival') return (
+                                if (p.eventType === 'festival' || p.eventType === 'event') return (
                                     <div key={item.instance.key} className="px-5 py-4">
                                         <p className="text-sm font-medium text-[#77c3ef] mb-2">{formatDate(item.date)}</p>
                                         <PracticeCard instance={item.instance} />

@@ -3,6 +3,7 @@ import { post } from './post'
 import { match } from './match'
 import { team } from './team'
 import { coach } from './coach'
+import { event } from './event'
 import { festival } from './festival'
 import { practice } from './practice'
 import { practiceSchedule } from './practiceSchedule'
@@ -20,6 +21,7 @@ export const schema = {
         coach,
         practice,
         festival,
+        event,
         practiceSchedule,
         leagueChampionship,
         leagueStandings,

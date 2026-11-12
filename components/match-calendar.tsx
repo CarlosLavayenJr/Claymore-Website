@@ -38,7 +38,7 @@ function MobileList({
         const today = new Date()
         const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         const horizon = new Date(today)
-        horizon.setDate(horizon.getDate() + 60)
+        horizon.setDate(horizon.getDate() + 365)
         const horizonIso = `${horizon.getFullYear()}-${String(horizon.getMonth() + 1).padStart(2, '0')}-${String(horizon.getDate()).padStart(2, '0')}`
         const upcomingPractices = expandPractices(practices, todayIso, horizonIso)
 
