@@ -317,6 +317,7 @@ export interface SanityPractice {
     description: string | null
     recurring: boolean
     weekdays: string[] | null
+    skipDates?: string[] | null
 }
 
 export const practicesQuery = groq`
@@ -333,6 +334,7 @@ export const practicesQuery = groq`
     description,
     recurring,
     weekdays,
+    skipDates,
     "eventType": _type,
     venue,
     participants,
