@@ -42,12 +42,15 @@ export function expandPractice(p: SanityPractice, from: string, to: string): Pra
     )
     if (allowed.size === 0) return []
 
+    // Dates an editor cancelled in Sanity (holidays, field closures).
+    const skipped = new Set(p.skipDates ?? [])
+
     const out: PracticeInstance[] = []
     const cursor = new Date(Math.max(startD.getTime(), fromD.getTime()))
     while (cursor <= toD) {
         if (allowed.has(cursor.getUTCDay())) {
             const iso = toIsoDate(cursor)
-            out.push({ practice: p, date: iso, key: `${p._id}-${iso}` })
+            if (!skipped.has(iso)) out.push({ practice: p, date: iso, key: `${p._id}-${iso}` })
         }
         cursor.setUTCDate(cursor.getUTCDate() + 1)
     }
