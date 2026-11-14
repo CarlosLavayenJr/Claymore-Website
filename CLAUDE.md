@@ -54,6 +54,7 @@ Meta titles, descriptions, headings, alt text, and URLs all matter.
 | `/faq` | Frequently asked questions |
 | `/location` | Location / directions page |
 | `/contact` | Contact form (sends via Resend to claymoresrfc@gmail.com) — the primary conversion point and the blue navbar CTA |
+| `/privacy` | Privacy policy — also the policy link for the Clubhouse app's Google sign-in |
 | `/studio` | Sanity CMS (not public-facing) |
 
 ## Brand Colors
