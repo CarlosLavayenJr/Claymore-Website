@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { sanityPortraitLoader } from '@/lib/sanity-portrait'
 import type { SanityPlayer } from '@/sanity/lib/queries'
 
 const FALLBACK_IMAGE = 'https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png'
@@ -14,6 +15,7 @@ interface Props {
 
 function CarouselCard({ player, badgeColor }: { player: SanityPlayer; badgeColor: string }) {
     const [loaded, setLoaded] = useState(false)
+    const portrait = player.imageUrl || FALLBACK_IMAGE
 
     return (
         <Link
@@ -24,7 +26,8 @@ function CarouselCard({ player, badgeColor }: { player: SanityPlayer; badgeColor
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#1a1d20] via-[#252a2e] to-[#1a1d20]" />
             )}
             <Image
-                src={player.imageUrl || FALLBACK_IMAGE}
+                src={portrait}
+                loader={sanityPortraitLoader(portrait)}
                 alt={player.name}
                 fill
                 sizes="220px"

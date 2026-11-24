@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { sanityPortraitLoader } from "@/lib/sanity-portrait"
 import type { SanityPlayer } from "@/sanity/lib/queries"
 
 const FALLBACK_IMAGE = "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png"
@@ -16,6 +17,7 @@ interface PlayerCardProps {
 
 export default function PlayerCard({ player, badgeColor = '#77c3ef', onClick, priority = false }: PlayerCardProps) {
     const [loaded, setLoaded] = useState(false)
+    const portrait = player.imageUrl || FALLBACK_IMAGE
 
     const inner = (
         <div className="group relative overflow-hidden rounded-md aspect-[3/4] cursor-pointer bg-[#131518]">
@@ -24,7 +26,8 @@ export default function PlayerCard({ player, badgeColor = '#77c3ef', onClick, pr
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#1a1d20] via-[#252a2e] to-[#1a1d20] bg-[length:200%_100%]" />
             )}
             <Image
-                src={player.imageUrl || FALLBACK_IMAGE}
+                src={portrait}
+                loader={sanityPortraitLoader(portrait)}
                 alt={player.name}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
