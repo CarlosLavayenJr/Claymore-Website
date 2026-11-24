@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace Claymores.Api.Tests;
@@ -9,12 +11,19 @@ namespace Claymores.Api.Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly IReadOnlyDictionary<string, string?> _settings;
+    private readonly Action<IServiceCollection>? _services;
 
     public ApiFactory() => _settings = new Dictionary<string, string?>();
 
-    private ApiFactory(IReadOnlyDictionary<string, string?> settings) => _settings = settings;
+    private ApiFactory(IReadOnlyDictionary<string, string?> settings, Action<IServiceCollection>? services)
+    {
+        _settings = settings;
+        _services = services;
+    }
 
-    public static ApiFactory With(IReadOnlyDictionary<string, string?> settings) => new(settings);
+    /// <param name="services">Optional replacements (fakes) applied after the API registers its services.</param>
+    public static ApiFactory With(IReadOnlyDictionary<string, string?> settings, Action<IServiceCollection>? services = null) =>
+        new(settings, services);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -23,6 +32,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("DATABASE_URL", "");
         foreach (var (key, value) in _settings)
             builder.UseSetting(key, value);
+        if (_services is not null)
+            builder.ConfigureTestServices(_services);
     }
 }
 

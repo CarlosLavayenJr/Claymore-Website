@@ -51,7 +51,7 @@ Swagger is enabled by default in Development. To expose it in another environmen
 | `GET /v1/players/{slug}` | Public | `200` and the active player profile, or `404` for an unknown or inactive profile. |
 | `GET /v1/practices` | Public | `200` and an array of published practice and event records. |
 | `GET /v1/practices/schedule` | Public | `200` and the practice schedule, or `404` when no schedule is published. |
-| `GET /v1/me` | Bearer token | `200` and the token's subject and name claims, or `401` for a missing or invalid token. |
+| `GET /v1/me` | Bearer token | `200` and `{"subject","name","email","role"}` from the token, or `401` for a missing or invalid token. `role` is set for tokens from [mobile sign-in](#mobile-sign-in). |
 
 Fixture filters take a numeric year from 1900 through 2200. Standings filters take a season label in `YYYY-YYYY` format. Invalid filters return `400`. A successful fixture list with no matches returns `[]`. Health reports process liveness. To verify the data path, request fixtures or standings as well.
 
@@ -106,7 +106,49 @@ Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and
 
   The `PUT` and `DELETE` requests require the same-origin browser session, like the other admin writes.
 
-The website entry hands off to the API-hosted account page. Flutter sign-in follows after browser verification. Keep local OAuth client settings separate from any future preview or production settings.
+The website entry hands off to the API-hosted account page. The Flutter app uses [mobile sign-in](#mobile-sign-in) instead. Keep local OAuth client settings separate from any future preview or production settings.
+
+## Mobile sign-in
+
+The Flutter app signs in with native Google sign-in, then trades the Google ID token for API tokens. The same invitations decide who gets in and with which role. Set `MobileAuth:Enabled=true`; it requires Google sign-in and Postgres to be configured, and the refresh tokens live in `mobile_refresh_tokens` (migration `008`).
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/google` | `{"idToken":"<Google ID token>"}` | `200` with tokens (below). `401 {"error":"invalid_token"}` for a bad, expired, wrong-audience, or unverified-email token. `403 {"error":"not_invited"}` when the email isn't invited. |
+| `POST /v1/auth/mobile/refresh` | `{"refreshToken":"..."}` | `200` with new tokens. The old refresh token stops working. `401` for an unknown, expired, or revoked token. `403 {"error":"not_invited"}` if the invitation was removed (the session is revoked). |
+| `POST /v1/auth/mobile/logout` | `{"refreshToken":"..."}` | `204`. Revokes that sign-in session. |
+
+```json
+{
+  "accessToken": "<JWT>",
+  "accessTokenExpiresAt": "2026-11-24T18:00:00+00:00",
+  "refreshToken": "<43 characters>",
+  "user": { "subject": "<Google subject>", "name": "Pat Player", "email": "pat@example.com", "role": "player" }
+}
+```
+
+- **Access tokens** are JWTs signed by the API (HS256 with `Authentication:Tokens:SigningKey`, issuer and audience `claymores-api`), valid for one hour. Send them as `Authorization: Bearer <token>` to `/v1/me`, `/v1/dues/mine`, `/v1/dues/mine/{id}`, and `/v1/dues/{id}/checkout-session`. The invitation is re-checked on every request, so removing or changing an invitation takes effect within 30 seconds. Admin writes still require the same-origin browser session.
+- **Refresh tokens** last 60 days and rotate on every refresh. Only a SHA-256 hash is stored. Presenting a token that was already rotated or revoked revokes every token in that sign-in session, so the app must store the newest refresh token before using it, and must not refresh twice in parallel.
+- **Signing key:** base64 for at least 32 random bytes, for example `openssl rand -base64 32`. The API refuses to start with mobile sign-in on and no valid key. Changing the key invalidates current access tokens at once; the app recovers by refreshing.
+
+### Google Cloud setup
+
+In the same Google Cloud project as the web client:
+
+1. Create an **iOS** OAuth client with the app's bundle ID. Put its client ID in the Flutter app (and the reversed client ID URL scheme in `Info.plist`).
+2. Create an **Android** OAuth client with the package name and the SHA-1 of each signing certificate (debug, upload, and Play app signing).
+3. Native Google sign-in on Android asks for an ID token for a *server* client ID. Use the existing **Web application** client ID for that (`serverClientId` in `google_sign_in`).
+4. List every client ID that can appear as a token's audience in `Authentication:Google:MobileClientIds` (`Authentication__Google__MobileClientIds__0`, `__1`, and so on): at least the iOS client ID. The web `Authentication:Google:ClientId` is always accepted, which covers Android tokens minted for the server client ID.
+
+The API checks each ID token's signature against Google's published keys, its issuer (`https://accounts.google.com` or `accounts.google.com`), its audience, its expiry, and `email_verified`.
+
+### App checkout and the `claymores://` link
+
+With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-session` with `{"amountCents":2500}` returns `{"url":"https://checkout.stripe.com/..."}`. Open that URL in the browser. Stripe sends the player back to `Stripe:AppReturnUrl` with `?checkout=returned` or `?checkout=cancelled`, for example `claymores://dues?checkout=returned`. Register the `claymores` scheme in the app (iOS `CFBundleURLTypes`, Android intent filter) and refresh dues when it opens. The balance changes only after Stripe's signed webhook arrives, never because of the return link.
+
+`Stripe:AppReturnUrl` is required when both features are on. It must be a custom scheme or HTTPS URL without a query. The amount must be from 50 to 99,999,999 cents and no more than the remaining balance (`409`). Another member's assessment is `404`. If the assessment already has a pending checkout, its session is resumed with the original amount, the same as the browser form. A browser session cookie may call this endpoint only from the same origin (`Sec-Fetch-Site: same-origin`).
+
+These routes are outside the public CORS policy. Native apps don't need CORS. If the Flutter web build ever uses them, give its exact origin a separate CORS policy for these routes instead of adding it to `Cors:PublicOrigins`.
 
 In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres for the Google and dues preview. It still builds the older copy in `outputs/claymores-api`, not this folder. Point it at `src/Claymores.Api` before relying on it.
 
@@ -188,6 +230,9 @@ For local testing, configure Google sign-in and a development Postgres database,
 | --- | --- | --- |
 | `GET /v1/dues/mine` | Player or admin | Lists the signed-in member's assessments |
 | `GET /v1/dues/mine/{id}` | Player or admin | Shows payment history for an assessment belonging to the signed-in member |
+| `POST /v1/dues/{id}/checkout-session` | Player or admin | Returns a Stripe test checkout URL for the app. See [App checkout](#app-checkout-and-the-claymores-link). |
+
+Member routes accept the browser session cookie or, with mobile sign-in on, an API bearer token.
 | `GET /v1/admin/dues` | Admin | Lists club dues and balances |
 | `GET /v1/admin/dues/{id}` | Admin | Shows a specific assessment and its payment history |
 | `POST /v1/admin/dues` | Admin | Assigns an assessment to a member's Google subject |
@@ -254,6 +299,7 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `FixtureDatabase.cs` | Npgsql fixture reads and transactional import |
 | `ClubMemberDirectory.cs` | Member directory populated after Google sign-in |
 | `GoogleSignIn.cs` | Google sign-in, session cookie, and account page |
+| `MobileAuth.cs` | App sign-in: Google ID-token check, API access tokens, rotating refresh tokens |
 | `DuesAdminPage.cs` | Treasurer interface and payment history |
 | `DuesLedger.cs` | Role-gated dues endpoints and transactional payment ledger |
 | `DuesCheckout.cs` | Test checkout and signed Stripe webhooks |
@@ -307,13 +353,13 @@ Compare the preview against the existing site before switching production. Check
 ## Backend work before production
 
 1. Configure the Google OAuth client, then test the player and admin flows through the website sign-in button. Plan Flutter sign-in when the website flow is verified.
-2. Club access is in Postgres (`club_invitations`). Mobile sign-in still needs a token endpoint, because the dues policies only accept the browser session cookie.
+2. Club access is in Postgres (`club_invitations`). Mobile sign-in is built but off (`MobileAuth__Enabled=false`) until the iOS and Android OAuth clients exist and the app is tested against it.
 3. Choose one editing workflow for fixtures. If Sanity Studio stays the editor, add a signed, retryable sync with deletion and reconciliation coverage before serving imported fixtures to the website. If Postgres becomes the editor, add protected write endpoints and an admin workflow.
 4. Deploy the API and its database to Render (see below). Check request timeouts, logs, cache refresh, missing records, and rollback to direct Sanity reads before changing the production environment.
 
 ## Flutter web access
 
-Native clients can call the API over HTTPS. If the Flutter web build is hosted on a separate origin, use a same-origin proxy or add its exact origin under `Cors:PublicOrigins`. For example, `Cors__PublicOrigins__0=http://127.0.0.1:8766` allows local public GET requests from that preview. Sign-in, identity, dues, and payment webhooks are outside this CORS policy.
+Native clients can call the API over HTTPS. If the Flutter web build is hosted on a separate origin, use a same-origin proxy or add its exact origin under `Cors:PublicOrigins`. For example, `Cors__PublicOrigins__0=http://127.0.0.1:8766` allows local public GET requests from that preview. Sign-in, identity, dues, and payment webhooks are outside this CORS policy. Native builds don't need CORS for mobile sign-in or dues. A hosted Flutter web build would need its exact origin in a separate CORS policy for those routes, which doesn't exist yet.
 
 ## Deploy on Render
 
@@ -333,4 +379,5 @@ Notes:
 - **HTTPS:** Render terminates TLS. Because `RENDER=true` is set on Render, the API trusts `X-Forwarded-Proto`, so the Google redirect uses `https` and the session cookie stays Secure. Set `ForwardedHeaders__Enabled=true` on any other host behind a TLS proxy, and only there. HSTS is sent outside Development.
 - **Restarts:** the sign-in key ring is stored in the `data_protection_keys` table, so members stay signed in across deploys and restarts.
 - **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. Checkout only accepts Stripe test keys.
+- **Mobile sign-in:** Render generates `Authentication__Tokens__SigningKey`. Enter the iOS client ID for `Authentication__Google__MobileClientIds__0`, then set `MobileAuth__Enabled=true` when the app is ready. With checkout on as well, also set `Stripe__AppReturnUrl=claymores://dues`.
 - **Running the container elsewhere:** from this folder, run `docker build -t claymores-api .` and then `docker run -p 8080:8080 -e DATABASE_URL=... claymores-api`.

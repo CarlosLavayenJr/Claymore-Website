@@ -75,6 +75,13 @@ builder.Services.AddAuthorization();
 var googleEnabled = GoogleSignIn.Configure(authentication, builder.Configuration);
 if (duesEnabled && (!googleEnabled || string.IsNullOrWhiteSpace(connectionString)))
     throw new InvalidOperationException("Dues requires Google sign-in and a Postgres connection.");
+var mobileAuthEnabled = MobileAuth.IsEnabled(builder.Configuration);
+if (mobileAuthEnabled)
+{
+    if (!googleEnabled || string.IsNullOrWhiteSpace(connectionString))
+        throw new InvalidOperationException("Mobile sign-in requires Google sign-in and a Postgres connection.");
+    MobileAuth.Configure(authentication, builder.Configuration);
+}
 
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
@@ -98,6 +105,8 @@ if (checkoutEnabled)
         throw new InvalidOperationException("Enable dues before enabling Stripe test checkout.");
 
     var checkoutSettings = CheckoutSettings.Read(builder.Configuration);
+    if (mobileAuthEnabled && checkoutSettings.AppReturnUrl is null)
+        throw new InvalidOperationException("Set Stripe:AppReturnUrl (for example claymores://dues) for app checkout.");
     builder.Services.AddSingleton(checkoutSettings);
     builder.Services.AddSingleton(new Stripe.Checkout.SessionService(new Stripe.StripeClient(checkoutSettings.SecretKey)));
     builder.Services.AddSingleton<DuesCheckoutStore>();
@@ -159,6 +168,8 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 GoogleSignIn.Map(app, googleEnabled);
+if (mobileAuthEnabled)
+    MobileAuth.Map(app);
 if (googleEnabled && migrator is not null)
     InvitationEndpoints.Map(app);
 if (duesEnabled)
@@ -167,7 +178,7 @@ if (duesEnabled)
     DuesAdminPage.Map(app);
 }
 if (checkoutEnabled)
-    DuesCheckout.Map(app);
+    DuesCheckout.Map(app, appCheckout: mobileAuthEnabled);
 
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))
     .WithTags("Health")
@@ -314,11 +325,13 @@ api.MapGet("/players/{slug}", async (string slug, SanityData sanity, Cancellatio
 
 app.MapGet("/v1/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityResponse(
     user.FindFirstValue("sub"),
-    user.FindFirstValue("name") ?? user.Identity?.Name)))
+    user.FindFirstValue("name") ?? user.Identity?.Name,
+    user.FindFirstValue("email"),
+    user.FindFirstValue(MobileAuth.RoleClaim))))
     .RequireAuthorization()
     .WithTags("Identity")
     .WithSummary("Get the current API identity")
-    .WithDescription("Provide an access token issued for this API to see the subject and name claims.")
+    .WithDescription("Provide an access token issued for this API to see the subject, name, email, and club role.")
     .Produces<CurrentIdentityResponse>()
     .Produces(StatusCodes.Status401Unauthorized);
 
