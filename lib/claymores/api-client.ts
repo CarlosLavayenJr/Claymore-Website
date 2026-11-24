@@ -167,8 +167,9 @@ export class ClaymoresApiClient {
         return this.request<DuesDetail>('GET', `/v1/dues/mine/${encodeURIComponent(id)}`)
     }
 
-    createCheckoutSession(id: string, amountCents: number) {
-        return this.request<{ url: string }>('POST', `/v1/dues/${encodeURIComponent(id)}/checkout-session`, { amountCents })
+    /** returnTo "web" sends the member back to the website's /account (API config Stripe:WebReturnUrl). */
+    createCheckoutSession(id: string, amountCents: number, returnTo: 'app' | 'web' = 'web') {
+        return this.request<{ url: string }>('POST', `/v1/dues/${encodeURIComponent(id)}/checkout-session`, { amountCents, returnTo })
     }
 
     // --- Admin (bearer, role=admin) ---

@@ -9,12 +9,20 @@
 // player@example.com (player). Any other email is not invited and can request
 // to join. Refresh tokens rotate, and reusing an old one revokes the family,
 // like the real API. Public sports endpoints return empty data.
+//
+// Dues checkout accepts `returnTo: "app" | "web"`. MOCK_WEB_CHECKOUT=off makes
+// "web" fail with 400 web_checkout_unavailable (API without Stripe:WebReturnUrl);
+// MOCK_STRIPE_DOWN=1 makes every checkout fail with 502. The returned "Stripe"
+// URL is fake; open `/account?checkout=returned` or `?checkout=cancelled` on the
+// website to see the return banners.
 
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
 const port = Number(process.env.MOCK_API_PORT ?? 5399)
 const accessTtl = Number(process.env.MOCK_ACCESS_TTL_SECONDS ?? 300) * 1000
+const webCheckout = process.env.MOCK_WEB_CHECKOUT !== 'off'
+const stripeDown = process.env.MOCK_STRIPE_DOWN === '1'
 
 const invitations = new Map([
     ['admin@example.com', { role: 'admin', invitedBy: 'bootstrap', invitedAt: '2026-09-01T12:00:00Z' }],
@@ -166,9 +174,13 @@ const server = createServer(async (req, res) => {
         const d = dues.find(x => x.id === m[1] && x.player === user.email)
         if (!d) return send(res, 404, { error: 'not_found' })
         const a = assessment(d)
-        if (!Number.isInteger(body.amountCents) || body.amountCents < 50) return send(res, 400, { error: 'invalid_request' })
+        if (!Number.isInteger(body.amountCents) || body.amountCents < 50) return send(res, 400, { error: 'invalid_request', field: 'amountCents' })
+        const returnTo = body.returnTo ?? 'app'
+        if (returnTo !== 'app' && returnTo !== 'web') return send(res, 400, { error: 'invalid_request', field: 'returnTo' })
+        if (returnTo === 'web' && !webCheckout) return send(res, 400, { error: 'web_checkout_unavailable' })
         if (body.amountCents > a.balanceCents - a.pendingCheckoutCents) return send(res, 409, { error: 'overpayment' })
-        return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_${randomBytes(6).toString('hex')}` })
+        if (stripeDown) return send(res, 502, { title: 'Stripe could not create the checkout session.' })
+        return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_${returnTo}_${randomBytes(6).toString('hex')}` })
     }
 
     // --- Admin ---

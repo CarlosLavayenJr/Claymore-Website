@@ -25,9 +25,10 @@ export function devSignInEnabled(env: Env = process.env): boolean {
 }
 
 /**
- * Web Stripe checkout needs the API to return players to the website rather
- * than to the app's `Stripe:AppReturnUrl`. Until the API supports a web
- * return URL, the pay button stays hidden unless this flag is set.
+ * Kill switch for web Stripe checkout. The website asks the API for
+ * `returnTo: "web"`, which needs the API's `Stripe:WebReturnUrl`
+ * (https://www.claymoresrfc.com/account). Turn this on once that is set;
+ * until then the pay button stays hidden.
  */
 export function webCheckoutEnabled(env: Env = process.env): boolean {
     return env.CLAYMORES_WEB_CHECKOUT_ENABLED === 'true' || env.CLAYMORES_WEB_CHECKOUT_ENABLED === '1'

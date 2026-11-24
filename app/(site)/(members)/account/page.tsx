@@ -16,6 +16,7 @@ import {
 } from '@/components/members/member-ui'
 import { formatCents, type DuesAssessment, type DuesDetail } from '@/lib/claymores/api-client'
 import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
+import { checkoutReturnStatus } from '@/lib/claymores/checkout'
 import { memberApi } from '@/lib/claymores/member'
 
 export const metadata: Metadata = {
@@ -126,7 +127,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
     if (!session) redirect('/sign-in?callbackUrl=/account')
     const { api, token } = session
     const params = await searchParams
-    const checkout = params.checkout
+    // Stripe returns here via the API's Stripe:WebReturnUrl: /account?checkout=returned|cancelled
+    const checkout = checkoutReturnStatus(params.checkout)
 
     const [me, dues] = await Promise.all([api.me(), api.myDues()])
 

@@ -44,7 +44,7 @@ The site stays public. Sign-in exists only for member features (dues and payment
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google **Web application** OAuth client. Use the API's `Authentication:Google:ClientId` client, or add this client ID to the API's `Authentication:Google:MobileClientIds`, or the API rejects the id_token's audience. |
 | `AUTH_SECRET` | `openssl rand -base64 32`. Encrypts the session and pending-request cookies. |
 | `CLAYMORES_API_BASE_URL` | Claymores API origin. This also switches sports data from Sanity to the API (see above). |
-| `CLAYMORES_WEB_CHECKOUT_ENABLED` | Optional, `true` shows **Pay now**. Leave it off until the API supports a web return URL (TODO below). |
+| `CLAYMORES_WEB_CHECKOUT_ENABLED` | Optional kill switch, `true` shows **Pay now**. Turn it on once the API has `Stripe:WebReturnUrl` set (see **Web dues checkout** below). |
 
 Authorized redirect URIs to register on the Google client: `https://www.claymoresrfc.com/api/auth/callback/google`, plus a stable preview host such as `https://<project>-git-<branch>-<team>.vercel.app/api/auth/callback/google` (each preview hostname must be listed exactly; Google doesn't accept wildcards), and `http://localhost:3000/api/auth/callback/google` for local work.
 
@@ -61,17 +61,17 @@ Authorized redirect URIs to register on the Google client: `https://www.claymore
 
 The single-flight guard is per server instance. Two requests on two different instances in the same instant can still race; the member is then asked to sign in again.
 
-**TODO (API): web checkout return.** `POST /v1/dues/{id}/checkout-session` sends bearer clients back to `Stripe:AppReturnUrl` (`claymores://dues`). The website needs `https://www.claymoresrfc.com/account?checkout=returned|cancelled`. Add a web return URL to the API (for example a `client: "web"` field or a separate `Stripe:WebReturnUrl`), then set `CLAYMORES_WEB_CHECKOUT_ENABLED=true`. The account page already shows the return banners.
+**Web dues checkout.** **Pay now** posts `POST /v1/dues/{id}/checkout-session` with `{"amountCents", "returnTo": "web"}` and redirects to the Stripe-hosted URL the API returns (only `https://` URLs are followed). Stripe then sends the member to the API's `Stripe:WebReturnUrl`, which must be `https://www.claymoresrfc.com/account`; the API appends `?checkout=returned` or `?checkout=cancelled` and `/account` shows the matching banner (a signed-out member goes through sign-in and lands back on the same URL). Set `Stripe:WebReturnUrl` on the API first, then `CLAYMORES_WEB_CHECKOUT_ENABLED=true` on the website. If the flag is on but the API isn't configured, the API answers `400 web_checkout_unavailable` and the member sees "Online payment isn't available yet" instead of a generic error. Other errors: `400 invalid_request` (amount), `404` (not their dues), `409` (over the balance or the session is no longer open), `502` (Stripe). The error mapping lives in `lib/claymores/checkout.ts`.
 
 **Local testing with the mock API.**
 
 ```sh
 MOCK_API_PORT=5399 node scripts/mock-claymores-api.mjs
 CLAYMORES_DEV_SIGN_IN=1 AUTH_GOOGLE_ID=dev AUTH_GOOGLE_SECRET=dev AUTH_SECRET="$(openssl rand -base64 32)" \
-  CLAYMORES_API_BASE_URL=http://127.0.0.1:5399 npm run dev
+  CLAYMORES_API_BASE_URL=http://127.0.0.1:5399 CLAYMORES_WEB_CHECKOUT_ENABLED=true npm run dev
 ```
 
-`CLAYMORES_DEV_SIGN_IN=1` adds a development-only email form on `/sign-in` (never in a production build). Use `player@example.com`, `admin@example.com`, or any other email to try request-to-join. Set `MOCK_ACCESS_TTL_SECONDS=150` to see a token refresh after 30 seconds.
+`CLAYMORES_DEV_SIGN_IN=1` adds a development-only email form on `/sign-in` (never in a production build). The mock's checkout returns a fake Stripe URL; set `MOCK_WEB_CHECKOUT=off` to see the `web_checkout_unavailable` message or `MOCK_STRIPE_DOWN=1` for the `502` message, and open `/account?checkout=returned` to see the return banner. Use `player@example.com`, `admin@example.com`, or any other email to try request-to-join. Set `MOCK_ACCESS_TTL_SECONDS=150` to see a token refresh after 30 seconds.
 
 ### Scheduled jobs
 

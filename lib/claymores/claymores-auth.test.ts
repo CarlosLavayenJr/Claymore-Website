@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ClaymoresApiClient, parseDollarsToCents, type FetchLike } from './api-client'
 import { createRefresher, exchangeGoogleIdToken, needsRefresh, toApiSession } from './api-session'
-import { devSignInEnabled, memberAuthEnabled } from './auth-env'
+import { devSignInEnabled, memberAuthEnabled, webCheckoutEnabled } from './auth-env'
+import { CHECKOUT_UNAVAILABLE_MESSAGE, checkoutOutcome, checkoutReturnStatus } from './checkout'
 import { validateJoinRequest } from './join-request'
 import { findSessionCookie } from './session-cookie'
 
@@ -183,4 +184,41 @@ test('validates the request-to-join form', () => {
     assert.equal(!missing.ok && missing.field, 'name')
     const ok = validateJoinRequest(form({ name: 'Pat', phone: '(407) 555-0100', message: 'Flanker, 3 seasons' }))
     assert.deepEqual(ok.ok && ok.value, { name: 'Pat', phone: '(407) 555-0100', message: 'Flanker, 3 seasons' })
+})
+
+test('checkout asks the API to return to the website', async () => {
+    const { fetch, calls } = fakeFetch(() => json(200, { url: 'https://checkout.stripe.com/c/pay/x' }))
+    const api = new ClaymoresApiClient({ baseUrl: 'https://api', fetch, accessToken: 't' })
+    const result = await api.createCheckoutSession('a/b', 2550)
+    assert.equal(calls[0].url, 'https://api/v1/dues/a%2Fb/checkout-session')
+    assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { amountCents: 2550, returnTo: 'web' })
+    assert.deepEqual(checkoutOutcome(result), { kind: 'redirect', url: 'https://checkout.stripe.com/c/pay/x' })
+    await api.createCheckoutSession('a', 100, 'app')
+    assert.equal(JSON.parse(String(calls[1].init?.body)).returnTo, 'app')
+})
+
+test('checkout maps API errors to member messages', async () => {
+    const outcome = async (status: number, body: unknown) => {
+        const api = new ClaymoresApiClient({ baseUrl: 'https://api', fetch: fakeFetch(() => json(status, body)).fetch })
+        return checkoutOutcome(await api.createCheckoutSession('a', 100))
+    }
+    assert.deepEqual(await outcome(400, { error: 'web_checkout_unavailable' }), { kind: 'error', message: CHECKOUT_UNAVAILABLE_MESSAGE })
+    const invalid = await outcome(400, { error: 'invalid_request', field: 'amountCents' })
+    assert.match(invalid.kind === 'error' ? invalid.message : '', /\$0\.50/)
+    assert.deepEqual(await outcome(401, { error: 'invalid_token' }), { kind: 'sign-in' })
+    assert.match((await outcome(404, { error: 'not_found' }) as { message: string }).message, /wasn’t found/)
+    assert.match((await outcome(409, { error: 'overpayment' }) as { message: string }).message, /already in progress/)
+    assert.match((await outcome(502, { title: 'Stripe' }) as { message: string }).message, /Stripe couldn’t start/)
+    assert.match((await outcome(500, null) as { message: string }).message, /temporarily unavailable/)
+    // A 200 without an https URL is never followed.
+    assert.equal((await outcome(200, { url: 'javascript:alert(1)' })).kind, 'error')
+})
+
+test('reads the checkout return banner and the web checkout kill switch', () => {
+    assert.equal(checkoutReturnStatus('returned'), 'returned')
+    assert.equal(checkoutReturnStatus(['cancelled', 'returned']), 'cancelled')
+    assert.equal(checkoutReturnStatus('paid'), null)
+    assert.equal(checkoutReturnStatus(undefined), null)
+    assert.equal(webCheckoutEnabled({}), false)
+    assert.equal(webCheckoutEnabled({ CLAYMORES_WEB_CHECKOUT_ENABLED: 'true' }), true)
 })
