@@ -338,6 +338,142 @@ public sealed class CheckoutTests(PostgresDatabase database) : IClassFixture<Pos
             session, attempt, 2500, live: false, StripeEvents.Legacy()))).StatusCode);
         Assert.Equal("paid", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", attempt));
     }
+
+    private async Task<string> AdminAsync(string name)
+    {
+        var email = $"{name}@example.com";
+        await _factory!.Services.GetRequiredService<ClubInvitations>().UpsertAsync(email, "admin", "test", Ct);
+        var response = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+            new { idToken = FakeGoogleValidator.Token("sub-" + name, email) }, Ct);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
+        return json.RootElement.GetProperty("accessToken").GetString()!;
+    }
+
+    private Task<HttpResponseMessage> ReleaseAsync(string token, Guid dues, Guid attempt, string? prefix = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"{prefix ?? "/v1/admin/dues"}/{dues}/checkouts/{attempt}/release");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return Client().SendAsync(request, Ct);
+    }
+
+    private async Task AgeCheckoutAsync(Guid attempt, int minutes)
+    {
+        await using var dataSource = database.CreateDataSource();
+        await using var command = dataSource.CreateCommand(
+            "UPDATE dues_checkouts SET created_at = created_at - make_interval(mins => @minutes) WHERE id = @id");
+        command.Parameters.AddWithValue("id", attempt);
+        command.Parameters.AddWithValue("minutes", minutes);
+        await command.ExecuteNonQueryAsync(Ct);
+    }
+
+    /// <summary>A checkout whose create reached Stripe but whose response was lost: pending and unbound.</summary>
+    private async Task<Guid> LostCheckoutAsync(string token, Guid dues)
+    {
+        _stripe.DropResponses = true;
+        Assert.Equal(HttpStatusCode.BadGateway, (await CheckoutAsync(token, dues, new { amountCents = 2500 })).StatusCode);
+        _stripe.DropResponses = false;
+        return await AttemptAsync(dues);
+    }
+
+    [Fact]
+    public async Task Release_frees_an_unbound_checkout_when_stripe_has_no_live_session()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminAsync("release-admin");
+        var token = await SignInAsync("release-none");
+        var dues = await AssignDuesAsync("sub-release-none", 10000);
+
+        // The reservation never reached Stripe at all (the process stopped before the create).
+        var attempt = Guid.NewGuid();
+        await using (var dataSource = database.CreateDataSource())
+        await using (var insert = dataSource.CreateCommand("""
+            INSERT INTO dues_checkouts (id, assessment_id, amount_cents, status, return_to, stripe_mode)
+            VALUES (@id, @dues, 2500, 'pending', 'app', 'test')
+            """))
+        {
+            insert.Parameters.AddWithValue("id", attempt);
+            insert.Parameters.AddWithValue("dues", dues);
+            await insert.ExecuteNonQueryAsync(Ct);
+        }
+
+        // Less than an hour old: left alone, without asking Stripe.
+        var recent = await ReleaseAsync(admin, dues, attempt);
+        Assert.Equal(HttpStatusCode.Conflict, recent.StatusCode);
+        Assert.Equal("""{"error":"too_recent"}""", await recent.Content.ReadAsStringAsync(Ct));
+        Assert.Empty(_stripe.ListQueries);
+
+        await AgeCheckoutAsync(attempt, 13 * 60);
+        // Past 12 hours the member can't resume it, and it blocks a new checkout.
+        Assert.Equal(HttpStatusCode.Conflict, (await CheckoutAsync(token, dues, new { amountCents = 1000 })).StatusCode);
+
+        // Players can't release; the wrong assessment is 404.
+        Assert.Equal(HttpStatusCode.Forbidden, (await ReleaseAsync(token, dues, attempt)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ReleaseAsync(admin, Guid.NewGuid(), attempt)).StatusCode);
+
+        var released = await ReleaseAsync(admin, dues, attempt);
+        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
+        Assert.Equal("""{"status":"released"}""", await released.Content.ReadAsStringAsync(Ct));
+        var query = Assert.Single(_stripe.ListQueries);
+        Assert.Contains("created[gte]=", query);
+        Assert.Contains("created[lte]=", query);
+        Assert.Equal("expired", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", attempt));
+        Assert.Equal("release-admin@example.com",
+            await ScalarAsync<string>("SELECT released_by FROM dues_checkouts WHERE id = @id", attempt));
+
+        // Released once; a second release is a conflict, and the member can start a new checkout.
+        var again = await ReleaseAsync(admin, dues, attempt);
+        Assert.Equal("""{"error":"not_pending"}""", await again.Content.ReadAsStringAsync(Ct));
+        await UrlAsync(await CheckoutAsync(token, dues, new { amountCents = 1000 }));
+    }
+
+    [Fact]
+    public async Task Release_binds_an_open_session_and_releases_an_expired_one()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminAsync("release-admin2");
+        var token = await SignInAsync("release-lost");
+        var open = await AssignDuesAsync("sub-release-lost", 10000);
+        var expired = await AssignDuesAsync("sub-release-lost", 10000);
+
+        // Both creates reached Stripe, and both responses were lost.
+        var openAttempt = await LostCheckoutAsync(token, open);
+        var expiredAttempt = await LostCheckoutAsync(token, expired);
+        await AgeCheckoutAsync(openAttempt, 90);
+        await AgeCheckoutAsync(expiredAttempt, 90);
+        _stripe.Expire(_stripe.SessionFor(expiredAttempt)!);
+
+        // An open session for the checkout exists: bind it instead of releasing.
+        var bound = await ReleaseAsync(admin, open, openAttempt);
+        Assert.Equal(HttpStatusCode.OK, bound.StatusCode);
+        var body = await bound.Content.ReadFromJsonAsync<Dictionary<string, string>>(Ct);
+        Assert.Equal(("bound", "open", _stripe.SessionFor(openAttempt)), (body!["status"], body["sessionStatus"], body["sessionId"]));
+        Assert.Equal(_stripe.SessionFor(openAttempt),
+            await ScalarAsync<string>("SELECT stripe_session_id FROM dues_checkouts WHERE id = @id", openAttempt));
+        Assert.Equal("pending", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", openAttempt));
+        // Now bound: releasing again is refused.
+        Assert.Equal("""{"error":"bound","sessionId":"%s"}""".Replace("%s", _stripe.SessionFor(openAttempt)),
+            await (await ReleaseAsync(admin, open, openAttempt)).Content.ReadAsStringAsync(Ct));
+
+        // Stripe is unavailable: nothing changes.
+        _stripe.FailLists = true;
+        Assert.Equal(HttpStatusCode.BadGateway, (await ReleaseAsync(admin, expired, expiredAttempt)).StatusCode);
+        Assert.Equal("pending", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", expiredAttempt));
+        _stripe.FailLists = false;
+
+        // Only an expired session: released, through the treasurer page's button.
+        var page = new HttpRequestMessage(HttpMethod.Get, DuesAdminPage.Path);
+        page.Headers.Authorization = new AuthenticationHeaderValue("Bearer", admin);
+        var html = await (await Client().SendAsync(page, Ct)).Content.ReadAsStringAsync(Ct);
+        var action = $"{DuesAdminPage.Path}/{expired:D}/checkouts/{expiredAttempt:D}/release";
+        Assert.Contains(action, html);
+        Assert.DoesNotContain($"/checkouts/{openAttempt:D}/release", html);
+
+        var form = await ReleaseAsync(admin, expired, expiredAttempt, DuesAdminPage.Path);
+        Assert.Equal(HttpStatusCode.SeeOther, form.StatusCode);
+        Assert.Equal($"{DuesAdminPage.Path}?notice=checkout-released", form.Headers.Location?.ToString());
+        Assert.Equal("expired", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", expiredAttempt));
+    }
 }
 
 /// <summary>Live mode against Postgres, without hosting the API in Production.</summary>

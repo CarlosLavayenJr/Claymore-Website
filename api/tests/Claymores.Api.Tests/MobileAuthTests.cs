@@ -62,6 +62,25 @@ internal sealed class FakeStripe : HttpMessageHandler
 
     public int SessionCount => _sessions.Count;
 
+    public ConcurrentQueue<string> ListQueries { get; } = new();
+
+    /// <summary>Answer session lists with a Stripe error.</summary>
+    public bool FailLists { get; set; }
+
+    /// <summary>The stored session for a checkout (client_reference_id), if any.</summary>
+    public string? SessionFor(Guid checkout) => _sessions
+        .Where(pair => JsonDocument.Parse(pair.Value).RootElement.GetProperty("client_reference_id").GetString() == checkout.ToString("D"))
+        .Select(pair => pair.Key).FirstOrDefault();
+
+    /// <summary>Marks a stored session expired, as Stripe does after 24 hours.</summary>
+    public void Expire(string sessionId)
+    {
+        var session = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(_sessions[sessionId])!;
+        session["status"] = JsonSerializer.SerializeToElement("expired");
+        session["url"] = JsonSerializer.SerializeToElement<string?>(null);
+        _sessions[sessionId] = JsonSerializer.Serialize(session);
+    }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var path = request.RequestUri!.AbsolutePath;
@@ -100,6 +119,15 @@ internal sealed class FakeStripe : HttpMessageHandler
             _sessions[id] = json;
             _idempotent[key] = (body, json);
             return DropResponses ? Error(HttpStatusCode.InternalServerError, "api_error", "Lost") : Json(json);
+        }
+        if (request.Method == HttpMethod.Get && path == "/v1/checkout/sessions")
+        {
+            // List: every stored session, newest first, on one page. The query is recorded.
+            ListQueries.Enqueue(Uri.UnescapeDataString(request.RequestUri.Query));
+            if (FailLists)
+                return Error(HttpStatusCode.InternalServerError, "api_error", "Unavailable");
+            var data = string.Join(",", _sessions.Values);
+            return Json($$"""{"object":"list","url":"/v1/checkout/sessions","has_more":false,"data":[{{data}}]}""");
         }
         if (request.Method == HttpMethod.Get && path.StartsWith("/v1/checkout/sessions/", StringComparison.Ordinal) &&
             _sessions.TryGetValue(path["/v1/checkout/sessions/".Length..], out var stored))

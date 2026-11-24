@@ -4,6 +4,9 @@ using Npgsql;
 /// <param name="Mode">The Stripe mode that created the row; null for rows created before it was stored (test).</param>
 internal sealed record CheckoutReservation(Guid Id, int AmountCents, DateTime CreatedAt, string? SessionId,
     CheckoutReturn? ReturnTo = null, StripeMode? Mode = null);
+/// <param name="Mode">The Stripe mode that created the row (rows from before it was stored are test).</param>
+internal sealed record CheckoutRecord(Guid Id, Guid AssessmentId, int AmountCents, string Status, string? SessionId,
+    DateTime CreatedAt, StripeMode Mode);
 internal sealed record ReservationResult(CheckoutReservation? Checkout, int ErrorStatus = 0, string? Error = null);
 
 internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
@@ -71,6 +74,56 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("session", sessionId);
         if (await cmd.ExecuteNonQueryAsync(ct) != 1)
             throw new InvalidOperationException("Stripe session did not match its checkout reservation.");
+    }
+
+    /// <summary>A checkout of <paramref name="assessmentId"/>, or null.</summary>
+    public async Task<CheckoutRecord?> FindAsync(Guid assessmentId, Guid checkoutId, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT id, amount_cents, status, stripe_session_id, created_at, COALESCE(stripe_mode, 'test')
+            FROM dues_checkouts WHERE id = @id AND assessment_id = @assessment
+            """);
+        cmd.Parameters.AddWithValue("id", checkoutId);
+        cmd.Parameters.AddWithValue("assessment", assessmentId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct)
+            ? new CheckoutRecord(reader.GetGuid(0), assessmentId, reader.GetInt32(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetDateTime(4),
+                reader.GetString(5) == "live" ? StripeMode.Live : StripeMode.Test)
+            : null;
+    }
+
+    /// <summary>Pending checkouts without a Stripe session that are older than <paramref name="age"/>.</summary>
+    public async Task<List<CheckoutRecord>> ListUnboundAsync(TimeSpan age, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT id, assessment_id, amount_cents, created_at, COALESCE(stripe_mode, 'test') FROM dues_checkouts
+            WHERE status = 'pending' AND stripe_session_id IS NULL AND created_at <= now() - @age
+            ORDER BY created_at, id
+            """);
+        cmd.Parameters.AddWithValue("age", age);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<CheckoutRecord>();
+        while (await reader.ReadAsync(ct))
+            rows.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetInt32(2), "pending", null, reader.GetDateTime(3),
+                reader.GetString(4) == "live" ? StripeMode.Live : StripeMode.Test));
+        return rows;
+    }
+
+    /// <summary>
+    /// Releases a pending checkout that still has no Stripe session: it becomes 'expired' (freeing the
+    /// assessment for a new checkout) and records who released it.
+    /// </summary>
+    /// <returns>False when it was no longer pending and unbound.</returns>
+    public async Task<bool> ReleaseAsync(Guid checkoutId, string releasedBy, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            UPDATE dues_checkouts SET status = 'expired', released_by = @by, released_at = now()
+            WHERE id = @id AND status = 'pending' AND stripe_session_id IS NULL
+            """);
+        cmd.Parameters.AddWithValue("id", checkoutId);
+        cmd.Parameters.AddWithValue("by", releasedBy);
+        return await cmd.ExecuteNonQueryAsync(ct) == 1;
     }
 
     private static CheckoutReturn ParseReturn(string value) => value switch
