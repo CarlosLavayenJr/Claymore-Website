@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/api_base.dart';
@@ -16,6 +17,7 @@ import '../features/auth/auth_service.dart';
 import '../features/fixtures/availability.dart';
 import 'config.dart';
 import 'deep_links.dart';
+import 'launch_intro.dart';
 import 'router.dart';
 import 'services.dart';
 import 'theme.dart';
@@ -58,7 +60,11 @@ class ClaymoresApp extends StatefulWidget {
     this.members,
     this.teams,
     this.deepLinks = const Stream.empty(),
+    this.playIntro = true,
   });
+
+  /// The crest's launch animation (see [LaunchIntro]).
+  final bool playIntro;
 
   final ClubRepository repository;
 
@@ -143,6 +149,8 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       debugShowCheckedModeBanner: false,
       theme: buildClaymoresTheme(),
       routerConfig: router,
+      builder: (context, child) =>
+          LaunchIntro(play: widget.playIntro, child: child!),
     ),
   );
 }
