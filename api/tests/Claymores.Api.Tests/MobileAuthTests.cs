@@ -649,20 +649,137 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
     }
 
     [Fact]
-    public async Task Apple_and_google_subjects_never_collide()
+    public async Task Google_and_apple_with_the_same_email_are_one_member()
     {
         database.SkipIfUnavailable();
         await InviteAsync("collide@example.com");
         var google = await SignInAsync("same-sub", "collide@example.com");
-        var apple = await AppleAsync("same-sub", "collide@example.com");
+        var dues = await AssignDuesAsync("same-sub", 5000);
+
+        // Apple with the same email signs in as the Google member and sees the same dues.
+        var apple = await AppleAsync("apple-sub", "collide@example.com");
         Assert.Equal(HttpStatusCode.OK, apple.StatusCode);
+        var appleBody = (await apple.Content.ReadFromJsonAsync<TokenBody>(Ct))!;
         Assert.Equal("same-sub", google.User.Subject);
-        Assert.Equal("apple|same-sub", (await apple.Content.ReadFromJsonAsync<TokenBody>(Ct))!.User.Subject);
+        Assert.Equal("same-sub", appleBody.User.Subject);
+        var mine = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/dues/mine", appleBody.AccessToken), Ct);
+        Assert.Contains(dues.ToString(), await mine.Content.ReadAsStringAsync(Ct));
 
         await using var dataSource = database.CreateDataSource();
         await using var count = dataSource.CreateCommand(
-            "SELECT count(*) FROM club_members WHERE google_subject IN ('same-sub', 'apple|same-sub')");
-        Assert.Equal(2L, await count.ExecuteScalarAsync(Ct));
+            "SELECT count(*) FROM club_members WHERE google_subject IN ('same-sub', 'apple|apple-sub')");
+        Assert.Equal(1L, await count.ExecuteScalarAsync(Ct));
+        var providers = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/me/identities", google.AccessToken), Ct);
+        Assert.Equal("""{"providers":["apple","google"]}""", await providers.Content.ReadAsStringAsync(Ct));
+
+        // Apple first, then Google, works the same way round.
+        await InviteAsync("apple-first@example.com");
+        var first = (await (await AppleAsync("first-apple", "apple-first@example.com"))
+            .Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        var then = await SignInAsync("then-google", "apple-first@example.com");
+        Assert.Equal("apple|first-apple", first.User.Subject);
+        Assert.Equal("apple|first-apple", then.User.Subject);
+    }
+
+    [Fact]
+    public async Task A_hidden_email_apple_account_signs_in_after_linking()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("linker@example.com");
+        var google = await SignInAsync("linker-google", "linker@example.com");
+        const string relay = "x7k2@privaterelay.appleid.com";
+
+        // Not invited under the relay address: request to join.
+        Assert.Equal(HttpStatusCode.Forbidden, (await AppleAsync("linker-apple", relay)).StatusCode);
+
+        var link = await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple", google.AccessToken,
+            new { identityToken = FakeAppleValidator.Token("linker-apple", relay, "n-link"), rawNonce = "n-link" }), Ct);
+        Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+        Assert.Equal("""{"providers":["apple","google"]}""", await link.Content.ReadAsStringAsync(Ct));
+        // Linking again is fine.
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple",
+            google.AccessToken, new { identityToken = FakeAppleValidator.Token("linker-apple", relay, "n2"), rawNonce = "n2" }), Ct)).StatusCode);
+
+        var apple = await AppleAsync("linker-apple", relay);
+        Assert.Equal(HttpStatusCode.OK, apple.StatusCode);
+        var body = (await apple.Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        Assert.Equal("linker-google", body.User.Subject);
+        Assert.Equal("linker@example.com", body.User.Email);
+
+        // Another member can't take that Apple account; a bad token is refused.
+        await InviteAsync("other@example.com");
+        var other = await SignInAsync("other-google", "other@example.com");
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple",
+            other.AccessToken, new { identityToken = FakeAppleValidator.Token("linker-apple", relay, "n3"), rawNonce = "n3" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple",
+            other.AccessToken, new { identityToken = "garbage", rawNonce = "n4" }), Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Linking_folds_in_an_apple_account_that_signed_in_on_its_own()
+    {
+        database.SkipIfUnavailable();
+        const string relay = "solo@privaterelay.appleid.com";
+        await InviteAsync(relay);
+        await InviteAsync("main@example.com");
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("solo-apple", relay)).StatusCode);
+        var google = await SignInAsync("main-google", "main@example.com");
+
+        var link = await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple", google.AccessToken,
+            new { identityToken = FakeAppleValidator.Token("solo-apple", relay, "n-fold"), rawNonce = "n-fold" }), Ct);
+        Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+        var apple = (await (await AppleAsync("solo-apple", relay)).Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        Assert.Equal("main-google", apple.User.Subject);
+        await using var dataSource = database.CreateDataSource();
+        await using var gone = dataSource.CreateCommand("SELECT count(*) FROM club_members WHERE google_subject = 'apple|solo-apple'");
+        Assert.Equal(0L, await gone.ExecuteScalarAsync(Ct));
+
+        // A standalone Apple member with dues is not folded in.
+        const string relay2 = "paid@privaterelay.appleid.com";
+        await InviteAsync(relay2);
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("paid-apple", relay2)).StatusCode);
+        await AssignDuesAsync("apple|paid-apple", 1000);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/identities/apple",
+            google.AccessToken, new { identityToken = FakeAppleValidator.Token("paid-apple", relay2, "n-p"), rawNonce = "n-p" }), Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_migration_merges_members_that_share_an_email()
+    {
+        database.SkipIfUnavailable();
+        await using var dataSource = database.CreateDataSource();
+        async Task Sql(string sql)
+        {
+            await using var command = dataSource.CreateCommand(sql);
+            await command.ExecuteNonQueryAsync(Ct);
+        }
+        async Task<object?> Scalar(string sql)
+        {
+            await using var command = dataSource.CreateCommand(sql);
+            return await command.ExecuteScalarAsync(Ct);
+        }
+        // Two members with one email (from before migration 016), dues on the later one.
+        await Sql("""
+            DELETE FROM member_identities WHERE member_subject IN ('dup-old', 'apple|dup-new');
+            INSERT INTO club_members (google_subject, email, first_sign_in_at) VALUES
+                ('dup-old', 'dup@example.com', now() - interval '2 days'),
+                ('apple|dup-new', 'DUP@example.com ', now() - interval '1 day');
+            INSERT INTO dues_assessments (id, player_subject, description, amount_cents)
+                VALUES (gen_random_uuid(), 'apple|dup-new', 'Season dues', 5000);
+            """);
+        var sql = new StreamReader(typeof(DatabaseMigrator).Assembly
+            .GetManifestResourceStream("sql/016_member_identities.sql")!).ReadToEnd();
+        await using (var connection = await dataSource.OpenConnectionAsync(Ct))
+        await using (var transaction = await connection.BeginTransactionAsync(Ct))
+        {
+            await using var migrate = new Npgsql.NpgsqlCommand(sql, connection, transaction);
+            await migrate.ExecuteNonQueryAsync(Ct);
+            await transaction.CommitAsync(Ct);
+        }
+
+        Assert.Equal(0L, await Scalar("SELECT count(*) FROM club_members WHERE google_subject = 'apple|dup-new'"));
+        Assert.Equal("dup-old", await Scalar("SELECT member_subject FROM member_identities WHERE provider_subject = 'apple|dup-new'"));
+        Assert.Equal(1L, await Scalar("SELECT count(*) FROM dues_assessments WHERE player_subject = 'dup-old'"));
     }
 
     [Fact]

@@ -118,13 +118,17 @@ internal static class MobileAuth
                 if (google is null || !google.EmailVerified)
                     return InvalidToken();
 
-                var member = new ClubMember(google.Subject, google.Email, google.Name);
+                // One member per person: this Google account may belong to a member who first
+                // signed in with Apple (same email, or linked).
+                var signIn = new ClubMember(google.Subject, google.Email, google.Name);
+                var member = await directory.ResolveAsync(signIn, ct);
                 var role = await ClubRoles.ResolveAsync(VerifiedPrincipal(member), configuration,
                     context.RequestServices.GetService<ClubInvitations>(), ct);
                 if (role is null)
                     return NotInvited();
 
                 await directory.ObserveSignInAsync(member, ct);
+                await directory.RememberIdentityAsync(signIn.Subject, member.Subject, ct);
                 if (context.RequestServices.GetService<AutomaticDues>() is { } automatic)
                     await automatic.EnsureAsync(member.Subject, role, ct);
                 var refresh = await sessions.StartAsync(member, ct);
@@ -134,7 +138,10 @@ internal static class MobileAuth
             .Produces<MobileTokenResponse>().Produces(401).Produces(403);
 
         if (app.Services.GetRequiredService<MobileAuthSettings>().AppleAudiences.Length > 0)
+        {
             AppleSignIn.Map(group);
+            AppleSignIn.MapLink(app);
+        }
 
         group.MapPost("/refresh", async (MobileRefreshRequest request, MobileSessionStore sessions, MobileTokens tokens,
                 IConfiguration configuration, HttpContext context, ILogger<MobileSessionStore> logger, CancellationToken ct) =>
