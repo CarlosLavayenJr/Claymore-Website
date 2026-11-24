@@ -12,6 +12,7 @@ import '../features/profile/profile_page.dart';
 import '../features/standings/standings_page.dart';
 import '../shared/widgets.dart';
 import 'deep_links.dart';
+import 'launch_intro.dart';
 
 /// Tabs live in a [StatefulShellRoute] so each keeps its scroll position and
 /// filters. Detail screens (match, profile, dues) open on the root navigator
@@ -105,7 +106,12 @@ class ClubShell extends StatelessWidget {
     appBar: AppBar(
       title: Row(
         children: [
-          Image.asset('assets/crest.png', width: 24, height: 37),
+          Image.asset(
+            'assets/crest.png',
+            key: appBarCrestKey,
+            width: 24,
+            height: 37,
+          ),
           const SizedBox(width: 12),
           const Text('CLAYMORES RFC'),
         ],
