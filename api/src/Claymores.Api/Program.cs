@@ -72,6 +72,7 @@ var authentication = builder.Services.AddAuthentication(JwtBearerDefaults.Authen
         }
     });
 builder.Services.AddAuthorization();
+JoinRequestEndpoints.AddRateLimiting(builder.Services, builder.Configuration);
 var googleEnabled = GoogleSignIn.Configure(authentication, builder.Configuration);
 if (duesEnabled && (!googleEnabled || string.IsNullOrWhiteSpace(connectionString)))
     throw new InvalidOperationException("Dues requires Google sign-in and a Postgres connection.");
@@ -101,6 +102,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     {
         builder.Services.AddSingleton<ClubInvitations>();
         builder.Services.AddSingleton<ClubMemberDirectory>();
+        builder.Services.AddSingleton<JoinRequestStore>();
     }
     if (duesEnabled)
         builder.Services.AddSingleton<DuesLedger>();
@@ -179,11 +181,15 @@ if (!app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 GoogleSignIn.Map(app, googleEnabled);
 if (mobileAuthEnabled)
     MobileAuth.Map(app);
 if (googleEnabled && migrator is not null)
+{
     InvitationEndpoints.Map(app);
+    JoinRequestEndpoints.Map(app, mobileAuthEnabled);
+}
 if (duesEnabled)
 {
     DuesEndpoints.Map(app);

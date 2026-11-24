@@ -31,8 +31,11 @@ internal static class DuesAdminPage
             ? """<p class="empty">No dues have been assigned.</p>"""
             : $"""<ul class="assessment-list">{string.Concat(assessments.Select(RenderEntry))}</ul>""";
 
+        var joinLink = context.RequestServices.GetService<JoinRequestStore>() is null
+            ? ""
+            : $""" · <a href="{JoinRequestAdminPage.Path}">Join requests</a>""";
         return GoogleSignIn.RenderPage("Manage dues", $"""
-            <div class="admin-back"><a href="/auth/account">Back to club account</a></div>
+            <div class="admin-back"><a href="/auth/account">Back to club account</a>{joinLink}</div>
             <section class="account-header">
               <div>
                 <h1>Manage dues</h1>
@@ -147,13 +150,8 @@ internal static class DuesAdminPage
         });
     }
 
-    private static ValueTask<object?> SameOrigin(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
-    {
-        context.HttpContext.Response.Headers.CacheControl = "no-store";
-        return context.HttpContext.Request.Headers["Sec-Fetch-Site"] == "same-origin"
-            ? next(context)
-            : ValueTask.FromResult<object?>(Results.StatusCode(StatusCodes.Status403Forbidden));
-    }
+    private static ValueTask<object?> SameOrigin(EndpointFilterInvocationContext context, EndpointFilterDelegate next) =>
+        SameOriginGuard.Filter(context, next);
 
     private static IResult ReturnToPage(HttpContext context, string notice)
     {

@@ -191,7 +191,5 @@ internal static class DuesEndpoints
     }
 
     private static ValueTask<object?> SameOrigin(EndpointFilterInvocationContext context, EndpointFilterDelegate next) =>
-        context.HttpContext.Request.Headers["Sec-Fetch-Site"] == "same-origin"
-            ? next(context)
-            : ValueTask.FromResult<object?>(Results.StatusCode(403));
+        SameOriginGuard.Filter(context, next);
 }
