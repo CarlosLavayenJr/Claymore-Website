@@ -34,14 +34,16 @@ class ClubPage extends StatelessWidget {
                     '(see README). Release builds hide this section.',
               ),
             ],
-            const SizedBox(height: 20),
-            const SectionHeading('NOTIFICATIONS'),
-            Panel(
-              child: AlertSettings(
-                notifications: services.notifications,
-                prefs: services.prefs,
+            if (AppConfig.notificationsEnabled) ...[
+              const SizedBox(height: 20),
+              const SectionHeading('NOTIFICATIONS'),
+              Panel(
+                child: AlertSettings(
+                  notifications: services.notifications,
+                  prefs: services.prefs,
+                ),
               ),
-            ),
+            ],
             if (AppConfig.duesEnabled && auth.signedIn) ...[
               const SizedBox(height: 20),
               const SectionHeading('PLAYER DUES'),

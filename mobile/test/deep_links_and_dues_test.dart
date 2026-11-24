@@ -101,7 +101,12 @@ void main() {
     );
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('NOTIFICATIONS'), findsOneWidget);
+    expect(
+      find.textContaining('Your balance updates after Stripe confirms'),
+      findsNothing,
+    );
+    // Push isn't configured, so the notification switches stay hidden.
+    expect(find.text('NOTIFICATIONS'), findsNothing);
   });
 
   group('PayDuesForm', () {

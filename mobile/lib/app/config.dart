@@ -8,7 +8,16 @@ abstract final class AppConfig {
 
   /// Match availability pickers. Off until responses sync with the API; even
   /// then they only show to signed-in members. Everything else is public.
-  static const availabilityEnabled = bool.fromEnvironment('ENABLE_AVAILABILITY');
+  static const availabilityEnabled = bool.fromEnvironment(
+    'ENABLE_AVAILABILITY',
+  );
+
+  /// Match and practice notification switches under the Club tab. Off until
+  /// push is configured (APNs key, Firebase): App Review rejects controls that
+  /// don't work.
+  static const notificationsEnabled = bool.fromEnvironment(
+    'ENABLE_NOTIFICATIONS',
+  );
 
   /// Shows Google sign-in under the Club tab.
   static const signInEnabled = bool.fromEnvironment('ENABLE_SIGN_IN');
