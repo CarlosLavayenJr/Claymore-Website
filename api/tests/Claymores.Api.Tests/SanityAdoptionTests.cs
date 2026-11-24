@@ -137,6 +137,10 @@ public sealed class SanityAdoptionPostgresTests(PostgresDatabase database) : ICl
                 (reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
         }
 
+        // The CMS spelling of the team names wins over rugbyfl.com's ("Jacksonville D3").
+        Assert.Equal("Jacksonville v Claymores", await Scalar<string>(
+            "SELECT home_team_raw || ' v ' || away_team_raw FROM fixtures WHERE fixture_date = '2025-11-22'"));
+
         // Hand-created doc with an opponent we did not know: a needs_review team and a locked row.
         Assert.Equal(1L, await Scalar<long>("""
             SELECT count(*) FROM fixtures f JOIN teams t ON t.id = f.away_team_id

@@ -363,7 +363,7 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
     /// Writes Sanity hand edits onto scraper rows (see <see cref="SanityAdoption"/>), in one transaction.
     /// The row is found by (date, home team, away team), else by the Sanity document it was adopted
     /// from earlier (the document's date or teams changed, so the row moves), else it is inserted.
-    /// Sanity's values win, except that a blank kickoff or venue keeps the stored one. Every adopted
+    /// Sanity's values win, team names included, except that a blank kickoff or venue keeps the stored one. Every adopted
     /// row gets manual_override, so later scrapes leave it alone. Rerunning changes nothing.
     /// </summary>
     public async Task<AdoptionOutcome[]> AdoptFixturesAsync(IReadOnlyList<AdoptionItem> items, CancellationToken ct)
@@ -447,7 +447,9 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
             // A moved row takes the document's date, teams and names, and a fresh id derived from its new
             // key (origin_sanity_id still links it to the document). Keeping the old rfl-{oldDate}-... id
             // would make a later scrape of the old key collide with it on the primary key.
-            // Otherwise the scraped names and the id stay. Adopting also un-retires the row.
+            // Otherwise the id stays. The CMS team names always win ("Orlando Griffins" over rugbyfl.com's
+            // "Orlando"): fixture URLs are built from them and editors keep them clean. Adopting also
+            // un-retires the row unless the document is hidden.
             var newId = moved
                 ? await FreeFixtureIdAsync(connection, transaction, FixtureId(c.Date, home.Id, away.Id),
                     c.Date, home.Id, away.Id, existing, ct)
@@ -456,8 +458,7 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 UPDATE fixtures f SET
                     sanity_id = @new_id, retired_at = CASE WHEN @hidden THEN COALESCE(f.retired_at, now()) END,
                     fixture_date = @date, home_team = @home, away_team = @away, home_team_id = @home_id, away_team_id = @away_id,
-                    home_team_raw = CASE WHEN @moved THEN @home_raw ELSE f.home_team_raw END,
-                    away_team_raw = CASE WHEN @moved THEN @away_raw ELSE f.away_team_raw END,
+                    home_team_raw = @home_raw, away_team_raw = @away_raw,
                     season = @season, status = @status, match_type = @match_type, competition = @competition, note = @note,
                     home_score = @home_score, away_score = @away_score,
                     kickoff_time = COALESCE(@kickoff, f.kickoff_time), venue = COALESCE(@venue, f.venue),
@@ -465,11 +466,11 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 WHERE f.sanity_id = @id AND (
                     f.fixture_date, f.home_team_id, f.away_team_id, f.season, f.status, f.match_type, f.competition, f.note,
                     f.home_score, f.away_score, f.kickoff_time, f.venue, f.manual_override, f.origin_sanity_id,
-                    f.sanity_id, f.retired_at IS NOT NULL)
+                    f.sanity_id, f.retired_at IS NOT NULL, f.home_team_raw, f.away_team_raw)
                     IS DISTINCT FROM (
                     @date, @home_id, @away_id, @season, @status, @match_type, @competition, @note,
                     @home_score, @away_score, COALESCE(@kickoff, f.kickoff_time), COALESCE(@venue, f.venue), true, @origin,
-                    @new_id, @hidden)
+                    @new_id, @hidden, @home_raw, @away_raw)
                 """, connection, transaction);
             update.Parameters.AddWithValue("id", existing);
             update.Parameters.AddWithValue("new_id", newId);
