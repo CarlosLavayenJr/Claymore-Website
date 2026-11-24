@@ -191,7 +191,7 @@ void main() {
         ),
       );
       expect(find.text('MEN DIVISION 3 · 2026-2027'), findsOneWidget);
-      final us = find.text('Central Florida Claymores RFC');
+      final us = find.text('Central Florida Claymores');
       expect(us, findsOneWidget);
       final row = tester.widget<Container>(
         find.ancestor(of: us, matching: find.byType(Container)).first,
@@ -247,7 +247,7 @@ void main() {
       fail = false;
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.text('Central Florida Claymores RFC'), findsOneWidget);
+      expect(find.text('Central Florida Claymores'), findsOneWidget);
     });
   });
 }

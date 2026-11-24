@@ -104,3 +104,42 @@ class TeamMonogram extends StatelessWidget {
     ),
   );
 }
+
+/// A team's name as the club writes it: the matched team's CMS name for a
+/// scraped one ("Brevard Old Red Eye RFC (D3)" shows as "Brevard Red Eyes"),
+/// through the same aliases [TeamLogo] uses. Falls back to [name] when no
+/// team matches. Matches the website's standings table.
+class TeamName extends StatelessWidget {
+  const TeamName(
+    this.name, {
+    super.key,
+    this.style,
+    this.maxLines = 1,
+    this.overflow = TextOverflow.ellipsis,
+  });
+
+  final String name;
+  final TextStyle? style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+
+  static String display(String name, Team? team) {
+    final resolved = team?.name.trim();
+    return resolved == null || resolved.isEmpty ? name : resolved;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final directory =
+        AppScope.maybeOf(context)?.teams ?? TeamLogo._fallbackDirectory;
+    return ListenableBuilder(
+      listenable: directory,
+      builder: (context, _) => Text(
+        display(name, directory.resolve(name)),
+        maxLines: maxLines,
+        overflow: overflow,
+        style: style,
+      ),
+    );
+  }
+}

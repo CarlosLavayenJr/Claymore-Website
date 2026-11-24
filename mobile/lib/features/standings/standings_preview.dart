@@ -188,14 +188,7 @@ class _Card extends StatelessWidget {
                 children: [
                   TeamLogo(name: row.teamName, size: 24),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      row.teamName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: cell(row),
-                    ),
-                  ),
+                  Expanded(child: TeamName(row.teamName, style: cell(row))),
                 ],
               ),
               played: Text('${row.played}', style: cell(row)),
