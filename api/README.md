@@ -143,6 +143,31 @@ In the same Google Cloud project as the web client:
 
 The API checks each ID token's signature against Google's published keys, its issuer (`https://accounts.google.com` or `accounts.google.com`), its audience, its expiry, and `email_verified`.
 
+### Sign in with Apple
+
+App Store guideline 4.8 requires Sign in with Apple in an iOS app that offers Google sign-in. The app uses native Sign in with Apple and trades Apple's identity token for the same API tokens. `POST /v1/auth/mobile/apple` is mapped only when `MobileAuth:Enabled` is on and at least one `Authentication:Apple:ClientIds` entry is set (`Authentication__Apple__ClientIds__0=com.claymoresrfc.claymores`, already in `render.yaml`). No migration is needed.
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/apple` | `{"identityToken":"<Apple identity token>","rawNonce":"<nonce before hashing>","fullName":"Pat Player"}` (`fullName` optional) | `200` with the same tokens as Google. `401 {"error":"invalid_token"}` for a bad, expired, or wrong-audience token, a nonce mismatch, or an unverified email. `403 {"error":"not_invited"}` when the email isn't invited, or `403 {"error":"not_invited","email":"<relay address>"}` when it is an `@privaterelay.appleid.com` address. |
+
+- **Token checks:** RS256 signature against Apple's keys at `https://appleid.apple.com/auth/keys` (cached, and fetched again once when a token names an unknown key ID), issuer `https://appleid.apple.com`, audience in `Authentication:Apple:ClientIds`, expiry, `email_verified` (Apple sends it as a string or a boolean), and the `nonce` claim. The app sends Apple the lowercase hex SHA-256 of a random raw nonce and sends the raw nonce here; the API hashes it and compares. A token can't be replayed with a different nonce.
+- **Subjects:** stored as `apple|<Apple sub>` in `club_members`, `mobile_refresh_tokens` and `dues_assessments.player_subject`, so they can't collide with Google subjects (which stay unprefixed). The same person signing in with Google and with Apple has two member records; assign dues to the one they use.
+- **Role:** resolved from the email in the token, like Google. Refresh re-checks the invitation with the email stored on the session.
+- **Name:** Apple sends the name to the app only on the first authorization. The API stores `fullName` when it is present and otherwise keeps the stored name.
+- **Hide My Email:** a member who hides their email signs in with an address like `x7k2@privaterelay.appleid.com`, which won't match their invitation. The `403` includes that address and the app shows it. An admin can invite that exact address (`PUT /v1/admin/invitations/{email}`, as for any email), or the member can use Google or sign in with Apple again after choosing **Share My Email** (first remove the app under Settings > [your name] > Sign-In & Security > Sign in with Apple).
+
+#### Apple Developer setup
+
+1. In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) > **Identifiers**, open the App ID `com.claymoresrfc.claymores` and enable the **Sign in with Apple** capability ("Enable as a primary App ID"). Save, then regenerate any manually managed provisioning profiles. Automatic signing in Xcode picks it up.
+2. The app already has `ios/Runner/Runner.entitlements` with `com.apple.developer.applesignin = [Default]`.
+
+Nothing else is needed for native sign-in. The identity token's audience is the bundle ID, and the API verifies it with Apple's public keys, so there is **no Services ID and no Sign in with Apple key**. Those are needed only for:
+
+- Sign in with Apple on Android or the web (a Services ID with a return URL). The app doesn't offer it there.
+- Calling Apple's REST API (`/auth/token`, `/auth/revoke`) with a client secret signed by a Sign in with Apple private key. Apple asks apps that offer account deletion (guideline 5.1.1(v)) to revoke the user's Apple tokens when the account is deleted. Members are invitation-based and the app has no account deletion yet; if it adds one, create a key and use `/auth/revoke` then.
+- Server-to-server notifications (email forwarding changes, account deletion) are optional and can be added later on the App ID.
+
 ### App checkout and the `claymores://` link
 
 With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-session` with `{"amountCents":2500}` returns `{"url":"https://checkout.stripe.com/..."}`. Open that URL in the browser. Stripe sends the player back to `Stripe:AppReturnUrl` with `?checkout=returned` or `?checkout=cancelled`, for example `claymores://dues?checkout=returned`. Register the `claymores` scheme in the app (iOS `CFBundleURLTypes`, Android intent filter) and refresh dues when it opens. The balance changes only after Stripe's signed webhook arrives, never because of the return link.
@@ -460,5 +485,5 @@ Notes:
 - **HTTPS:** Render terminates TLS. Because `RENDER=true` is set on Render, the API trusts `X-Forwarded-Proto`, so the Google redirect uses `https` and the session cookie stays Secure. Set `ForwardedHeaders__Enabled=true` on any other host behind a TLS proxy, and only there. HSTS is sent outside Development.
 - **Restarts:** the sign-in key ring is stored in the `data_protection_keys` table, so members stay signed in across deploys and restarts.
 - **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. Checkout only accepts Stripe test keys.
-- **Mobile sign-in:** Render generates `Authentication__Tokens__SigningKey`. Enter the iOS client ID for `Authentication__Google__MobileClientIds__0`, then set `MobileAuth__Enabled=true` when the app is ready. With checkout on as well, also set `Stripe__AppReturnUrl=claymores://dues`.
+- **Mobile sign-in:** Render generates `Authentication__Tokens__SigningKey`. Enter the iOS client ID for `Authentication__Google__MobileClientIds__0`. `Authentication__Apple__ClientIds__0` is preset to the bundle ID for Sign in with Apple. Then set `MobileAuth__Enabled=true` when the app is ready. With checkout on as well, also set `Stripe__AppReturnUrl=claymores://dues`.
 - **Running the container elsewhere:** from this folder, run `docker build -t claymores-api .` and then `docker run -p 8080:8080 -e DATABASE_URL=... claymores-api`.

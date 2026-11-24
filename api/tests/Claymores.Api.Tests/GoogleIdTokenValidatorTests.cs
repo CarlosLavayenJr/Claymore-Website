@@ -10,7 +10,7 @@ namespace Claymores.Api.Tests;
 public sealed class GoogleIdTokenValidatorTests
 {
     private static readonly RsaSecurityKey GoogleKey = new(RSA.Create(2048)) { KeyId = "google-test" };
-    private static readonly MobileAuthSettings Settings = new(new byte[32], ["ios-client", "web-client"]);
+    private static readonly MobileAuthSettings Settings = new(new byte[32], ["ios-client", "web-client"], []);
 
     private static GoogleIdTokenValidator Validator()
     {

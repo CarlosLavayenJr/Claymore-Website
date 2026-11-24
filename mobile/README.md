@@ -1,6 +1,6 @@
 # Claymores RFC · Flutter starter
 
-A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. Club contains the player preview, notification settings and (when configured) Google sign-in, which leads to a profile with dues and card payments.
+A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. Club contains the player preview, notification settings and (when configured) Google sign-in and, on iOS, Sign in with Apple, which leads to a profile with dues and card payments.
 
 ## Run it
 
@@ -92,10 +92,11 @@ Sign-in and dues are behind dart-defines so a release build without the config s
 
 | Define | Purpose |
 |---|---|
-| `ENABLE_SIGN_IN=true` | Shows the Account section under Club. Also needs the two below. |
+| `ENABLE_SIGN_IN=true` | Shows the Account section under Club. Also needs the API URL and at least one provider (Google client ID, or Apple on iOS). |
 | `CLAYMORES_API_BASE_URL` | API server, HTTPS in release builds. |
-| `GOOGLE_SERVER_CLIENT_ID` | The OAuth **web** client ID the API verifies. Passed to google_sign_in as `serverClientId`, so it becomes the ID token's audience. |
+| `GOOGLE_SERVER_CLIENT_ID` | The OAuth **web** client ID the API verifies. Passed to google_sign_in as `serverClientId`, so it becomes the ID token's audience. Without it, Google sign-in is hidden. |
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID (iOS only). |
+| `ENABLE_APPLE_SIGN_IN` | Sign in with Apple, iOS only. Defaults to `true`; set `false` to hide it. |
 | `ENABLE_DUES=true` | Shows dues on the profile. |
 
 ```sh
@@ -110,6 +111,30 @@ Google Cloud setup (per the google_sign_in docs):
 - **Android:** create an Android OAuth client for `com.claymoresrfc.claymores` with the SHA-1 of each signing key (debug and release). No client ID is passed in code; the web client ID above is the server client ID.
 - **iOS:** create an iOS OAuth client for the bundle ID, pass it as `GOOGLE_IOS_CLIENT_ID`, and add its *reversed* client ID (`com.googleusercontent.apps.123-ios`) as another URL scheme in `ios/Runner/Info.plist` under `CFBundleURLTypes`.
 - **Web:** google_sign_in 7 can't produce an ID token from a custom button on the web, so the web build tells people to use the mobile app.
+
+### Sign in with Apple (iOS)
+
+App Store guideline 4.8 requires Sign in with Apple because the app offers Google sign-in, so on iOS the Account section shows Apple's black **Sign in with Apple** button under the Google button. It isn't shown on Android or the web.
+
+- Each attempt makes a random 64-character raw nonce, passes its lowercase hex SHA-256 to Apple (`SignInWithApple.getAppleIDCredential(nonce: ...)`), and sends `{"identityToken", "rawNonce", "fullName"}` to `POST /v1/auth/mobile/apple`. The API checks that the token's `nonce` claim is the hash of `rawNonce`.
+- Apple shares the person's name only the first time they authorize the app. The app sends it then, and the API keeps it.
+- If someone chose **Hide My Email**, Apple gives a `@privaterelay.appleid.com` address that won't match their invitation. The API answers `403 {"error":"not_invited","email":"..."}` and the app shows: "This Apple ID shares a private relay email (x@privaterelay.appleid.com). Ask a club admin to invite that address, or sign in with Google."
+- `ios/Runner/Runner.entitlements` holds the `com.apple.developer.applesignin` capability and is set as `CODE_SIGN_ENTITLEMENTS` for Debug, Release and Profile. The App ID must have **Sign in with Apple** enabled in the Apple Developer portal (see `api/README.md`), or signing fails.
+
+**Run it on an iPhone.** The simulator can show Apple's sheet but needs a signed-in Apple ID and is unreliable, so use a device:
+
+1. Open `ios/Runner.xcworkspace` in Xcode. Under **Runner > Signing & Capabilities**, choose the club's team. With automatic signing Xcode creates or updates the provisioning profile with the Sign in with Apple capability from `Runner.entitlements`. A free personal team can't use this capability.
+2. Connect the iPhone (Developer Mode on), then run from this folder:
+
+   ```sh
+   flutter run -d <iphone-id> --dart-define=ENABLE_SIGN_IN=true \
+     --dart-define=CLAYMORES_API_BASE_URL=https://api.example.com \
+     --dart-define=GOOGLE_SERVER_CLIENT_ID=123-web.apps.googleusercontent.com \
+     --dart-define=GOOGLE_IOS_CLIENT_ID=123-ios.apps.googleusercontent.com
+   ```
+
+   `flutter devices` lists the device ID. The API must have `Authentication__Apple__ClientIds__0=com.claymoresrfc.claymores` and mobile sign-in enabled.
+3. Open **Club** and tap **Sign in with Apple**. To see the first-time flow again (name and email choice), remove the app under **Settings > [your name] > Sign-In & Security > Sign in with Apple** on the iPhone.
 
 How the session works (`lib/features/auth/auth_service.dart`): the Google ID token is exchanged at `POST /v1/auth/mobile/google`. The access token stays in memory; the refresh token is kept in `flutter_secure_storage` (Keychain / Android Keystore). The app refreshes a minute before `accessTokenExpiresAt` and after any 401, with one shared refresh in flight because the API rotates refresh tokens. A 401/403 from refresh signs out. `403 {"error":"not_invited"}` shows a "Not invited yet" notice. Sign out calls `POST /v1/auth/mobile/logout`.
 

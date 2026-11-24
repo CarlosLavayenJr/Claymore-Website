@@ -16,6 +16,20 @@ class AuthApi {
   Future<AuthSession> signInWithGoogle(String idToken) =>
       _session('/v1/auth/mobile/google', {'idToken': idToken});
 
+  /// Exchanges an Apple identity token. [rawNonce] is the value whose SHA-256
+  /// was sent to Apple; [fullName] only arrives on the first authorization.
+  /// 401: invalid token or nonce. 403 `not_invited`, with `email` for a
+  /// private relay address.
+  Future<AuthSession> signInWithApple({
+    required String identityToken,
+    required String rawNonce,
+    String? fullName,
+  }) => _session('/v1/auth/mobile/apple', {
+    'identityToken': identityToken,
+    'rawNonce': rawNonce,
+    if (fullName != null && fullName.isNotEmpty) 'fullName': fullName,
+  });
+
   /// Rotates the refresh token. 401/403 end the session.
   Future<AuthSession> refresh(String refreshToken) =>
       _session('/v1/auth/mobile/refresh', {'refreshToken': refreshToken});

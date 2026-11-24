@@ -1,6 +1,10 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 /// Where the refresh token lives between launches.
 abstract interface class TokenStore {
@@ -94,5 +98,83 @@ class GoogleIdTokenSource implements IdTokenSource {
   Future<void> signOut() async {
     await _init();
     await GoogleSignIn.instance.signOut();
+  }
+}
+
+/// What the API needs from a native Apple sign-in.
+class AppleCredential {
+  const AppleCredential({
+    required this.identityToken,
+    required this.rawNonce,
+    this.fullName,
+  });
+
+  final String identityToken;
+
+  /// The nonce before hashing. Apple saw only [hashNonce] of it.
+  final String rawNonce;
+
+  /// Apple sends the name only the first time a person authorizes the app.
+  final String? fullName;
+}
+
+/// Produces an Apple identity token for the API to verify.
+abstract interface class AppleCredentialSource {
+  bool get supported;
+
+  /// Null when the person cancels the Apple sheet.
+  Future<AppleCredential?> credential();
+}
+
+/// A fresh random nonce for one sign-in attempt (64 URL-safe characters).
+String newRawNonce() => generateNonce(length: 64);
+
+/// Lowercase hex SHA-256 of [rawNonce]. Apple puts this value in the identity
+/// token's `nonce` claim; the API recomputes it from the raw nonce.
+String hashNonce(String rawNonce) =>
+    sha256.convert(utf8.encode(rawNonce)).toString();
+
+/// Native Sign in with Apple, offered on iOS only. (Android would need Apple's
+/// web flow and a Services ID, which the club doesn't use.)
+class NativeAppleCredentialSource implements AppleCredentialSource {
+  const NativeAppleCredentialSource({this.enabled = true});
+
+  final bool enabled;
+
+  @override
+  bool get supported =>
+      enabled && !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  @override
+  Future<AppleCredential?> credential() async {
+    final rawNonce = newRawNonce();
+    try {
+      final result = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashNonce(rawNonce),
+      );
+      final token = result.identityToken;
+      if (token == null) {
+        throw const SignInWithAppleCredentialsException(
+          message: 'Apple returned no identity token.',
+        );
+      }
+      final name = [result.givenName, result.familyName]
+          .whereType<String>()
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .join(' ');
+      return AppleCredential(
+        identityToken: token,
+        rawNonce: rawNonce,
+        fullName: name.isEmpty ? null : name,
+      );
+    } on SignInWithAppleAuthorizationException catch (error) {
+      if (error.code == AuthorizationErrorCode.canceled) return null;
+      rethrow;
+    }
   }
 }

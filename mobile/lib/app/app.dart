@@ -20,22 +20,31 @@ import 'services.dart';
 import 'theme.dart';
 
 /// Builds the session from the dart-defines. Disabled unless sign-in is
-/// switched on and both the API and the Google web client ID are set, so a
-/// release build without that config shows no sign-in UI at all.
+/// switched on and the API is set, and at least one provider is configured
+/// (the Google web client ID, or Sign in with Apple, which is on by default
+/// and shown on iOS only). A release build without that config shows no
+/// sign-in UI at all.
 AuthService authFromConfig() {
   final base = ApiBase.tryParse(AppConfig.apiBaseUrl);
+  final google = AppConfig.googleServerClientId.isEmpty
+      ? null
+      : GoogleIdTokenSource(
+          serverClientId: AppConfig.googleServerClientId,
+          iosClientId: AppConfig.googleIosClientId,
+        );
+  final apple = AppConfig.appleSignInEnabled
+      ? const NativeAppleCredentialSource()
+      : null;
   if (!AppConfig.signInEnabled ||
       base == null ||
-      AppConfig.googleServerClientId.isEmpty) {
+      (google == null && apple == null)) {
     return AuthService.disabled();
   }
   return AuthService(
     api: AuthApi(base),
     store: const SecureTokenStore(),
-    google: GoogleIdTokenSource(
-      serverClientId: AppConfig.googleServerClientId,
-      iosClientId: AppConfig.googleIosClientId,
-    ),
+    google: google,
+    apple: apple,
   );
 }
 

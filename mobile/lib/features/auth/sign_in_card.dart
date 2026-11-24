@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../app/deep_links.dart';
 import '../../app/services.dart';
@@ -54,20 +55,18 @@ class SignInCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Players sign in with the Google account the club invited.',
+                Text(
+                  auth.canSignInWithApple
+                      ? 'Players sign in with the email address the club invited.'
+                      : 'Players sign in with the Google account the club invited.',
                 ),
                 if (auth.message != null) ...[
                   const SizedBox(height: 6),
                   Text(auth.message!, style: textTheme.bodySmall),
                 ],
                 const SizedBox(height: 12),
-                if (auth.canSignIn)
-                  FilledButton.icon(
-                    onPressed: auth.signIn,
-                    icon: const Icon(Icons.login),
-                    label: const Text('SIGN IN WITH GOOGLE'),
-                  )
+                if (auth.canSignIn || auth.canSignInWithApple)
+                  SignInButtons(auth: auth)
                 else
                   Text(
                     'Sign in from the Claymores iOS or Android app.',
@@ -114,7 +113,9 @@ class _NotInvited extends StatelessWidget {
                 'This Google account hasn’t been invited to the club app.',
           ),
           const SizedBox(height: 12),
-          if (auth.canSignIn)
+          if (auth.canSignInWithApple)
+            SignInButtons(auth: auth)
+          else if (auth.canSignIn)
             OutlinedButton(
               onPressed: auth.signIn,
               child: const Text('TRY ANOTHER ACCOUNT'),
@@ -122,5 +123,40 @@ class _NotInvited extends StatelessWidget {
         ],
       ),
     ),
+  );
+}
+
+/// Google and (on iOS) Sign in with Apple. Apple's button follows its
+/// guidelines: black, Apple logo, the standard "Sign in with Apple" label.
+class SignInButtons extends StatelessWidget {
+  const SignInButtons({super.key, required this.auth});
+  final AuthService auth;
+
+  static const _width = 260.0;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (auth.canSignIn)
+        SizedBox(
+          width: _width,
+          height: 44,
+          child: FilledButton.icon(
+            onPressed: auth.signIn,
+            icon: const Icon(Icons.login),
+            label: const Text('SIGN IN WITH GOOGLE'),
+          ),
+        ),
+      if (auth.canSignIn && auth.canSignInWithApple) const SizedBox(height: 10),
+      if (auth.canSignInWithApple)
+        SizedBox(
+          width: _width,
+          child: SignInWithAppleButton(
+            key: const Key('sign-in-with-apple'),
+            onPressed: auth.signInWithApple,
+          ),
+        ),
+    ],
   );
 }

@@ -15,7 +15,7 @@ enum AuthStatus {
   signingIn,
   signedIn,
 
-  /// The Google account is valid but has no club invitation (403).
+  /// The Google account or Apple ID is valid but has no club invitation (403).
   notInvited,
   failed,
 }
@@ -29,7 +29,8 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   AuthService({
     required AuthApi this._api,
     required this._store,
-    required IdTokenSource this._google,
+    this._google,
+    this._apple,
     DateTime Function()? now,
     this.refreshLeeway = const Duration(seconds: 60),
   }) : _now = now ?? DateTime.now,
@@ -39,6 +40,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     : _api = null,
       _store = MemoryTokenStore(),
       _google = null,
+      _apple = null,
       _now = DateTime.now,
       refreshLeeway = Duration.zero,
       _status = AuthStatus.disabled;
@@ -46,6 +48,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   final AuthApi? _api;
   final TokenStore _store;
   final IdTokenSource? _google;
+  final AppleCredentialSource? _apple;
   final DateTime Function() _now;
   final Duration refreshLeeway;
 
@@ -61,8 +64,11 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   bool get signedIn => _status == AuthStatus.signedIn && _session != null;
   bool get enabled => _api != null;
 
-  /// Sign-in can be attempted on this platform (Google SDK available).
+  /// Google sign-in can be attempted on this platform (Google SDK available).
   bool get canSignIn => enabled && (_google?.supported ?? false);
+
+  /// Sign in with Apple can be attempted (iOS only).
+  bool get canSignInWithApple => enabled && (_apple?.supported ?? false);
 
   /// A message for the last failure, suitable for the UI.
   String? get message => _message;
@@ -93,15 +99,52 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
         unawaited(google.signOut().catchError((Object _) {}));
         return _set(AuthStatus.notInvited);
       }
-      _message = error.statusCode == 401
-          ? 'Google sign-in couldn’t be verified. Try again.'
-          : 'The club server couldn’t sign you in (${error.statusCode}).';
-      _set(AuthStatus.failed);
+      _fail(error, 'Google');
     } on Exception {
       _message =
           'Sign-in didn’t complete. Check your connection and try again.';
       _set(AuthStatus.failed);
     }
+  }
+
+  Future<void> signInWithApple() async {
+    final api = _api, apple = _apple;
+    if (api == null || apple == null) return;
+    _message = null;
+    _set(AuthStatus.signingIn);
+    try {
+      final credential = await apple.credential();
+      if (credential == null) return _set(AuthStatus.signedOut);
+      await _accept(
+        await api.signInWithApple(
+          identityToken: credential.identityToken,
+          rawNonce: credential.rawNonce,
+          fullName: credential.fullName,
+        ),
+      );
+    } on ApiException catch (error) {
+      if (error.notInvited) {
+        final relay = error.email;
+        _message = relay != null
+            ? 'This Apple ID shares a private relay email ($relay). '
+                  'Ask a club admin to invite that address, or sign in with Google.'
+            : 'The email on this Apple ID hasn’t been invited to the club app. '
+                  'Ask a club admin for an invitation, or sign in with Google.';
+        return _set(AuthStatus.notInvited);
+      }
+      _fail(error, 'Apple');
+    } on Exception {
+      _message =
+          'Sign-in didn’t complete. Check your connection and try again.';
+      _set(AuthStatus.failed);
+    }
+  }
+
+  void _fail(ApiException error, String provider) {
+    _message = error.statusCode == 401
+        ? '$provider sign-in couldn’t be verified. Try again.'
+        : 'The club server couldn’t sign you in (${error.statusCode}).';
+    _set(AuthStatus.failed);
   }
 
   Future<void> signOut() async {

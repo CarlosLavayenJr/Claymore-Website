@@ -4,21 +4,29 @@ internal sealed record ClubMember(string Subject, string Email, string? Name);
 
 internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfiguration configuration)
 {
-    public async Task ObserveSignInAsync(ClubMember member, CancellationToken ct)
+    /// <param name="keepExistingName">
+    /// Keep the stored name when <paramref name="member"/> has none (Apple sends the name only once).
+    /// </param>
+    /// <returns>The member's stored display name after the update.</returns>
+    public async Task<string?> ObserveSignInAsync(ClubMember member, CancellationToken ct, bool keepExistingName = false)
     {
         await using var command = dataSource.CreateCommand("""
             INSERT INTO club_members (google_subject, email, display_name)
             VALUES (@subject, @email, @name)
             ON CONFLICT (google_subject) DO UPDATE SET
                 email = EXCLUDED.email,
-                display_name = EXCLUDED.display_name,
+                display_name = CASE WHEN @keepName
+                    THEN COALESCE(EXCLUDED.display_name, club_members.display_name)
+                    ELSE EXCLUDED.display_name END,
                 last_sign_in_at = now()
+            RETURNING display_name
             """);
         command.Parameters.AddWithValue("subject", member.Subject);
         command.Parameters.AddWithValue("email", member.Email.Trim());
         command.Parameters.Add("name", NpgsqlTypes.NpgsqlDbType.Text).Value =
             (object?)member.Name ?? DBNull.Value;
-        await command.ExecuteNonQueryAsync(ct);
+        command.Parameters.AddWithValue("keepName", keepExistingName);
+        return await command.ExecuteScalarAsync(ct) as string;
     }
 
     public async Task<List<ClubMember>> ListAsync(CancellationToken ct)
