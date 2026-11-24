@@ -29,8 +29,45 @@ export type DuesAssessment = {
     pendingCheckoutCents: number
 }
 
-export type DuesPayment = { id: string; amountCents: number; recordedAt: string }
+/** How a payment was made. "stripe" is set by the API for card checkouts; admins record the rest. */
+export type PaymentMethod = 'stripe' | 'cash' | 'venmo' | 'zelle' | 'check' | 'other'
+/** Methods an admin can record by hand (everything except Stripe). */
+export type ManualPaymentMethod = Exclude<PaymentMethod, 'stripe'>
+
+export type DuesPayment = {
+    id: string
+    amountCents: number
+    recordedAt: string
+    /** null for payments recorded before methods were tracked. */
+    method?: PaymentMethod | string | null
+    /** Admin-only; always null on the player routes. */
+    note?: string | null
+}
 export type DuesDetail = { assessment: DuesAssessment; payments: DuesPayment[] }
+
+/** A dues assessment as the admin routes return it: always names the player. */
+export type AdminDuesAssessment = DuesAssessment & { playerSubject: string }
+export type AdminDuesDetail = { assessment: AdminDuesAssessment; payments: DuesPayment[] }
+
+/** A member who has signed in at least once (GET /v1/admin/members). */
+export type ClubMember = { subject: string; email: string; name: string | null }
+
+export type NewDuesAssessment = {
+    /** Client-generated idempotency key; reuse it (with the identical body) on retry. */
+    id: string
+    playerSubject: string
+    description: string
+    amountCents: number
+    dueDate?: string
+}
+
+export type NewDuesPayment = {
+    /** Client-generated idempotency key; reuse it (with the identical body) on retry. */
+    id: string
+    amountCents: number
+    method: ManualPaymentMethod
+    note?: string
+}
 
 export type JoinRequestStatus = 'none' | 'pending' | 'approved' | 'denied'
 
@@ -204,6 +241,30 @@ export class ClaymoresApiClient {
 
     deleteInvitation(email: string) {
         return this.request<null>('DELETE', `/v1/admin/invitations/${encodeURIComponent(email)}`)
+    }
+
+    /** Members who have signed in at least once (the dues player picker). */
+    members() {
+        return this.request<ClubMember[]>('GET', '/v1/admin/members')
+    }
+
+    /** Every dues assessment in the club. 404 when dues are switched off in the API. */
+    allDues() {
+        return this.request<AdminDuesAssessment[]>('GET', '/v1/admin/dues')
+    }
+
+    duesDetail(id: string) {
+        return this.request<AdminDuesDetail>('GET', `/v1/admin/dues/${encodeURIComponent(id)}`)
+    }
+
+    /** 201 on success. Idempotent on `input.id`. */
+    createDues(input: NewDuesAssessment) {
+        return this.request<unknown>('POST', '/v1/admin/dues', input)
+    }
+
+    /** Records a cash/Venmo/Zelle/check/other payment. Idempotent on `input.id`. */
+    recordDuesPayment(assessmentId: string, input: NewDuesPayment) {
+        return this.request<unknown>('POST', `/v1/admin/dues/${encodeURIComponent(assessmentId)}/payments`, input)
     }
 }
 

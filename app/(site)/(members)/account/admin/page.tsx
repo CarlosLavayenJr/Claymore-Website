@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { approveJoinRequest, denyJoinRequest, removeInvitation, saveInvitation } from './actions'
+import { DuesSection } from './dues-section'
 import { ConfirmSubmit } from '@/components/members/confirm-submit'
 import {
     CardHeading,
@@ -174,7 +175,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     return (
         <>
             <MemberHeader eyebrow="Claymores RFC · Admin" title="Club admin">
-                Review requests to join and manage who can sign in. <Link href="/account" className={linkClass}>Back to my account</Link>
+                Review requests to join, manage who can sign in, and keep track of dues. <Link href="/account" className={linkClass}>Back to my account</Link>
             </MemberHeader>
 
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
@@ -239,6 +240,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         )}
                     </div>
                 </MemberCard>
+
+                <DuesSection api={api} />
             </div>
         </>
     )
