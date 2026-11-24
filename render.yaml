@@ -24,6 +24,8 @@ services:
           property: connectionString
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      - key: Swagger__Enabled
+        value: "true"
       - key: Cors__PublicOrigins__0
         value: https://www.claymoresrfc.com
       # Serve scraped Postgres data (see api/README.md, Cutover). Standings seasons not yet in
