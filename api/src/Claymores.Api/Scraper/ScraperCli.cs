@@ -41,11 +41,11 @@ public static class ScraperCli
             }
             case "--adopt-sanity-overrides":
             {
-                // Reads Sanity only; writes scraper rows in Postgres. Never run automatically.
+                // Reads Sanity only; writes scraper rows in Postgres. Runs hourly as a Render cron job.
                 var docs = await services.GetRequiredService<SanityData>().FixturesForAdoptionAsync(ct);
                 var result = await SanityAdoption.RunAsync(store, docs, ct);
                 Console.WriteLine($"Sanity hand edits: {result.Adopted} adopted (new rows), {result.Updated} updated, " +
-                                  $"{result.Unchanged} unchanged, {result.UnresolvedNames.Count} unresolved names, " +
+                                  $"{result.Unchanged} unchanged, {result.Released} released, {result.UnresolvedNames.Count} unresolved names, " +
                                   $"{result.Skipped.Count} skipped.");
                 foreach (var line in result.Lines)
                     Console.WriteLine("  " + line);

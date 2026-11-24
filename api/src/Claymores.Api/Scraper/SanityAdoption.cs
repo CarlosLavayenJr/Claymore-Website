@@ -5,21 +5,26 @@ using System.Text.RegularExpressions;
 /// <summary>A Sanity match document that was edited or created by hand, in the shape the scraper table stores.</summary>
 public sealed record AdoptionCandidate(
     string SanityId, DateOnly Date, int Season, string HomeTeam, string AwayTeam, int? HomeScore, int? AwayScore,
-    string Status, string? MatchType, string? Competition, string? Note, TimeOnly? Kickoff, string? Venue);
+    string Status, string? MatchType, string? Competition, string? Note, TimeOnly? Kickoff, string? Venue,
+    bool Hidden = false);
 
 public sealed record AdoptionItem(AdoptionCandidate Candidate, TeamRef Home, TeamRef Away);
 
-public enum AdoptionOutcome { Adopted, Updated, Unchanged }
+public enum AdoptionOutcome { Adopted, Updated, Unchanged, Released }
 
 public sealed record AdoptionResult(
     int Adopted, int Updated, int Unchanged, IReadOnlyList<string> UnresolvedNames, IReadOnlyList<string> Skipped,
-    IReadOnlyList<string> Lines);
+    IReadOnlyList<string> Lines, int Released = 0);
 
 /// <summary>
 /// Carries Sanity's hand edits over to the scraper rows before cutover (--adopt-sanity-overrides).
 /// A document is a hand edit when <c>manualOverride</c> is true or its <c>_id</c> was not written by
 /// the website scraper (which always uses a <c>scraped-</c> prefix). Each one becomes, or overwrites,
 /// the scraper row with the same (date, home team, away team) and locks it with manual_override.
+/// A document with <c>hidden</c> checked is a hand edit too: its row is locked and retired, so it
+/// disappears from the API and later scrapes can't bring it back. A row adopted earlier whose
+/// document is no longer a hand edit (both boxes unticked) is released back to the scraper.
+/// Runs hourly (render.yaml) and by hand with --adopt-sanity-overrides.
 /// </summary>
 public static partial class SanityAdoption
 {
@@ -29,7 +34,11 @@ public static partial class SanityAdoption
 
     public static bool IsHandEdit(JsonElement doc) =>
         (doc.TryGetProperty("manualOverride", out var flag) && flag.ValueKind == JsonValueKind.True) ||
+        IsHidden(doc) ||
         (Text(doc, "id") is { } id && !id.StartsWith("scraped-", StringComparison.Ordinal));
+
+    public static bool IsHidden(JsonElement doc) =>
+        doc.TryGetProperty("hidden", out var hidden) && hidden.ValueKind == JsonValueKind.True;
 
     /// <summary>Reads a Sanity match document. Returns null and a reason when it cannot be stored.</summary>
     public static AdoptionCandidate? Parse(JsonElement doc, out string? problem)
@@ -71,7 +80,7 @@ public static partial class SanityAdoption
         }
         var season = Number(doc, "season") ?? RugbyFlParser.SeasonFor(date);
         return new AdoptionCandidate(id, date, season, home, away, Number(doc, "homeScore"), Number(doc, "awayScore"),
-            status, matchType, Text(doc, "competition"), Text(doc, "note"), kickoff, Text(doc, "venue"));
+            status, matchType, Text(doc, "competition"), Text(doc, "note"), kickoff, Text(doc, "venue"), IsHidden(doc));
     }
 
     /// <summary>"1:00 PM", "1:00pm", "1pm", "13:00" and "1:00 p.m." all read as 13:00.</summary>
@@ -98,12 +107,15 @@ public static partial class SanityAdoption
 
     public static async Task<AdoptionResult> RunAsync(ScrapeStore store, IEnumerable<JsonElement> sanityFixtures, CancellationToken ct)
     {
+        var docs = sanityFixtures as IReadOnlyCollection<JsonElement> ?? sanityFixtures.ToArray();
+        // An empty answer from Sanity is an outage or a wrong dataset, never "every edit was undone".
+        if (docs.Count == 0) throw new InvalidOperationException("Sanity returned no match documents; nothing synced.");
         var resolver = await store.LoadResolverAsync(ct);
         var unresolved = new List<string>();
         var skipped = new List<string>();
         var lines = new List<string>();
         var items = new List<AdoptionItem>();
-        foreach (var doc in sanityFixtures.Where(IsHandEdit))
+        foreach (var doc in docs.Where(IsHandEdit))
         {
             if (Parse(doc, out var problem) is not { } candidate)
             {
@@ -126,10 +138,17 @@ public static partial class SanityAdoption
         var outcomes = await store.AdoptFixturesAsync(distinct, ct);
         foreach (var (item, outcome) in distinct.Zip(outcomes))
             lines.Add($"{outcome.ToString().ToUpperInvariant(),-9} {item.Candidate.Date:yyyy-MM-dd} {item.Candidate.HomeTeam} v " +
-                      $"{item.Candidate.AwayTeam} ({item.Candidate.SanityId}, {item.Candidate.Status}" +
+                      $"{item.Candidate.AwayTeam} ({item.Candidate.SanityId}, {(item.Candidate.Hidden ? "hidden" : item.Candidate.Status)}" +
                       $"{(item.Candidate.Competition is { } c ? ", " + c : "")})");
+
+        // Documents that still exist but are no longer hand edits: hand their rows back to the scraper.
+        // Rows whose document is gone are left alone (a deletion is not an instruction).
+        var released = await store.ReleaseFixturesAsync(
+            docs.Where(doc => !IsHandEdit(doc)).Select(doc => Text(doc, "id")).OfType<string>().ToArray(), ct);
+        foreach (var line in released)
+            lines.Add($"{"RELEASED",-9} {line}");
         return new AdoptionResult(outcomes.Count(o => o == AdoptionOutcome.Adopted), outcomes.Count(o => o == AdoptionOutcome.Updated),
-            outcomes.Count(o => o == AdoptionOutcome.Unchanged), unresolved.Distinct().ToArray(), skipped, lines);
+            outcomes.Count(o => o == AdoptionOutcome.Unchanged), unresolved.Distinct().ToArray(), skipped, lines, released.Count);
     }
 
     private static string? Text(JsonElement element, string property) =>

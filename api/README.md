@@ -346,7 +346,8 @@ Teams, players and practices always read Sanity. `GET /v1/teams` stays there bec
 | `dotnet run -- --scrape-standings [--force]` | Scrapes the championship in `championship_config`. `--force` runs even when `active` is false. |
 | `dotnet run -- --scrape-standings --championship-id 162 --season-label 2023-2024 [--division-name ...]` | Backfills one championship without stamping `championship_config` |
 | `dotnet run -- --import-reference-data` | Copies Sanity team profiles to Postgres (slug, city, website, logo URL, aliases) and copies the `leagueChampionship` singleton to `championship_config`. It never writes to Sanity. |
-| `dotnet run -- --adopt-sanity-overrides` | Copies Sanity's hand edits onto scraper rows and locks them with `manual_override`. Reads Sanity only. Nothing runs it automatically. See [Cutover](#cutover). |
+| `dotnet run -- --adopt-sanity-overrides` | Copies Sanity's hand edits onto scraper rows and locks them with `manual_override`, hides matches with **Hide this match** checked, and hands rows back to the scraper when both boxes are unticked. Reads Sanity only. Runs hourly as the `claymores-sync-cms` cron job. See [Fixing scraped data in the CMS](#fixing-scraped-data-in-the-cms). |
+| `dotnet run -- --hide-fixtures <id> …` | Hides and locks scraper rows by ID, for games with no Sanity document. Prefer **Hide this match** in Studio. |
 | `dotnet run -- --compare-with-sanity` | Reports differences between scraped Postgres data and Sanity. See [Cutover](#cutover). |
 
 Each command applies pending migrations first, then prints a JSON summary. A run where every page fails exits with code 1. Every run is logged in `scrape_runs` with its kind, trigger, parameters, status, summary, and error.
@@ -401,12 +402,22 @@ SELECT id, name, slug FROM teams WHERE needs_review ORDER BY created_at;   -- ad
 SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT 20;
 ```
 
+### Fixing scraped data in the CMS
+
+rugbyfl.com is sometimes wrong. Fix it in Sanity Studio (`/studio`), the same way as before:
+
+- **Wrong score, status, date, teams, kickoff or venue:** edit the match and check **Manual Override**. The scrapers leave it alone, and the hourly `claymores-sync-cms` job copies it to the API (and so the app) within the hour.
+- **A game that never happened:** check **Hide this match** instead of deleting it. It disappears from the website and the API within the hour, and stays hidden. Deleting doesn't work: the website's scraper re-creates deleted current-season games, and the API never sees a deletion.
+- **Undo:** untick both boxes. The API row goes back to the scraper, which refreshes it from rugbyfl.com on its next run.
+
+A match created by hand in Studio (an `_id` without the `scraped-` prefix) counts as a fix even without Manual Override. The job refuses to run if Sanity returns no matches at all, so an outage can't undo every fix.
+
 ### Cutover
 
 Render one-off jobs don't run through a shell, so run each step as its own job (`dotnet Claymores.Api.dll <command>`), in this order:
 
 1. **Scrape.** `--import-reference-data` once (logos, slugs, aliases and the current championship from Sanity), then `--scrape-fixtures --all`, `--scrape-fixtures` (adds venues for the current season), and `--scrape-standings --force` plus any backfills (`--scrape-standings --championship-id 191 --season-label 2025-2026`).
-2. **Adopt.** `--adopt-sanity-overrides`. Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row and gives it a new ID derived from its new key (`origin_sanity_id` still links it to the document), so a later scrape that still lists the old date can insert it without a primary key conflict. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
+2. **Adopt.** `--adopt-sanity-overrides` (also hourly, see below). Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row and gives it a new ID derived from its new key (`origin_sanity_id` still links it to the document), so a later scrape that still lists the old date can insert it without a primary key conflict. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
 3. **Compare.** `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Kickoffs are compared as times ("1:00pm" equals "1:00 PM"). Locked rows that equal Sanity count as matching and are tallied on a `LOCKED` line. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference. Standings rows are compared by team, and playoff lists are compared too. Review what is left and resolve teams in `needs_review`.
 4. **Serve Postgres.** `render.yaml` sets `Fixtures__Source=scraper` and `Standings__Source=postgres` on the web service (see [Read sources](#scraper)). This changes what the Vercel preview and the app read. The production website still reads Sanity directly. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity. To roll back, set either value to `sanity`.
 5. **Point the production website at the API** (`CLAYMORES_API_BASE_URL` in the Vercel Production environment) once the preview is verified.

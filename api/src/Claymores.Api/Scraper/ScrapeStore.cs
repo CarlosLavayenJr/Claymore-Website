@@ -317,6 +317,29 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
         return lines;
     }
 
+    /// <summary>
+    /// Hands rows adopted from the given Sanity documents back to the scraper: clears manual_override,
+    /// the origin link and retired_at, so the next scrape refreshes them from rugbyfl.com (or retires
+    /// them if it no longer lists them). Used when both CMS boxes are unticked again.
+    /// </summary>
+    /// <returns>"id date home vs away" for each row released.</returns>
+    public async Task<List<string>> ReleaseFixturesAsync(IReadOnlyList<string> sanityIds, CancellationToken ct)
+    {
+        if (sanityIds.Count == 0) return [];
+        await using var command = dataSource.CreateCommand("""
+            UPDATE fixtures SET manual_override = false, origin_sanity_id = NULL, retired_at = NULL, updated_at = now()
+            WHERE source = 'scraper' AND origin_sanity_id = ANY(@ids)
+            RETURNING sanity_id, fixture_date, home_team_raw, away_team_raw
+            """);
+        command.Parameters.AddWithValue("ids", sanityIds.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var lines = new List<string>();
+        while (await reader.ReadAsync(ct))
+            lines.Add($"{reader.GetString(0)} {reader.GetFieldValue<DateOnly>(1):yyyy-MM-dd} {reader.GetString(2)} vs {reader.GetString(3)}");
+        lines.Sort(StringComparer.Ordinal);
+        return lines;
+    }
+
     /// <summary>Scraper rows that are not retired, for the Sanity comparison.</summary>
     public async Task<StoredFixture[]> ScrapedFixturesAsync(CancellationToken ct)
     {
@@ -373,6 +396,7 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 p.Add("kickoff", NpgsqlDbType.Time).Value = c.Kickoff is { } kickoff ? kickoff : DBNull.Value;
                 p.Add("venue", NpgsqlDbType.Text).Value = (object?)c.Venue ?? DBNull.Value;
                 p.AddWithValue("origin", c.SanityId);
+                p.AddWithValue("hidden", c.Hidden);
             }
 
             string? existing;
@@ -406,11 +430,11 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                     INSERT INTO fixtures (
                         sanity_id, source, fixture_date, season, home_team, away_team, home_team_id, away_team_id,
                         home_team_raw, away_team_raw, status, match_type, competition, note, home_score, away_score,
-                        kickoff_time, venue, manual_override, origin_sanity_id, updated_at, payload)
+                        kickoff_time, venue, manual_override, origin_sanity_id, updated_at, payload, retired_at)
                     VALUES (
                         @id, 'scraper', @date, @season, @home, @away, @home_id, @away_id,
                         @home_raw, @away_raw, @status, @match_type, @competition, @note, @home_score, @away_score,
-                        @kickoff, @venue, true, @origin, now(), '{}'::jsonb)
+                        @kickoff, @venue, true, @origin, now(), '{}'::jsonb, CASE WHEN @hidden THEN now() END)
                     """, connection, transaction);
                 insert.Parameters.AddWithValue("id", id);
                 Bind(insert.Parameters);
@@ -430,7 +454,7 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 : existing;
             await using var update = new NpgsqlCommand("""
                 UPDATE fixtures f SET
-                    sanity_id = @new_id, retired_at = NULL,
+                    sanity_id = @new_id, retired_at = CASE WHEN @hidden THEN COALESCE(f.retired_at, now()) END,
                     fixture_date = @date, home_team = @home, away_team = @away, home_team_id = @home_id, away_team_id = @away_id,
                     home_team_raw = CASE WHEN @moved THEN @home_raw ELSE f.home_team_raw END,
                     away_team_raw = CASE WHEN @moved THEN @away_raw ELSE f.away_team_raw END,
@@ -441,11 +465,11 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 WHERE f.sanity_id = @id AND (
                     f.fixture_date, f.home_team_id, f.away_team_id, f.season, f.status, f.match_type, f.competition, f.note,
                     f.home_score, f.away_score, f.kickoff_time, f.venue, f.manual_override, f.origin_sanity_id,
-                    f.sanity_id, f.retired_at)
+                    f.sanity_id, f.retired_at IS NOT NULL)
                     IS DISTINCT FROM (
                     @date, @home_id, @away_id, @season, @status, @match_type, @competition, @note,
                     @home_score, @away_score, COALESCE(@kickoff, f.kickoff_time), COALESCE(@venue, f.venue), true, @origin,
-                    @new_id, NULL::timestamptz)
+                    @new_id, @hidden)
                 """, connection, transaction);
             update.Parameters.AddWithValue("id", existing);
             update.Parameters.AddWithValue("new_id", newId);

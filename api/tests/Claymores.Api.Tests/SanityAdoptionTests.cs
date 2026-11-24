@@ -12,6 +12,8 @@ public sealed class SanityAdoptionRuleTests
     [InlineData("""{"id":"scraped-2025-09-20-x","manualOverride":true}""", true)]
     [InlineData("""{"id":"scraped-2025-09-20-x","manualOverride":false}""", false)]
     [InlineData("""{"id":"scraped-2025-09-20-x"}""", false)]
+    [InlineData("""{"id":"scraped-2025-09-20-x","hidden":true}""", true)]
+    [InlineData("""{"id":"scraped-2025-09-20-x","hidden":false,"manualOverride":false}""", false)]
     [InlineData("""{"id":"07c4a7f0-4210-4a45-a880-4ca231fb86a4","manualOverride":null}""", true)]
     [InlineData("""{"id":"ae5a2143-3767-40b4-8e46-e88fb38508b3","manualOverride":false}""", true)]
     public void Picks_overrides_and_hand_created_documents(string json, bool expected) =>
@@ -169,6 +171,53 @@ public sealed class SanityAdoptionPostgresTests(PostgresDatabase database) : ICl
         var report = SanityComparison.CompareFixtures(SanityDocs, await store.ScrapedFixturesAsync(ct), await store.LoadResolverAsync(ct));
         Assert.Equal((4, 0), (report.Matched, report.Differences));
         Assert.Contains(report.Lines, line => line.StartsWith("LOCKED 3 ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Hide_in_the_cms_hides_the_row_until_unticked()
+    {
+        database.SkipIfUnavailable();
+        var ct = TestContext.Current.CancellationToken;
+        var store = new ScrapeStore(_dataSource!);
+        var service = new ScrapeService(_site, store, NullLogger<ScrapeService>.Instance);
+        Task<FixtureScrapeResult> Scrape() => service.ScrapeFixturesAsync(new FixtureScrapeRequest([117], [43], false), "cli", ct);
+        JsonElement[] Docs(bool hidden) => JsonSerializer.Deserialize<JsonElement[]>($$"""
+            [{"id":"scraped-2031-03-01-claymores-daytona","date":"2031-03-01","homeTeam":"Claymores","awayTeam":"Daytona",
+              "homeScore":0,"awayScore":0,"status":"upcoming","matchType":"league","manualOverride":false,
+              "hidden":{{(hidden ? "true" : "false")}} }]
+            """)!;
+        async Task<bool> Listed() =>
+            (await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource).ListAsync(null, ct))
+            .Any(f => f.GetProperty("date").GetString() == "2031-03-01");
+
+        _site.ClubPages[(117, 43)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, March 1, 2031", "Claymores", "Daytona"),
+            new ClubPageBuilder.Game("Saturday, March 8, 2031", "Claymores", "Lakeland"));
+        await Scrape();
+        Assert.True(await Listed());
+
+        // Hide ticked: the row is retired and locked, and a rescrape doesn't bring it back.
+        Assert.Equal(1, (await SanityAdoption.RunAsync(store, Docs(hidden: true), ct)).Updated);
+        Assert.False(await Listed());
+        Assert.Equal(1, (await Scrape()).Pages.Single().SkippedManualOverride);
+        Assert.False(await Listed());
+        Assert.Equal(1, (await SanityAdoption.RunAsync(store, Docs(hidden: true), ct)).Unchanged);
+
+        // Unticked: the row goes back to the scraper and shows again; the next scrape owns it.
+        var released = await SanityAdoption.RunAsync(store, Docs(hidden: false), ct);
+        Assert.Equal(1, released.Released);
+        Assert.True(await Listed());
+        Assert.Equal("false", await Scalar<string>("SELECT manual_override::text FROM fixtures WHERE fixture_date = '2031-03-01'"));
+        Assert.Equal(0, (await Scrape()).Pages.Single().SkippedManualOverride);
+        Assert.Equal(0, (await SanityAdoption.RunAsync(store, Docs(hidden: false), ct)).Released);
+    }
+
+    [Fact]
+    public async Task An_empty_answer_from_sanity_changes_nothing()
+    {
+        database.SkipIfUnavailable();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SanityAdoption.RunAsync(new ScrapeStore(_dataSource!), [], TestContext.Current.CancellationToken));
     }
 
     [Fact]

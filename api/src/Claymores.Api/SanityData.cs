@@ -26,7 +26,7 @@ public sealed class SanityData(HttpClient client)
     public async Task<JsonElement[]> FixturesAsync(int? season, CancellationToken ct)
     {
         var filter = season.HasValue ? " && season == $season" : "";
-        var query = "*[_type == \"match\"" + filter + "] | order(date asc, _id asc) " + FixtureFields;
+        var query = "*[_type == \"match\" && hidden != true" + filter + "] | order(date asc, _id asc) " + FixtureFields;
         var result = await QueryAsync(query, season.HasValue ? ("season", season.Value) : null, ct);
         return result.EnumerateArray().Select(item => item.Clone()).ToArray();
     }
@@ -37,14 +37,14 @@ public sealed class SanityData(HttpClient client)
         var result = await QueryAsync("""
             *[_type == "match"] | order(date asc, _id asc) {
               "id": _id, date, season, homeTeam, awayTeam, homeScore, awayScore, status,
-              venue, kickoffTime, note, matchType, competition, manualOverride
+              venue, kickoffTime, note, matchType, competition, manualOverride, hidden
             }
             """, null, ct);
         return result.EnumerateArray().Select(item => item.Clone()).ToArray();
     }
 
     public Task<JsonElement> FixtureAsync(string id, CancellationToken ct) =>
-        QueryAsync("*[_type == \"match\" && _id == $id][0] " + FixtureFields, ("id", id), ct);
+        QueryAsync("*[_type == \"match\" && _id == $id && hidden != true][0] " + FixtureFields, ("id", id), ct);
 
     public Task<JsonElement> StandingsAsync(string? season, CancellationToken ct)
     {
