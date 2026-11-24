@@ -1,8 +1,11 @@
 'use server'
 
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { signOut } from '@/auth'
+import { ACCOUNT_DELETED_PARAM, DELETE_CONFIRMATION, deletionOutcome, isDeleteConfirmed } from '@/lib/claymores/account-deletion'
 import { parseDollarsToCents, formatCents } from '@/lib/claymores/api-client'
-import { webCheckoutEnabled } from '@/lib/claymores/auth-env'
+import { memberAuthEnabled, SIGNED_IN_HINT_COOKIE, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { CHECKOUT_UNAVAILABLE_MESSAGE, checkoutOutcome } from '@/lib/claymores/checkout'
 import { memberApi } from '@/lib/claymores/member'
 
@@ -16,6 +19,27 @@ export async function startCheckout(_previous: PayState, formData: FormData): Pr
     const amount = String(formData.get('amount') ?? '').slice(0, 20)
     const state = await checkout(id, amount)
     return { ...state, amount }
+}
+
+export type DeleteState = { error: string | null }
+
+/** Deletes the member's account through the API, then signs out locally and goes home. */
+export async function deleteAccount(_previous: DeleteState, formData: FormData): Promise<DeleteState> {
+    if (!memberAuthEnabled()) redirect('/')
+    if (!isDeleteConfirmed(formData.get('confirm'))) {
+        return { error: `Type ${DELETE_CONFIRMATION} in capital letters to confirm.` }
+    }
+    const session = await memberApi()
+    if (!session) redirect('/sign-in?callbackUrl=/account')
+
+    const outcome = deletionOutcome(await session.api.deleteMe())
+    if (outcome.kind === 'sign-in') redirect('/sign-in?error=expired&callbackUrl=/account')
+    if (outcome.kind === 'error') return { error: outcome.message }
+
+    // The API already revoked every session, so there is no logout call to make.
+    ;(await cookies()).delete(SIGNED_IN_HINT_COOKIE)
+    await signOut({ redirectTo: `/?${ACCOUNT_DELETED_PARAM}=1` })
+    return { error: null }
 }
 
 async function checkout(id: string, amount: string): Promise<PayState> {

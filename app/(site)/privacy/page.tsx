@@ -36,7 +36,7 @@ const sections = [
         heading: 'Requests to join',
         body: [
             'If you sign in but are not yet on the club’s member list, you can ask to join. We collect your name and email address, plus a phone number and a message if you choose to add them.',
-            'Club admins review each request and approve or deny it. Requests are kept while they are waiting and, once decided, are kept as a record of the decision. To have yours deleted, email claymoresrfc@gmail.com.',
+            'Club admins review each request and approve or deny it. Requests are kept while they are waiting and, once decided, are kept as a record of the decision. To have yours deleted, email claymoresrfc@gmail.com. Deleting your member account also removes it.',
         ],
     },
     {
@@ -84,13 +84,14 @@ const sections = [
         heading: 'How long we keep it',
         body: [
             'Contact form messages stay in the club inbox for as long as they are useful for club business. Ask us and we will delete yours.',
-            'Member sign-in details are kept while you are a club member. Requests to join are kept as a record after they are approved or denied. Dues and payment records are kept as part of the club’s financial records.',
+            'Member sign-in details are kept while you are a club member, or until you delete your account. Requests to join are kept as a record after they are approved or denied. Dues and payment records are kept as part of the club’s financial records.',
         ],
     },
     {
         heading: 'Your choices',
         body: [
             'You can ask what information we hold about you, ask us to correct it, or ask us to delete it. Email claymoresrfc@gmail.com and a club volunteer will respond.',
+            'Signed-in members can also delete their account themselves, under “Delete my account” on the My account page of this website or in the Claymores RFC app. Deleting your account ends your access, signs you out everywhere, and removes your member record and any request to join. Dues and payment records are kept as part of the club’s financial records. You can still delete your account by emailing claymoresrfc@gmail.com.',
         ],
     },
     {

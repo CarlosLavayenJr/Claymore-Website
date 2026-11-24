@@ -31,7 +31,16 @@ Open [http://localhost:3000](http://localhost:3000). The site needs `NEXT_PUBLIC
 
 ### Reading data from the API
 
-With `CLAYMORES_API_BASE_URL` unset, the site reads Sanity directly. With it set (server-only), fixtures, standings, teams, players and practices come from the API. On Vercel, it is set only for Preview deployments of `codex/claymores-api-integration`, pointing at the Render API. Production still reads Sanity.
+Public sports data (fixtures, standings, teams, players and practices) reads Sanity unless both of these server-only variables are set:
+
+| Variable | Value |
+| --- | --- |
+| `CLAYMORES_API_BASE_URL` | Claymores API origin. Member sign-in needs it too; on its own it does **not** change where sports data comes from. |
+| `CLAYMORES_DATA_SOURCE` | `api` reads sports data from the API. `sanity`, unset, or anything else reads Sanity (the default). |
+
+With `CLAYMORES_DATA_SOURCE=api`, each API read has an 8-second timeout. A network error, timeout, 5xx or unreadable response logs a `[claymores-api] … Falling back to Sanity.` warning and that read comes from Sanity instead, so pages and the build (`generateStaticParams`, sitemap) keep working while the API is down. The practice schedule falls back to the built-in defaults if both fail.
+
+Production reads Sanity. The Preview deployment of `codex/claymores-api-integration` reads the API: it needs `CLAYMORES_DATA_SOURCE=api` (not a secret) added next to its existing `CLAYMORES_API_BASE_URL`, or it reads Sanity after this change.
 
 ### Member sign-in (`/sign-in`, `/sign-up`, `/account`, `/account/admin`)
 
@@ -43,7 +52,7 @@ The site stays public. Sign-in exists only for member features (dues and payment
 | --- | --- |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google **Web application** OAuth client. Use the API's `Authentication:Google:ClientId` client, or add this client ID to the API's `Authentication:Google:MobileClientIds`, or the API rejects the id_token's audience. |
 | `AUTH_SECRET` | `openssl rand -base64 32`. Encrypts the session and pending-request cookies. |
-| `CLAYMORES_API_BASE_URL` | Claymores API origin. This also switches sports data from Sanity to the API (see above). |
+| `CLAYMORES_API_BASE_URL` | Claymores API origin. Turning on sign-in does not move sports data to the API; that takes `CLAYMORES_DATA_SOURCE=api` (see above). |
 | `CLAYMORES_WEB_CHECKOUT_ENABLED` | Optional kill switch, `true` shows **Pay now**. Turn it on once the API has `Stripe:WebReturnUrl` set (see **Web dues checkout** below). |
 
 Authorized redirect URIs to register on the Google client: `https://www.claymoresrfc.com/api/auth/callback/google`, plus a stable preview host such as `https://<project>-git-<branch>-<team>.vercel.app/api/auth/callback/google` (each preview hostname must be listed exactly; Google doesn't accept wildcards), and `http://localhost:3000/api/auth/callback/google` for local work.
@@ -58,6 +67,11 @@ Authorized redirect URIs to register on the Google client: `https://www.claymore
 3. Every `/account*` request goes through `proxy.ts`. When the access token expires within two minutes, the proxy calls `POST /v1/auth/mobile/refresh` once per refresh token (single-flight, and the rotated result is remembered for two minutes so a parallel request carrying the old cookie reuses it instead of replaying the old token and revoking the family). The new session is written to the response cookie and into the request so the page rendered in the same request already uses it. A `401`/`403` from refresh signs the member out.
 4. Pages and server actions call the API server-side with the bearer token (`/v1/me`, `/v1/dues/mine`, checkout, and admin join requests and invitations).
 5. **Sign out** posts `POST /v1/auth/mobile/logout` and clears the cookies.
+6. **Delete my account** (bottom of `/account`, confirmed by typing `DELETE`) calls `DELETE /v1/me`. On `204` the API has ended access, revoked sessions and removed the member and join-request records (dues and payments are kept); the site clears its cookies and redirects to `/?accountDeleted=1`, which shows a notice. `409 last_admin` tells the only admin to promote someone first; any other failure deletes nothing and says so.
+
+`callbackUrl` on `/sign-in` is accepted only as a same-origin path (`lib/claymores/callback-url.ts`): no scheme or host, no `//`, no backslashes, no control characters.
+
+While a checkout is open for a dues item (`pendingCheckoutCents > 0`), the amount field is replaced by **Resume payment** for that amount, because the API reuses the open session. A checkout started in the app returns to the app.
 
 The single-flight guard is per server instance. Two requests on two different instances in the same instant can still race; the member is then asked to sign in again.
 

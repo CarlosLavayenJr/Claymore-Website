@@ -14,7 +14,11 @@
 // "web" fail with 400 web_checkout_unavailable (API without Stripe:WebReturnUrl);
 // MOCK_STRIPE_DOWN=1 makes every checkout fail with 502. The returned "Stripe"
 // URL is fake; open `/account?checkout=returned` or `?checkout=cancelled` on the
-// website to see the return banners.
+// website to see the return banners. An open checkout (admin@example.com's
+// dues) is reused whatever amount is sent, like the real API.
+//
+// DELETE /v1/me deletes the caller's account (204) and answers 409 last_admin
+// for the only admin, so delete player@example.com to try it.
 
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -160,6 +164,17 @@ const server = createServer(async (req, res) => {
     if (path.startsWith('/v1/me') || path.startsWith('/v1/dues') || path.startsWith('/v1/admin')) {
         if (!user) return send(res, 401, { error: 'invalid_token' })
     }
+    if (method === 'DELETE' && path === '/v1/me') {
+        if (user.role === 'admin' && [...invitations.values()].filter(v => v.role === 'admin').length <= 1) {
+            return send(res, 409, { error: 'last_admin' })
+        }
+        // Access ends, every session is revoked, member and join-request records go; dues stay.
+        invitations.delete(user.email)
+        for (const [token, entry] of accessTokens) if (entry.email === user.email) accessTokens.delete(token)
+        for (const entry of refreshTokens.values()) if (entry.email === user.email) revokedFamilies.add(entry.family)
+        for (let i = joinRequests.length - 1; i >= 0; i--) if (joinRequests[i].email === user.email) joinRequests.splice(i, 1)
+        return send(res, 204)
+    }
     if (method === 'GET' && path === '/v1/me') {
         return send(res, 200, { subject: subjectOf(user.email), name: nameOf(user.email), email: user.email, role: user.role })
     }
@@ -178,8 +193,10 @@ const server = createServer(async (req, res) => {
         const returnTo = body.returnTo ?? 'app'
         if (returnTo !== 'app' && returnTo !== 'web') return send(res, 400, { error: 'invalid_request', field: 'returnTo' })
         if (returnTo === 'web' && !webCheckout) return send(res, 400, { error: 'web_checkout_unavailable' })
-        if (body.amountCents > a.balanceCents - a.pendingCheckoutCents) return send(res, 409, { error: 'overpayment' })
         if (stripeDown) return send(res, 502, { title: 'Stripe could not create the checkout session.' })
+        // Like the real API, an open checkout is reused (its amount and return target win).
+        if (a.pendingCheckoutCents > 0) return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_resume_${randomBytes(6).toString('hex')}` })
+        if (body.amountCents > a.balanceCents) return send(res, 409, { error: 'overpayment' })
         return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_${returnTo}_${randomBytes(6).toString('hex')}` })
     }
 
@@ -191,8 +208,9 @@ const server = createServer(async (req, res) => {
     }
     m = path.match(/^\/v1\/admin\/join-requests\/([^/]+)\/(approve|deny)$/)
     if (method === 'POST' && m) {
-        const r = joinRequests.find(x => x.id === m[1] && x.status === 'pending')
+        const r = joinRequests.find(x => x.id === m[1])
         if (!r) return send(res, 404, { error: 'not_found' })
+        if (r.status !== 'pending') return send(res, 409, { error: 'not_pending' })
         if (m[2] === 'approve') {
             if (body.role !== 'player' && body.role !== 'admin') return send(res, 400, { error: 'invalid_request', field: 'role' })
             r.status = 'approved'
