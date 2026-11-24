@@ -2,6 +2,20 @@
 
 Everything in the repo is ready (icon, version 1.0.0, iPhone only, encryption declared, Sign in with Apple entitlement). What's left needs your Apple account, so do it on your own Mac.
 
+## No Mac? Build in the cloud (phone or iPad is enough)
+
+`.github/workflows/ios-testflight.yml` builds, signs and uploads the app to TestFlight on GitHub's Macs. Do this once from your phone or iPad (Safari, "Request Desktop Website" helps):
+
+1. **App Store Connect** → Apps → **+ New App** (fields in section 2 below).
+2. **App Store Connect** → **Users and Access** → **Integrations** → **App Store Connect API** → **+** (Team Keys). Name it "GitHub", Access **Admin**, Generate. Note the **Key ID** and the **Issuer ID** (above the list), then **Download API Key**: a `.p8` file you can download only once. Open it in the Files app and copy all of its text.
+3. **GitHub** → the repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**, three times:
+   - `APP_STORE_CONNECT_KEY_ID`: the Key ID
+   - `APP_STORE_CONNECT_ISSUER_ID`: the Issuer ID
+   - `APP_STORE_CONNECT_KEY`: the full text of the `.p8`, including the BEGIN and END lines
+4. **GitHub** → **Actions** → **iOS TestFlight** → **Run workflow** (main). About 15–20 minutes later the build is in TestFlight (section 4). Every run gets a new build number automatically.
+
+Then skip to section 4.
+
 ## 1. One-time setup on your Mac
 
 1. Install **Xcode** from the Mac App Store, open it once, and accept the license.
