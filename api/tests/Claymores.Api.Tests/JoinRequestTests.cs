@@ -624,4 +624,35 @@ public sealed class JoinRequestRateLimitTests(PostgresDatabase database) : IClas
             new { idToken = FakeGoogleValidator.Token("g-limit-0", "limit0@example.com") }, ct);
         Assert.Equal(HttpStatusCode.TooManyRequests, status.StatusCode);
     }
+
+    [Fact]
+    public async Task Behind_the_proxy_the_limit_uses_the_right_most_forwarded_address()
+    {
+        database.SkipIfUnavailable();
+        var settings = JoinRequestTests.Settings(database.ConnectionString!, 2);
+        settings["ForwardedHeaders:Enabled"] = "true";
+        await using var factory = ApiFactory.With(settings, JoinRequestTests.Fakes);
+        var client = factory.CreateClient();
+        var ct = TestContext.Current.CancellationToken;
+        var n = 0;
+
+        Task<HttpResponseMessage> Request(string forwardedFor)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/mobile/google/request-status")
+            {
+                Content = JsonContent.Create(new { idToken = FakeGoogleValidator.Token($"g-fwd-{n++}", "fwd@example.com") })
+            };
+            // Render's proxy appends the address it saw; anything to the left came from the client.
+            request.Headers.Add("X-Forwarded-For", forwardedFor);
+            return client.SendAsync(request, ct);
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Request("198.51.100.1, 203.0.113.10")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Request("198.51.100.2, 203.0.113.10")).StatusCode);
+        // A different spoofed left-hand entry doesn't open a new partition.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await Request("198.51.100.3, 203.0.113.10")).StatusCode);
+        // Another client (a different address appended by the proxy) has its own limit.
+        Assert.Equal(HttpStatusCode.OK, (await Request("203.0.113.20")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Request("203.0.113.10, 203.0.113.20")).StatusCode);
+    }
 }

@@ -175,6 +175,8 @@ if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] || scra
 if (migrator is not null && app.Configuration.GetValue("Database:MigrateOnStartup", true))
     await migrator.MigrateAsync(CancellationToken.None);
 
+// First, so everything after it (the scheme for redirects and cookies, and the client IP that
+// UseRateLimiter partitions on) sees the forwarded values. See Hosting.ConfigureForwardedHeaders.
 if (forwardedHeaders)
     app.UseForwardedHeaders();
 app.UseExceptionHandler(new ExceptionHandlerOptions
