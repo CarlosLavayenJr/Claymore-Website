@@ -1,6 +1,6 @@
+import { getMatches, getTeams, getPractices } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
-import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, practicesQuery, type SanityMatch, type SanityTeam, type SanityPractice } from '@/sanity/lib/queries'
+import { type SanityMatch, type SanityTeam, type SanityPractice } from '@/sanity/lib/queries'
 import FixturesSchedule from '@/components/fixtures-schedule'
 import { ogImage } from '@/lib/og'
 
@@ -20,9 +20,9 @@ export const metadata: Metadata = {
 
 export default async function Fixtures() {
     const [matches, teams, practices]: [SanityMatch[], SanityTeam[], SanityPractice[]] = await Promise.all([
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
-        client.fetch(practicesQuery),
+        getMatches(),
+        getTeams(),
+        getPractices(),
     ])
     return (
         <div className="container mx-auto px-4 py-12 max-w-7xl">

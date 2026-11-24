@@ -1,10 +1,7 @@
+import { getMatches, getTeams, getSeasonDivisions } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { client } from '@/sanity/lib/client'
 import {
-    matchesQuery,
-    teamsQuery,
-    seasonDivisionsQuery,
     type SanityMatch,
     type SanityTeam,
     type SanitySeasonDivision,
@@ -29,9 +26,9 @@ export const metadata: Metadata = {
 
 export default async function ResultsPage() {
     const [matches, teams, seasonDivisions]: [SanityMatch[], SanityTeam[], SanitySeasonDivision[]] = await Promise.all([
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
-        client.fetch(seasonDivisionsQuery),
+        getMatches(),
+        getTeams(),
+        getSeasonDivisions(),
     ])
     const divisionsBySeason = buildDivisionsBySeason(seasonDivisions)
 

@@ -1,9 +1,6 @@
 import { cache } from 'react'
-import { client } from '@/sanity/lib/client'
-import {
-    practiceScheduleQuery,
-    type SanityPracticeSchedule,
-} from '@/sanity/lib/queries'
+import { getPracticeScheduleDocument, usesClaymoresApi } from '@/lib/claymores-api'
+import type { SanityPracticeSchedule } from '@/sanity/lib/queries'
 
 export interface PracticeSchedule {
     seasonLabel: string
@@ -57,9 +54,10 @@ function merge(doc: SanityPracticeSchedule | null | undefined): PracticeSchedule
 // Memoized within a single request — multiple components calling this
 // during one render share a single Sanity fetch.
 export const getPracticeSchedule = cache(async (): Promise<PracticeSchedule> => {
+    if (usesClaymoresApi) return merge(await getPracticeScheduleDocument())
+
     try {
-        const doc = await client.fetch<SanityPracticeSchedule | null>(practiceScheduleQuery)
-        return merge(doc)
+        return merge(await getPracticeScheduleDocument())
     } catch {
         return DEFAULT
     }

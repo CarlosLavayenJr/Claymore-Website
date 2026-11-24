@@ -1,11 +1,8 @@
+import { getMatches, getTeams, getTeamForSlug } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { client } from '@/sanity/lib/client'
 import {
-    matchesQuery,
-    teamBySlugQuery,
-    teamsQuery,
     type SanityMatch,
     type SanityTeam,
 } from '@/sanity/lib/queries'
@@ -28,7 +25,7 @@ interface Params {
 }
 
 export async function generateStaticParams() {
-    const teams: SanityTeam[] = await client.fetch(teamsQuery)
+    const teams: SanityTeam[] = await getTeams()
     return teams.filter((t) => t.slug && !isClaymores(t.name)).map((t) => ({ slug: t.slug as string }))
 }
 
@@ -45,7 +42,7 @@ function teamMatches(team: SanityTeam, match: SanityMatch): boolean {
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const { slug } = await params
-    const team: SanityTeam | null = await client.fetch(teamBySlugQuery, { slug })
+    const team: SanityTeam | null = await getTeamForSlug(slug)
     if (!team) return {}
     const title = `${team.name} vs Central Florida Claymores RFC | Florida Rugby Union`
     const description = `Head-to-head record, match history, and results between the Central Florida Claymores RFC (Orlando) and ${team.name}${
@@ -67,8 +64,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function OpponentPage({ params }: Params) {
     const { slug } = await params
     const [team, allMatches]: [SanityTeam | null, SanityMatch[]] = await Promise.all([
-        client.fetch(teamBySlugQuery, { slug }),
-        client.fetch(matchesQuery),
+        getTeamForSlug(slug),
+        getMatches(),
     ])
     if (!team) notFound()
 

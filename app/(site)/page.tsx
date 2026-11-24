@@ -1,3 +1,4 @@
+import { getMatches, getTeams, getPractices } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import RugbyHero from '@/components/Hero'
@@ -9,11 +10,7 @@ import UpcomingEvents from '@/components/upcoming-events'
 import LeagueTable from '@/components/league-table'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
-import { client } from '@/sanity/lib/client'
 import {
-    matchesQuery,
-    practicesQuery,
-    teamsQuery,
     type SanityMatch,
     type SanityPractice,
     type SanityTeam,
@@ -48,9 +45,9 @@ export default async function Home() {
         SanityTeam[],
     ] = await Promise.all([
         getPracticeSchedule(),
-        client.fetch(matchesQuery),
-        client.fetch(practicesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getPractices(),
+        getTeams(),
     ])
 
     return (

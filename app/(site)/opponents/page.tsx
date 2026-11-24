@@ -1,7 +1,7 @@
+import { getMatches, getTeams } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
+import { type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import Breadcrumbs from '@/components/breadcrumbs'
 import { isClaymores } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
@@ -48,8 +48,8 @@ function findTeam(name: string, teams: SanityTeam[]): SanityTeam | undefined {
 
 export default async function OpponentsIndexPage() {
     const [matches, teams]: [SanityMatch[], SanityTeam[]] = await Promise.all([
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getTeams(),
     ])
 
     const byOpp = new Map<string, OppRow>()

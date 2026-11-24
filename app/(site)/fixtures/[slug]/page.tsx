@@ -1,9 +1,10 @@
+import { getMatches, getMatchForSlug, getTeams } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
+import { type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import MatchTypeBadge from '@/components/match-type-badge'
@@ -33,7 +34,7 @@ interface Params {
 }
 
 export async function generateStaticParams() {
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
+    const matches: SanityMatch[] = await getMatches()
     const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
     return [...matches.map((m) => ({ slug: matchSlug(m) })), ...festivals.map(event => ({ slug: festivalSlug(event) }))]
 }
@@ -43,14 +44,9 @@ async function getFestival(slug: string): Promise<SanityPractice | null> {
     return festivals.find(event => festivalSlug(event) === slug) ?? null
 }
 
-async function getMatch(slug: string): Promise<SanityMatch | null> {
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
-    return matches.find((m) => matchSlug(m) === slug) ?? null
-}
-
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const { slug } = await params
-    const match = await getMatch(slug)
+    const match = await getMatchForSlug(slug)
     if (!match) {
         const event = await getFestival(slug)
         if (!event) return {}
@@ -116,8 +112,8 @@ function findTeam(name: string, teams: SanityTeam[]): SanityTeam | null {
 export default async function MatchPage({ params, searchParams }: Params) {
     const { slug } = await params
     const [match, teams]: [SanityMatch | null, SanityTeam[]] = await Promise.all([
-        getMatch(slug),
-        client.fetch(teamsQuery),
+        getMatchForSlug(slug),
+        getTeams(),
     ])
     if (!match) {
         const event = await getFestival(slug)

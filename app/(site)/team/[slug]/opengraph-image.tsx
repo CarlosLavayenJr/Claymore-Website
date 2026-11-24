@@ -1,5 +1,5 @@
-import { client } from '@/sanity/lib/client'
-import { playerBySlugQuery, type SanityPlayer } from '@/sanity/lib/queries'
+import { getPlayerForSlug } from '@/lib/claymores-api'
+import { type SanityPlayer } from '@/sanity/lib/queries'
 import { brandedImageResponse, OG_CONTENT_TYPE, OG_SIZE } from '@/lib/og'
 
 export const alt = 'Claymores Player Profile'
@@ -8,7 +8,7 @@ export const contentType = OG_CONTENT_TYPE
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params
-    const player: SanityPlayer | null = await client.fetch(playerBySlugQuery, { slug })
+    const player: SanityPlayer | null = await getPlayerForSlug(slug)
 
     if (!player) {
         return brandedImageResponse({

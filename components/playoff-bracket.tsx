@@ -1,10 +1,8 @@
+import { getTeams, getLeagueStandings } from '@/lib/claymores-api'
 import Image from 'next/image'
 import Link from 'next/link'
 import { cache } from 'react'
-import { client } from '@/sanity/lib/client'
 import {
-    leagueStandingsBySeasonQuery,
-    teamsQuery,
     type PlayoffRound,
     type SanityLeagueStandings,
     type SanityPlayoffMatch,
@@ -13,12 +11,12 @@ import {
 import { resolveTeam, type ResolvedTeam } from '@/lib/teams'
 
 const getAllTeams = cache(async (): Promise<SanityTeam[]> => {
-    return client.fetch(teamsQuery)
+    return getTeams()
 })
 
 const getStandingsForSeason = cache(
     async (seasonLabel: string): Promise<SanityLeagueStandings | null> => {
-        return client.fetch(leagueStandingsBySeasonQuery, { seasonLabel })
+        return getLeagueStandings(seasonLabel)
     },
 )
 

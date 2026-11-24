@@ -1,5 +1,5 @@
-import { client } from '@/sanity/lib/client'
-import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
+import { getMatches } from '@/lib/claymores-api'
+import { type SanityMatch } from '@/sanity/lib/queries'
 import {
     formatMatchDateLong,
     isClaymores,
@@ -15,7 +15,7 @@ export const contentType = OG_CONTENT_TYPE
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
+    const matches: SanityMatch[] = await getMatches()
     const match = matches.find((m) => matchSlug(m) === slug)
     if (!match) {
         return brandedImageResponse({

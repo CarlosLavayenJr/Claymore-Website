@@ -1,11 +1,9 @@
+import { getMatches, getPlayers, getTeams } from '@/lib/claymores-api'
 import type { MetadataRoute } from 'next'
 import { client } from '@/sanity/lib/client'
 import {
     coachesQuery,
-    matchesQuery,
-    playersQuery,
     postsQuery,
-    teamsQuery,
     type SanityCoach,
     type SanityMatch,
     type SanityPlayer,
@@ -28,10 +26,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         SanityTeam[],
         SanityCoach[],
     ] = await Promise.all([
-        client.fetch(playersQuery),
+        getPlayers(),
         client.fetch(postsQuery),
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getTeams(),
         features.coaches
             ? client.fetch(coachesQuery).catch(() => [] as SanityCoach[])
             : Promise.resolve([] as SanityCoach[]),
