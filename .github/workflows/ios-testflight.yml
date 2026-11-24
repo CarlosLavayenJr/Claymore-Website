@@ -73,8 +73,11 @@ jobs:
           printf '%s\n' "$KEY" > "$RUNNER_TEMP/keys/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/keys/AuthKey.p8"
 
-      # Signs for distribution (an App Store profile), not development: a
-      # development profile needs registered devices, and the team has none.
+      # The Runner target's Release config signs with "Apple Distribution"
+      # (an App Store profile): a development profile would need registered
+      # devices, and the team has none. Set there, not here, because a
+      # command-line identity would also hit the Swift packages' resource
+      # bundles, which must keep their default.
       - name: Archive (signs with the API key)
         run: >
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner
@@ -85,7 +88,6 @@ jobs:
           -authenticationKeyID "$KEY_ID"
           -authenticationKeyIssuerID "$ISSUER_ID"
           CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=57539PPNC3
-          CODE_SIGN_IDENTITY="Apple Distribution"
 
       - name: Upload to TestFlight
         run: >
