@@ -95,8 +95,16 @@ internal static class GoogleSignIn
                 var email = context.Principal?.FindFirstValue("email");
                 if (directory is not null && subject is not null && email is not null)
                 {
-                    var member = new ClubMember(subject, email, context.Principal?.FindFirstValue("name"));
+                    // One member per person (migration 016): the session carries the member's subject.
+                    var signIn = new ClubMember(subject, email, context.Principal?.FindFirstValue("name"));
+                    var member = await directory.ResolveAsync(signIn, context.HttpContext.RequestAborted);
                     await directory.ObserveSignInAsync(member, context.HttpContext.RequestAborted);
+                    await directory.RememberIdentityAsync(subject, member.Subject, context.HttpContext.RequestAborted);
+                    if (member.Subject != subject && context.Principal?.Identity is ClaimsIdentity identity)
+                    {
+                        identity.RemoveClaim(identity.FindFirst("sub"));
+                        identity.AddClaim(new Claim("sub", member.Subject));
+                    }
                     var automatic = context.HttpContext.RequestServices.GetService<AutomaticDues>();
                     if (automatic is not null && context.Principal is { } principal)
                         await automatic.EnsureAsync(principal, context.HttpContext.RequestAborted);

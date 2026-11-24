@@ -66,6 +66,7 @@ internal sealed class AccountDeletion(NpgsqlDataSource dataSource, ClubInvitatio
             Add("DELETE FROM club_invitations WHERE email = @email");
             Add("DELETE FROM join_requests WHERE subject = @subject OR lower(btrim(email)) = @email");
             Add("DELETE FROM club_members WHERE google_subject = @subject");
+            Add("DELETE FROM member_identities WHERE member_subject = @subject");
             Add("""
                 UPDATE dues_checkouts SET status = 'expired', released_by = @released_by, released_at = now()
                 WHERE status = 'pending' AND stripe_session_id IS NULL
@@ -153,6 +154,10 @@ internal sealed class AccountDeletion(NpgsqlDataSource dataSource, ClubInvitatio
         var user = context.User;
         var subject = user.FindFirstValue("sub")!;
         var email = user.FindFirstValue("email")!;
+        // Read before deleting: a Google member may have an Apple account linked (migration 016).
+        var directory = context.RequestServices.GetService<ClubMemberDirectory>();
+        var hasApple = subject.StartsWith(AppleSignIn.SubjectPrefix, StringComparison.Ordinal) ||
+                       (directory is not null && (await directory.ProvidersAsync(subject, ct)).Contains("apple"));
         var result = await deletion.DeleteAsync(subject, email, user.IsInRole("admin"), ct);
         if (result == DeletionResult.LastAdmin)
             return result;
@@ -161,7 +166,7 @@ internal sealed class AccountDeletion(NpgsqlDataSource dataSource, ClubInvitatio
         if ((await context.AuthenticateAsync(GoogleSignIn.Session)).Succeeded)
             await context.SignOutAsync(GoogleSignIn.Session);
 
-        if (subject.StartsWith(AppleSignIn.SubjectPrefix, StringComparison.Ordinal))
+        if (hasApple)
             await apple.RevokeAsync(appleAuthorizationCode, CancellationToken.None);
         return result;
     }

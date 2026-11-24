@@ -481,7 +481,15 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     final generation = _generation;
     String? appleCode;
     final apple = _apple;
-    if (user.subject.startsWith('apple|') && apple != null && apple.supported) {
+    // An Apple account, or a Google one with Apple linked: re-authorize so
+    // the server can revoke Apple's tokens.
+    var hasApple = user.subject.startsWith('apple|');
+    if (!hasApple && apple != null && apple.supported) {
+      try {
+        hasApple = (await members.identities()).contains('apple');
+      } on Object catch (_) {}
+    }
+    if (hasApple && apple != null && apple.supported) {
       try {
         appleCode = (await apple.credential())?.authorizationCode;
       } on Object catch (error) {
@@ -505,6 +513,38 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     }
     await _endLocally(null);
     return DeleteAccountResult.deleted;
+  }
+
+  /// Links an Apple account to the signed-in member
+  /// (`POST /v1/me/identities/apple`), so Sign in with Apple opens this
+  /// account, including with "Hide My Email".
+  Future<LinkAppleResult> linkApple(MemberRepository members) async {
+    final apple = _apple;
+    if (!signedIn || apple == null || !apple.supported) {
+      return LinkAppleResult.unavailable;
+    }
+    final generation = _generation;
+    AppleCredential? credential;
+    try {
+      credential = await apple.credential();
+    } on Object catch (error) {
+      debugPrint('Apple authorization for linking failed: $error');
+      return LinkAppleResult.failed;
+    }
+    if (credential == null) return LinkAppleResult.cancelled;
+    if (generation != _generation) return LinkAppleResult.sessionEnded;
+    try {
+      await members.linkApple(
+        identityToken: credential.identityToken,
+        rawNonce: credential.rawNonce,
+      );
+      return LinkAppleResult.linked;
+    } on ApiException catch (error) {
+      if (error.statusCode == 409) return LinkAppleResult.linkedElsewhere;
+      return LinkAppleResult.failed;
+    } on Exception {
+      return LinkAppleResult.failed;
+    }
   }
 
   /// Ends the session on this device only (the server already ended it).
@@ -653,6 +693,22 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
 }
 
 /// Outcome of [AuthService.deleteAccount].
+/// Outcome of [AuthService.linkApple].
+enum LinkAppleResult {
+  linked,
+
+  /// The person closed the Apple sheet.
+  cancelled,
+
+  /// 409: that Apple account already belongs to another member.
+  linkedElsewhere,
+  sessionEnded,
+  failed,
+
+  /// Not signed in, or Sign in with Apple isn't available (not iOS).
+  unavailable,
+}
+
 enum DeleteAccountResult {
   deleted,
 
