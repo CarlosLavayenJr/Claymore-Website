@@ -76,7 +76,9 @@ class _FixturesPageState extends State<FixturesPage> {
                   key: ValueKey(fixture.id),
                   fixture: fixture,
                   availability:
-                      showAvailability && !history && fixture.status == 'upcoming',
+                      showAvailability &&
+                      !history &&
+                      fixture.status == 'upcoming',
                 ),
               ),
           ];
