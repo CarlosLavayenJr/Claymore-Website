@@ -2,6 +2,7 @@ import { getMatches, getTeams, getPractices } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import RugbyHero from '@/components/Hero'
+import { AccountDeletedNotice } from '@/components/members/account-deleted-notice'
 import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
@@ -53,6 +54,7 @@ export default async function Home() {
     return (
         <main className="min-h-screen">
             <JsonLd data={organizationSchema} />
+            <AccountDeletedNotice />
             <RugbyHero />
 
             {/* Location + CTA section — critical for local SEO H1 */}

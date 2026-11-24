@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef, useSyncExternalStore } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import Image from "next/image"
 import { Menu, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -33,11 +34,18 @@ const ExternalNavLink = ({ href, children }: NavLinkProps) => (
 
 // The member session cookie is httpOnly. A separate, token-free hint cookie
 // tells the navbar to say "Account" instead of "Sign in" without making
-// every public page dynamic.
+// every public page dynamic. Sign-in and sign-out set or clear it on the
+// server and then redirect, so it is re-read on every client navigation.
 const MEMBER_HINT_COOKIE = 'claymores_member'
-const subscribeNoop = () => () => {}
 const readMemberHint = () => document.cookie.split('; ').some(c => c === `${MEMBER_HINT_COOKIE}=1`)
-const useSignedInHint = () => useSyncExternalStore(subscribeNoop, readMemberHint, () => false)
+const useSignedInHint = () => {
+    const pathname = usePathname()
+    const [signedIn, setSignedIn] = useState(false)
+    useEffect(() => {
+        setSignedIn(readMemberHint())
+    }, [pathname])
+    return signedIn
+}
 
 const SHOP_URL = 'https://tytanrugby.com/collections/claymores-rfc'
 

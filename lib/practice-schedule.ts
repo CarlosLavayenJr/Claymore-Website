@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { getPracticeScheduleDocument, usesClaymoresApi } from '@/lib/claymores-api'
+import { getPracticeScheduleDocument } from '@/lib/claymores-api'
 import type { SanityPracticeSchedule } from '@/sanity/lib/queries'
 
 export interface PracticeSchedule {
@@ -54,8 +54,8 @@ function merge(doc: SanityPracticeSchedule | null | undefined): PracticeSchedule
 // Memoized within a single request — multiple components calling this
 // during one render share a single Sanity fetch.
 export const getPracticeSchedule = cache(async (): Promise<PracticeSchedule> => {
-    if (usesClaymoresApi) return merge(await getPracticeScheduleDocument())
-
+    // API (with its Sanity fallback) or Sanity: if both fail, the defaults keep
+    // practice details on every page rather than failing the render or build.
     try {
         return merge(await getPracticeScheduleDocument())
     } catch {

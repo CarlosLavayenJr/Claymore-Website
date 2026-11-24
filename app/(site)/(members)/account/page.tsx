@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { signOutMember } from '../actions'
+import { DeleteAccountForm } from './delete-account-form'
 import { PayForm } from './pay-form'
 import {
     CardHeading,
@@ -48,6 +49,7 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
     const payable = dues.balanceCents - dues.pendingCheckoutCents
     const due = formatDate(dues.dueDate)
     const paidInFull = dues.balanceCents <= 0
+    const pending = dues.pendingCheckoutCents > 0
     return (
         <article className="rounded-lg border border-[#EAEAEA] p-4 sm:p-5" aria-labelledby={`dues-${dues.id}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -71,14 +73,19 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
                 <Amount label="Balance" cents={dues.balanceCents} emphasis />
             </dl>
 
-            {dues.pendingCheckoutCents > 0 && (
-                <Notice tone="info" title={`${formatCents(dues.pendingCheckoutCents)} checkout in progress`} className="mt-4">
-                    A payment you started hasn&apos;t been confirmed by Stripe yet. It usually updates within a few minutes.
+            {pending && (
+                <Notice tone="info" title={`A payment of ${formatCents(dues.pendingCheckoutCents)} is already in progress`} className="mt-4">
+                    Stripe hasn&apos;t confirmed it yet. It usually updates within a few minutes. A new payment can
+                    start once this one finishes or expires.
                 </Notice>
             )}
 
-            {!paidInFull && payable >= 50 && webCheckoutEnabled() && (
-                <PayForm assessmentId={dues.id} suggestedDollars={(payable / 100).toFixed(2)} />
+            {!paidInFull && webCheckoutEnabled() && (pending || payable >= 50) && (
+                <PayForm
+                    assessmentId={dues.id}
+                    suggestedDollars={(payable / 100).toFixed(2)}
+                    pendingDollars={pending ? (dues.pendingCheckoutCents / 100).toFixed(2) : undefined}
+                />
             )}
 
             <details className="mt-4 group">
@@ -233,6 +240,22 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
                         </div>
                     </MemberCard>
                 </div>
+
+                <MemberCard aria-labelledby="delete-heading">
+                    <CardHeading id="delete-heading">Delete my account</CardHeading>
+                    <div className="mt-3 max-w-2xl space-y-2 text-sm text-[#555555]">
+                        <p>
+                            This ends your member access on the website and in the Claymores app, signs you out
+                            everywhere, and removes your member record and any request to join. It can&apos;t be undone;
+                            to come back, a club admin has to invite you again.
+                        </p>
+                        <p>
+                            Dues and payment records are kept as part of the club&apos;s financial records. See our{' '}
+                            <Link href="/privacy" className={linkClass}>privacy policy</Link>.
+                        </p>
+                    </div>
+                    <DeleteAccountForm />
+                </MemberCard>
             </div>
         </>
     )

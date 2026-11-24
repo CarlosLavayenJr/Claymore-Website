@@ -38,6 +38,7 @@ const errors: Record<string, string> = {
     invalid: 'Check the details and try again.',
     forbidden: 'Only club admins can do that.',
     not_found: 'That item no longer exists. It may have been handled already.',
+    not_pending: 'This request was already decided. Refresh to see its current status.',
     conflict: 'That change isn’t allowed. Admins can’t remove or demote themselves.',
     unavailable: 'The club server didn’t respond. Try again in a minute.',
 }

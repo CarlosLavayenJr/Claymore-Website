@@ -159,6 +159,11 @@ export class ClaymoresApiClient {
         return this.request<ApiUser>('GET', '/v1/me')
     }
 
+    /** 204 on success; 409 `last_admin` when the caller is the club's only admin. */
+    deleteMe() {
+        return this.request<null>('DELETE', '/v1/me')
+    }
+
     myDues() {
         return this.request<DuesAssessment[]>('GET', '/v1/dues/mine')
     }

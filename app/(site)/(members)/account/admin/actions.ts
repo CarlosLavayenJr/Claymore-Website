@@ -19,6 +19,7 @@ function failed(result: ApiResult<unknown>, fallback: string): never {
     if (result.status === 401) redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
     const code = result.status === 403 ? 'forbidden'
         : result.status === 404 ? 'not_found'
+        : result.status === 409 && result.error === 'not_pending' ? 'not_pending'
         : result.status === 409 ? 'conflict'
         : result.status === 400 ? 'invalid'
         : 'unavailable'
