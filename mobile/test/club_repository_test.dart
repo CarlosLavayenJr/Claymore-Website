@@ -1,4 +1,4 @@
-import 'package:claymores/club_data.dart';
+import 'package:claymores/data/club_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
