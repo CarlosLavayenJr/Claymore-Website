@@ -146,6 +146,8 @@ internal static class GoogleSignIn
                 var adminLink = ledger is not null && context.User.IsInRole("admin")
                     ? $"""<a class="button" href="{DuesAdminPage.Path}">Manage dues</a>"""
                     : "";
+                if (context.User.IsInRole("admin") && context.RequestServices.GetService<JoinRequestStore>() is not null)
+                    adminLink += $"""<a class="button" href="{JoinRequestAdminPage.Path}">Join requests</a>""";
                 var checkoutNotice = checkoutEnabled ? RenderCheckoutNotice(context.Request.Query["checkout"]) : "";
                 return RenderPage("Club account", $"""
                     <section class="account-header">
@@ -182,9 +184,9 @@ internal static class GoogleSignIn
             .RequireAuthorization(RolePolicy)
             .ExcludeFromDescription();
 
-        app.MapPost("/auth/logout", (HttpContext context) =>
+        app.MapPost("/auth/logout", async (HttpContext context) =>
             {
-                if (context.Request.Headers["Sec-Fetch-Site"] != "same-origin")
+                if (!await SameOriginGuard.IsAllowedAsync(context))
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 return Results.SignOut(
                     new AuthenticationProperties { RedirectUri = "/auth/signed-out" }, [Session]);
@@ -417,5 +419,11 @@ internal static class GoogleSignIn
         .admin-record .admin-field { width: auto; margin-bottom: 0; }
         .admin-record input { width: 100%; }
         .amounts + p { margin-top: .65rem; }
+        .join-details { margin: .75rem 0 0; display: grid; gap: .35rem; }
+        .join-details dt { color: var(--muted); font-size: .8rem; }
+        .join-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+        .join-actions { display: grid; gap: .75rem; border-top: 1px solid var(--divider); margin-top: 1rem; padding-top: 1rem; }
+        .join-actions form { display: flex; flex-wrap: wrap; align-items: end; gap: .55rem; }
+        .join-actions .admin-field { width: auto; flex: 1 1 11rem; }
         """;
 }

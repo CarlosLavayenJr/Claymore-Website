@@ -16,7 +16,7 @@ internal sealed class DuesCheckout(
     public async Task<IResult> StartAsync(Guid assessmentId, HttpContext context, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        if (context.Request.Headers["Sec-Fetch-Site"] != "same-origin")
+        if (!await SameOriginGuard.IsAllowedAsync(context))
             return Results.StatusCode(403);
         if (!context.Request.HasFormContentType)
             return Results.BadRequest("Submit the checkout form on your club account page.");
@@ -38,15 +38,15 @@ internal sealed class DuesCheckout(
 
     /// <summary>
     /// JSON for the app: returns the Stripe URL to open; Stripe then returns to Stripe:AppReturnUrl.
-    /// Bearer callers need no CSRF check, but cookie callers must be same-origin.
+    /// Bearer callers need no CSRF check, but cookie callers must be same-origin (<see cref="SameOriginGuard"/>).
     /// </summary>
     public async Task<IResult> StartForAppAsync(Guid assessmentId, CheckoutSessionRequest request, HttpContext context,
         CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        var bearer = await context.AuthenticateAsync(MobileAuth.Scheme);
-        if (!bearer.Succeeded && context.Request.Headers["Sec-Fetch-Site"] != "same-origin")
+        if (!await SameOriginGuard.IsAllowedAsync(context))
             return Results.StatusCode(403);
+        var bearer = await context.AuthenticateAsync(MobileAuth.Scheme);
         if (request.AmountCents is < MinimumCents or > MaximumCents)
             return Results.Problem($"amountCents must be from {MinimumCents} to {MaximumCents}.", statusCode: 400);
 

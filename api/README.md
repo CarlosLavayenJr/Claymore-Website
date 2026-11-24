@@ -105,7 +105,11 @@ Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and
   | `PUT /v1/admin/invitations/{email}` with `{"role":"player"}` or `{"role":"admin"}` | Invites a member or changes their role |
   | `DELETE /v1/admin/invitations/{email}` | Removes an invitation. Admins can't remove or demote themselves. |
 
-  The `PUT` and `DELETE` requests require the same-origin browser session, like the other admin writes.
+  Signed in with the browser session cookie, the `PUT` and `DELETE` requests must come from the same origin, like the other admin writes. An admin's API bearer token works from anywhere (see [Same-origin rule](#same-origin-rule)).
+
+### Same-origin rule
+
+Every write that can be authenticated by the browser session cookie (`/auth/logout`, the dues and invitation admin writes, join request decisions, and both checkout entry points) checks `Sec-Fetch-Site: same-origin` **only when the cookie authenticated the request**. The cookie is an ambient credential, so a cross-site page could otherwise make the browser send it. A request that carries the cookie fails without the header even if it also has a bearer token. Requests authenticated only by an API bearer token pass: browsers never attach that token on their own. This lets a server-side web client (for example the website's admin page, holding an admin's access token) call the admin API.
 
 The website entry hands off to the API-hosted account page. The Flutter app uses [mobile sign-in](#mobile-sign-in) instead. Keep local OAuth client settings separate from any future preview or production settings.
 
@@ -128,7 +132,7 @@ The Flutter app signs in with native Google sign-in, then trades the Google ID t
 }
 ```
 
-- **Access tokens** are JWTs signed by the API (HS256 with `Authentication:Tokens:SigningKey`, issuer and audience `claymores-api`), valid for one hour. Send them as `Authorization: Bearer <token>` to `/v1/me`, `/v1/dues/mine`, `/v1/dues/mine/{id}`, and `/v1/dues/{id}/checkout-session`. The invitation is re-checked on every request, so removing or changing an invitation takes effect within 30 seconds. Admin writes still require the same-origin browser session.
+- **Access tokens** are JWTs signed by the API (HS256 with `Authentication:Tokens:SigningKey`, issuer and audience `claymores-api`), valid for one hour. Send them as `Authorization: Bearer <token>` to `/v1/me`, `/v1/dues/mine`, `/v1/dues/mine/{id}`, and `/v1/dues/{id}/checkout-session`. The invitation is re-checked on every request, so removing or changing an invitation takes effect within 30 seconds. An admin's token also works for the `/v1/admin/...` routes, writes included, without a `Sec-Fetch-Site` header (see [Same-origin rule](#same-origin-rule)).
 - **Refresh tokens** last 60 days and rotate on every refresh. Only a SHA-256 hash is stored. Presenting a token that was already rotated or revoked revokes every token in that sign-in session, so the app must store the newest refresh token before using it, and must not refresh twice in parallel.
 - **Signing key:** base64 for at least 32 random bytes, for example `openssl rand -base64 32`. The API refuses to start with mobile sign-in on and no valid key. Changing the key invalidates current access tokens at once; the app recovers by refreshing.
 
@@ -168,11 +172,37 @@ Nothing else is needed for native sign-in. The identity token's audience is the 
 - Calling Apple's REST API (`/auth/token`, `/auth/revoke`) with a client secret signed by a Sign in with Apple private key. Apple asks apps that offer account deletion (guideline 5.1.1(v)) to revoke the user's Apple tokens when the account is deleted. Members are invitation-based and the app has no account deletion yet; if it adds one, create a key and use `/auth/revoke` then.
 - Server-to-server notifications (email forwarding changes, account deletion) are optional and can be added later on the App ID.
 
+### Request to join
+
+When sign-in returns `403 {"error":"not_invited"}`, the app can ask to join with the same identity token. Requests live in `join_requests` (migration `011`), one per identity (provider plus subject; Apple subjects are `apple|<sub>`). These routes are mapped with mobile sign-in; the Apple ones only when Apple is configured. The token is checked exactly as at sign-in (`401 {"error":"invalid_token"}` otherwise). Responses are `no-store`.
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/google/request-access` | `{"idToken","name","phone"?,"message"?}` | `202 {"status":"pending","email":"<email from the token>"}`. `409 {"status":"already_member"}` when the email is already invited. `429 {"status":"denied_recently"}` within 24 hours of a denial. `400 {"error":"invalid_request","field":"name"}` (or `phone`, `message`). |
+| `POST /v1/auth/mobile/apple/request-access` | `{"identityToken","rawNonce","name","phone"?,"message"?}` | Same as Google. |
+| `POST /v1/auth/mobile/google/request-status` | `{"idToken"}` | `200 {"status":"none\|pending\|approved\|denied"}` |
+| `POST /v1/auth/mobile/apple/request-status` | `{"identityToken","rawNonce"}` | Same as Google. |
+
+- **Fields:** `name` is required, 1 to 80 characters after trimming. `phone` is optional, up to 30 characters of digits, spaces, and `+ ( ) - .`. `message` is optional, up to 500 characters. Blank optional fields are stored as null.
+- **Resubmitting** updates the name, phone, and message and keeps the request pending. An approved request whose invitation was later removed can ask again. A denied one can ask again 24 hours after the denial.
+- **Rate limit:** the four routes share a fixed window of `JoinRequests:PermitsPerMinute` (default 10) requests per minute per client IP. Over the limit: `429 {"error":"rate_limited"}` with `Retry-After`. Behind Render, the client IP comes from the forwarded headers.
+- **Notification:** no email yet (sending through Resend is a later step). A new request logs `New join request from {email}` at Information. Admins check `/auth/admin/join-requests`, linked from the account page and the dues admin page.
+
+Admins (cookie or bearer, `ClubAdmin`) decide:
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `GET /v1/admin/join-requests?status=pending` | | `200 [{"id","provider","email","name","phone","message","status","createdAt","updatedAt"}]`, oldest first. `status` is optional (`pending`, `approved`, `denied`); anything else is `400`. |
+| `POST /v1/admin/join-requests/{id}/approve` | `{"role":"player"}` or `{"role":"admin"}` | `200` with the updated request. Creates or updates the `club_invitations` row for the request's email (normalized), then records the approver's email and time. Works for pending, denied, or already approved requests (to change the role). `400` with `"field":"role"`, `404` for an unknown ID. |
+| `POST /v1/admin/join-requests/{id}/deny` | `{"reason":"..."}` (optional, up to 500 characters, never shown to the applicant) | `200` with the updated request. `409 {"error":"not_pending"}` unless the request is pending. `404` for an unknown ID. |
+
+The API-hosted page `/auth/admin/join-requests` lists pending and recently decided requests with approve (choose a role) and deny forms. Approving lets the person sign in at once; the app can poll `request-status` or simply retry sign-in.
+
 ### App checkout and the `claymores://` link
 
 With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-session` with `{"amountCents":2500}` returns `{"url":"https://checkout.stripe.com/..."}`. Open that URL in the browser. Stripe sends the player back to `Stripe:AppReturnUrl` with `?checkout=returned` or `?checkout=cancelled`, for example `claymores://dues?checkout=returned`. Register the `claymores` scheme in the app (iOS `CFBundleURLTypes`, Android intent filter) and refresh dues when it opens. The balance changes only after Stripe's signed webhook arrives, never because of the return link.
 
-`Stripe:AppReturnUrl` is required when both features are on. It must be a custom scheme or HTTPS URL without a query. The amount must be from 50 to 99,999,999 cents and no more than the remaining balance (`409`). Another member's assessment is `404`. If the assessment already has a pending checkout, its session is resumed with the original amount, the same as the browser form. A browser session cookie may call this endpoint only from the same origin (`Sec-Fetch-Site: same-origin`).
+`Stripe:AppReturnUrl` is required when both features are on. It must be a custom scheme or HTTPS URL without a query. The amount must be from 50 to 99,999,999 cents and no more than the remaining balance (`409`). Another member's assessment is `404`. If the assessment already has a pending checkout, its session is resumed with the original amount, the same as the browser form. A request authenticated by the browser session cookie must be same-origin (`Sec-Fetch-Site: same-origin`); see [Same-origin rule](#same-origin-rule).
 
 These routes are outside the public CORS policy. Native apps don't need CORS. If the Flutter web build ever uses them, give its exact origin a separate CORS policy for these routes instead of adding it to `Cors:PublicOrigins`.
 
@@ -384,7 +414,7 @@ A $25.00 payment body looks like this:
 }
 ```
 
-Generate a new UUID for each new assessment or payment. Reuse the original UUID and identical body when retrying an uncertain response. The ledger records the payment once and rejects a payment that exceeds the remaining balance. Admin writes require the same-origin browser session.
+Generate a new UUID for each new assessment or payment. Reuse the original UUID and identical body when retrying an uncertain response. The ledger records the payment once and rejects a payment that exceeds the remaining balance. With the browser session cookie, admin writes must be same-origin; an admin bearer token works anywhere (see [Same-origin rule](#same-origin-rule)).
 
 ### Stripe test checkout
 
@@ -432,6 +462,8 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `DuesLedger.cs` | Role-gated dues endpoints and transactional payment ledger |
 | `DuesCheckout.cs` | Test checkout and signed Stripe webhooks |
 | `DuesCheckoutStore.cs` | Durable reservations, payment credits, and expiration |
+| `JoinRequests.cs` | Request to join: app endpoints, admin decisions, rate limit, and the `/auth/admin/join-requests` page |
+| `SameOriginGuard.cs` | The same-origin check for cookie-authenticated writes |
 | `sql/` | Numbered Postgres migrations |
 
 ## Tests

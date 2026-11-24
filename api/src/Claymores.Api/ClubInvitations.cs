@@ -155,7 +155,5 @@ internal static class InvitationEndpoints
         string.Equals(user.FindFirstValue("email")?.Trim(), email, StringComparison.OrdinalIgnoreCase);
 
     private static ValueTask<object?> SameOrigin(EndpointFilterInvocationContext context, EndpointFilterDelegate next) =>
-        context.HttpContext.Request.Headers["Sec-Fetch-Site"] == "same-origin"
-            ? next(context)
-            : ValueTask.FromResult<object?>(Results.StatusCode(403));
+        SameOriginGuard.Filter(context, next);
 }
