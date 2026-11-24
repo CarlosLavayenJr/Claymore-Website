@@ -150,7 +150,7 @@ With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-sess
 
 These routes are outside the public CORS policy. Native apps don't need CORS. If the Flutter web build ever uses them, give its exact origin a separate CORS policy for these routes instead of adding it to `Cors:PublicOrigins`.
 
-In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres for the Google and dues preview. It still builds the older copy in `outputs/claymores-api`, not this folder. Point it at `src/Claymores.Api` before relying on it.
+In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres, builds `src/Claymores.Api`, imports fixtures (which also migrates), and starts the HTTPS Google and dues preview at `https://localhost:7057`.
 
 ## Test authentication locally
 
