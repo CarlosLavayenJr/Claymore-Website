@@ -83,7 +83,10 @@ void main() {
   ) async {
     final requests = await pumpHome(tester, ok);
     expect(find.text('STANDINGS'), findsOneWidget);
-    expect(find.text('MEN DIVISION 3 · SEASON 2026-2027'), findsOneWidget);
+    // Pink banner: division on the left, season on the right.
+    expect(find.text('Men Division 3'), findsOneWidget);
+    expect(find.text('2026-2027'), findsOneWidget);
+    expect(find.text('W'), findsOneWidget);
     for (final team in [
       'Orlando Griffins RFC (D3)',
       'Jacksonville RFC',

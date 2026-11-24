@@ -86,6 +86,7 @@ class _Card extends StatelessWidget {
       required Widget pos,
       required Widget team,
       required Widget played,
+      required Widget won,
       required Widget points,
       StandingsRow? row,
       bool gapAbove = false,
@@ -110,7 +111,8 @@ class _Card extends StatelessWidget {
         children: [
           SizedBox(width: 32, child: pos),
           Expanded(child: team),
-          SizedBox(width: 36, child: Center(child: played)),
+          SizedBox(width: 32, child: Center(child: played)),
+          SizedBox(width: 32, child: Center(child: won)),
           SizedBox(width: 44, child: Center(child: points)),
         ],
       ),
@@ -124,19 +126,40 @@ class _Card extends StatelessWidget {
               : FontWeight.w400,
         );
 
-    final label = [
-      if (standings.divisionName.isNotEmpty) standings.divisionName,
-      if (standings.seasonLabel.isNotEmpty) 'Season ${standings.seasonLabel}',
-    ].join(' · ');
+    // Pink banner like the website's table header: division left, season right.
+    const bannerText = TextStyle(
+      fontFamily: Brand.display,
+      color: Colors.white,
+      fontSize: 17,
+      height: 1.1,
+    );
 
     return Panel(
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-            child: Eyebrow(label),
+          Container(
+            color: Brand.pink,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    standings.divisionName.isEmpty
+                        ? 'Standings'
+                        : standings.divisionName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: bannerText,
+                  ),
+                ),
+                if (standings.seasonLabel.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text(standings.seasonLabel, style: bannerText),
+                ],
+              ],
+            ),
           ),
           line(
             pos: Text('POS', style: header),
@@ -144,6 +167,10 @@ class _Card extends StatelessWidget {
             played: Tooltip(
               message: 'Played',
               child: Text('P', style: header),
+            ),
+            won: Tooltip(
+              message: 'Won',
+              child: Text('W', style: header),
             ),
             points: Tooltip(
               message: 'Total points',
@@ -172,6 +199,7 @@ class _Card extends StatelessWidget {
                 ],
               ),
               played: Text('${row.played}', style: cell(row)),
+              won: Text('${row.won}', style: cell(row)),
               points: Text(
                 '${row.totalPoints}',
                 style: cell(row, strong: true),
