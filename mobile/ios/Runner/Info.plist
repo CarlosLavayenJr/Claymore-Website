@@ -38,6 +38,17 @@
 				<string>claymores</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.claymoresrfc.claymores.google</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Reversed "Claymores iOS app" OAuth client ID (Google Cloud project claymores-rfc). -->
+				<string>com.googleusercontent.apps.1070515951514-ukk1opg2c2ajdln89mb424n8b9cuir2k</string>
+			</array>
+		</dict>
 	</array>
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>

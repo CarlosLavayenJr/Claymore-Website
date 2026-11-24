@@ -107,17 +107,18 @@ Sign-in and dues are behind dart-defines so a release build without the config s
 | `ENABLE_DUES=true` | Shows dues on the profile. |
 | `ENABLE_AVAILABILITY=true` | Shows match availability pickers to signed-in members (local only for now). |
 
+The real values for the live API are in [`dart_defines/production.json`](dart_defines/production.json), so this is all it takes:
+
 ```sh
-flutter run --dart-define=ENABLE_SIGN_IN=true --dart-define=ENABLE_DUES=true \
-  --dart-define=CLAYMORES_API_BASE_URL=https://api.example.com \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=123-web.apps.googleusercontent.com \
-  --dart-define=GOOGLE_IOS_CLIENT_ID=123-ios.apps.googleusercontent.com
+flutter run --dart-define-from-file=dart_defines/production.json
 ```
+
+That file points at `https://claymores-api-4zm4.onrender.com` and uses the Google Cloud project `claymores-rfc`: the "Claymores web (API + website)" client as `GOOGLE_SERVER_CLIENT_ID` and the "Claymores iOS app" client as `GOOGLE_IOS_CLIENT_ID`. Client IDs aren't secret. Dues stay off until the API has `Dues__Enabled` and Stripe configured. The Xcode project already uses Apple team `57539PPNC3`, and the App ID `com.claymoresrfc.claymores` has Sign in with Apple enabled. Only test users listed in Google Cloud (Google Auth Platform → Audience) can sign in with Google while the consent screen is in testing.
 
 Google Cloud setup (per the google_sign_in docs):
 
 - **Android:** create an Android OAuth client for `com.claymoresrfc.claymores` with the SHA-1 of each signing key (debug and release). No client ID is passed in code; the web client ID above is the server client ID.
-- **iOS:** create an iOS OAuth client for the bundle ID, pass it as `GOOGLE_IOS_CLIENT_ID`, and add its *reversed* client ID (`com.googleusercontent.apps.123-ios`) as another URL scheme in `ios/Runner/Info.plist` under `CFBundleURLTypes`.
+- **iOS:** create an iOS OAuth client for the bundle ID, pass it as `GOOGLE_IOS_CLIENT_ID`, and add its *reversed* client ID as another URL scheme in `ios/Runner/Info.plist` under `CFBundleURLTypes` (already done for the Claymores iOS client).
 - **Web:** google_sign_in 7 can't produce an ID token from a custom button on the web, so the web build tells people to use the mobile app.
 
 ### Sign in with Apple (iOS)
