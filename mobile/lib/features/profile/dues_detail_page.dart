@@ -212,9 +212,10 @@ class _PayDuesFormState extends State<PayDuesForm> {
       if (!mounted) return;
       showMessage(
         context,
-        error.statusCode == 409
-            ? (error.error ?? 'A checkout is already open for these dues.')
-            : error.error ?? 'Couldn’t start checkout (${error.statusCode}).',
+        error.error ??
+            (error.statusCode == 409
+                ? 'A checkout is already open for these dues.'
+                : 'Couldn’t start checkout (${error.statusCode}).'),
       );
       widget.onStarted();
     } on Exception {

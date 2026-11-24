@@ -107,6 +107,7 @@ class AppleCredential {
     required this.identityToken,
     required this.rawNonce,
     this.fullName,
+    this.authorizationCode,
   });
 
   final String identityToken;
@@ -116,6 +117,10 @@ class AppleCredential {
 
   /// Apple sends the name only the first time a person authorizes the app.
   final String? fullName;
+
+  /// Single-use code the API exchanges to revoke the app's Apple tokens
+  /// (sent when deleting an account).
+  final String? authorizationCode;
 }
 
 /// Produces an Apple identity token for the API to verify.
@@ -171,6 +176,9 @@ class NativeAppleCredentialSource implements AppleCredentialSource {
         identityToken: token,
         rawNonce: rawNonce,
         fullName: name.isEmpty ? null : name,
+        authorizationCode: result.authorizationCode.isEmpty
+            ? null
+            : result.authorizationCode,
       );
     } on SignInWithAppleAuthorizationException catch (error) {
       if (error.code == AuthorizationErrorCode.canceled) return null;

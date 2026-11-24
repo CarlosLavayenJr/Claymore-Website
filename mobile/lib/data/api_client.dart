@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import 'api_base.dart';
 
 /// A non-success API response. [error] is the API's `{"error": "..."}` code
-/// or message when the body carries one. [email] is set when the body names
+/// or message when the body carries one; for an RFC 7807 ProblemDetails body
+/// without `error` it falls back to `detail`, then `title`. [email] is set when the body names
 /// the address it refers to (Apple's `not_invited` for a private relay email).
 class ApiException implements Exception {
   const ApiException(this.statusCode, [this.error, this.email]);
@@ -19,11 +20,14 @@ class ApiException implements Exception {
     String? error, email;
     try {
       final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (body is Map && body['error'] is String) {
-        error = body['error'] as String;
-      }
-      if (body is Map && body['email'] is String) {
-        email = body['email'] as String;
+      if (body is Map) {
+        String? text(String key) {
+          final value = body[key];
+          return value is String && value.trim().isNotEmpty ? value : null;
+        }
+
+        error = text('error') ?? text('detail') ?? text('title');
+        email = text('email');
       }
     } on FormatException {
       // Not JSON; keep the status code only.

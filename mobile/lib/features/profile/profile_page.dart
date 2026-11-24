@@ -5,6 +5,7 @@ import '../../app/config.dart';
 import '../../app/deep_links.dart';
 import '../../app/services.dart';
 import '../../app/theme.dart';
+import '../../data/api_client.dart';
 import '../../data/member_repository.dart';
 import '../../shared/widgets.dart';
 import '../auth/auth_service.dart';
@@ -176,13 +177,7 @@ class _SignedInProfileState extends State<_SignedInProfile> {
                   );
                 }
                 if (snapshot.hasError) {
-                  return StatusPanel(
-                    message: 'Couldn’t load your dues.',
-                    action: FilledButton(
-                      onPressed: refresh,
-                      child: const Text('RETRY'),
-                    ),
-                  );
+                  return DuesLoadError(error: snapshot.error, onRetry: refresh);
                 }
                 final items = snapshot.data!;
                 if (items.isEmpty) {
@@ -219,10 +214,115 @@ class _SignedInProfileState extends State<_SignedInProfile> {
               },
             ),
           ],
+          const SizedBox(height: 40),
+          const Divider(),
+          const SizedBox(height: 8),
+          DeleteAccountButton(members: widget.members),
         ],
       ),
     );
   }
+}
+
+/// Why the dues list didn't load. A 404 means dues are switched off on the
+/// API, which isn't an error to retry.
+class DuesLoadError extends StatelessWidget {
+  const DuesLoadError({super.key, required this.error, required this.onRetry});
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = this.error;
+    if (error is ApiException && error.statusCode == 404) {
+      return const StatusPanel(message: 'Dues aren’t available yet.');
+    }
+    return StatusPanel(
+      message: 'Couldn’t load your dues.',
+      action: FilledButton(onPressed: onRetry, child: const Text('RETRY')),
+    );
+  }
+}
+
+/// "Delete account" at the bottom of the profile (App Store 5.1.1(v)).
+class DeleteAccountButton extends StatefulWidget {
+  const DeleteAccountButton({super.key, required this.members});
+  final MemberRepository members;
+
+  @override
+  State<DeleteAccountButton> createState() => _DeleteAccountButtonState();
+}
+
+class _DeleteAccountButtonState extends State<DeleteAccountButton> {
+  bool busy = false;
+
+  Future<bool> confirm(bool apple) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete your account?'),
+          content: Text(
+            'Your access to member features ends and you’re signed out on '
+            'every device. The club keeps its records of your dues and '
+            'payments.'
+            '${apple ? ' Apple will ask you to confirm so the club can '
+                      'disconnect your Apple ID.' : ''}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('CANCEL'),
+            ),
+            TextButton(
+              key: const Key('confirm-delete-account'),
+              style: destructiveButtonStyle,
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('DELETE ACCOUNT'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> delete() async {
+    final auth = AppScope.of(context).auth;
+    final apple = auth.user?.subject.startsWith('apple|') ?? false;
+    if (!await confirm(apple) || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.maybeOf(context);
+    setState(() => busy = true);
+    final result = await auth.deleteAccount(widget.members);
+    if (mounted) setState(() => busy = false);
+    void say(String text) =>
+        messenger.showSnackBar(SnackBar(content: Text(text)));
+    switch (result) {
+      case DeleteAccountResult.deleted:
+        say('Your account was deleted');
+        router?.go('/club');
+      case DeleteAccountResult.lastAdmin:
+        say(
+          'You’re the club’s only admin. Make another member an admin '
+          'before deleting your account.',
+        );
+      case DeleteAccountResult.sessionEnded:
+        say('Your session ended. Sign in again to delete your account.');
+      case DeleteAccountResult.failed:
+        say(
+          'Couldn’t delete your account. Check your connection and try again.',
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: TextButton(
+      key: const Key('delete-account'),
+      style: destructiveButtonStyle,
+      onPressed: busy ? null : delete,
+      child: Text(busy ? 'DELETING…' : 'DELETE ACCOUNT'),
+    ),
+  );
 }
 
 class _CheckoutBanner extends StatelessWidget {

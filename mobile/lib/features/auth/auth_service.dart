@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/api_client.dart';
 import '../../data/auth_api.dart';
-import '../../data/models/account.dart';
+import '../../data/member_repository.dart';
 import 'auth_platform.dart';
 
 enum AuthStatus {
@@ -100,6 +100,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     this._apple,
     DateTime Function()? now,
     this.refreshLeeway = const Duration(seconds: 60),
+    this.minRefreshDelay = const Duration(seconds: 30),
   }) : _now = now ?? DateTime.now,
        _status = AuthStatus.signedOut;
 
@@ -110,6 +111,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
       _apple = null,
       _now = DateTime.now,
       refreshLeeway = Duration.zero,
+      minRefreshDelay = Duration.zero,
       _status = AuthStatus.disabled;
 
   final AuthApi? _api;
@@ -117,14 +119,35 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   final IdTokenSource? _google;
   final AppleCredentialSource? _apple;
   final DateTime Function() _now;
+
+  /// Refresh this long before the access token expires.
   final Duration refreshLeeway;
+
+  /// The soonest a new session is refreshed, however short its lifetime, so
+  /// a bad expiry can never cause a refresh loop.
+  final Duration minRefreshDelay;
 
   AuthStatus _status;
   AuthSession? _session;
+
+  /// Local clock time after which [_session]'s access token is refreshed.
+  DateTime? _refreshDue;
+
+  @visibleForTesting
+  DateTime? get refreshDue => _refreshDue;
   String? _message;
   Future<AuthSession?>? _refreshing;
   Timer? _timer;
   bool _disposed = false;
+
+  /// Bumped by sign-in, sign-out and account deletion. A refresh or sign-in
+  /// that started under an older generation is dropped when it completes, so
+  /// signing out while a refresh is in flight can't sign the user back in.
+  int _generation = 0;
+
+  /// The launch restore failed for a transient reason and the refresh token
+  /// is still stored, so it can be retried.
+  bool _restoreFailed = false;
 
   AuthStatus get status => _status;
   AuthUser? get user => _session?.user;
@@ -143,10 +166,53 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   /// Restores a saved session at launch.
   Future<void> restore() async {
     if (!enabled) return;
-    final saved = await _store.read();
-    if (saved == null) return _set(AuthStatus.signedOut);
+    final generation = _generation;
+    final saved = await _readStored();
+    if (generation != _generation) return;
+    if (saved == null) {
+      _restoreFailed = false;
+      return _set(AuthStatus.signedOut);
+    }
     _set(AuthStatus.restoring);
     await _refresh();
+  }
+
+  /// The launch restore couldn't reach the server; [retryRestore] can try
+  /// again with the stored refresh token.
+  bool get canRetryRestore => _status == AuthStatus.failed && _restoreFailed;
+
+  /// Retries a failed restore (on app resume and from "Try again").
+  Future<void> retryRestore() async {
+    if (canRetryRestore) await restore();
+  }
+
+  /// Reads the stored refresh token. An unreadable store (e.g. a Keystore key
+  /// lost after a backup restore) is cleared and treated as signed out.
+  Future<String?> _readStored() async {
+    try {
+      return await _store.read();
+    } on Object catch (error) {
+      debugPrint('Couldn’t read the saved sign-in: $error');
+      await _clearStored();
+      return null;
+    }
+  }
+
+  Future<void> _clearStored() async {
+    try {
+      await _store.clear();
+    } on Object catch (error) {
+      debugPrint('Couldn’t clear the saved sign-in: $error');
+    }
+  }
+
+  /// Starts a new session generation: anything in flight is now stale.
+  int _nextGeneration() {
+    _generation++;
+    _refreshing = null;
+    _timer?.cancel();
+    _restoreFailed = false;
+    return _generation;
   }
 
   JoinIdentity? _join;
@@ -173,15 +239,18 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   Future<void> signIn() async {
     final api = _api, google = _google;
     if (api == null || google == null) return;
+    final generation = _nextGeneration();
     _message = null;
     _resetJoin();
     _set(AuthStatus.signingIn);
     String? idToken;
     try {
       idToken = await google.idToken();
+      if (generation != _generation) return;
       if (idToken == null) return _set(AuthStatus.signedOut);
-      await _accept(await api.signInWithGoogle(idToken));
+      await _accept(await api.signInWithGoogle(idToken), generation);
     } on ApiException catch (error) {
+      if (generation != _generation) return;
       if (error.notInvited && idToken != null) {
         final claims = unverifiedJwtClaims(idToken);
         _join = JoinIdentity.google(
@@ -200,6 +269,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
       }
       _fail(error, 'Google');
     } on Exception {
+      if (generation != _generation) return;
       _message =
           'Sign-in didn’t complete. Check your connection and try again.';
       _set(AuthStatus.failed);
@@ -209,12 +279,14 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   Future<void> signInWithApple() async {
     final api = _api, apple = _apple;
     if (api == null || apple == null) return;
+    final generation = _nextGeneration();
     _message = null;
     _resetJoin();
     _set(AuthStatus.signingIn);
     AppleCredential? credential;
     try {
       credential = await apple.credential();
+      if (generation != _generation) return;
       if (credential == null) return _set(AuthStatus.signedOut);
       await _accept(
         await api.signInWithApple(
@@ -222,8 +294,10 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
           rawNonce: credential.rawNonce,
           fullName: credential.fullName,
         ),
+        generation,
       );
     } on ApiException catch (error) {
+      if (generation != _generation) return;
       if (error.notInvited) {
         final relay = error.email;
         final claims = credential == null
@@ -244,6 +318,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
       }
       _fail(error, 'Apple');
     } on Exception {
+      if (generation != _generation) return;
       _message =
           'Sign-in didn’t complete. Check your connection and try again.';
       _set(AuthStatus.failed);
@@ -376,12 +451,10 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
 
   Future<void> signOut() async {
     final api = _api;
-    final token = _session?.refreshToken ?? await _store.read();
-    _timer?.cancel();
-    _session = null;
-    _message = null;
-    _resetJoin();
-    await _store.clear();
+    final current = _session?.refreshToken;
+    _endSession();
+    final token = current ?? await _readStored();
+    await _clearStored();
     _set(enabled ? AuthStatus.signedOut : AuthStatus.disabled);
     if (api != null && token != null) {
       unawaited(api.logout(token).catchError((Object _) {}));
@@ -389,13 +462,65 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     unawaited(_google?.signOut().catchError((Object _) {}));
   }
 
+  /// Drops the in-memory session and starts a new generation (synchronously,
+  /// before any await, so in-flight work sees it).
+  void _endSession() {
+    _nextGeneration();
+    _session = null;
+    _refreshDue = null;
+    _message = null;
+    _resetJoin();
+  }
+
+  /// Deletes the signed-in account (`DELETE /v1/me`). An Apple account first
+  /// re-authorizes with Apple so the server can revoke Apple's tokens; if the
+  /// person cancels that, the account is still deleted without the code.
+  Future<DeleteAccountResult> deleteAccount(MemberRepository members) async {
+    final user = _session?.user;
+    if (!signedIn || user == null) return DeleteAccountResult.sessionEnded;
+    final generation = _generation;
+    String? appleCode;
+    final apple = _apple;
+    if (user.subject.startsWith('apple|') && apple != null && apple.supported) {
+      try {
+        appleCode = (await apple.credential())?.authorizationCode;
+      } on Object catch (error) {
+        debugPrint('Apple re-authorization for deletion failed: $error');
+      }
+    }
+    if (generation != _generation) return DeleteAccountResult.sessionEnded;
+    try {
+      await members.deleteAccount(appleAuthorizationCode: appleCode);
+    } on ApiException catch (error) {
+      if (error.statusCode == 409 && error.error == 'last_admin') {
+        return DeleteAccountResult.lastAdmin;
+      }
+      if (error.statusCode == 401) {
+        await _endLocally('Your session ended. Sign in again.');
+        return DeleteAccountResult.sessionEnded;
+      }
+      return DeleteAccountResult.failed;
+    } on Exception {
+      return DeleteAccountResult.failed;
+    }
+    await _endLocally(null);
+    return DeleteAccountResult.deleted;
+  }
+
+  /// Ends the session on this device only (the server already ended it).
+  Future<void> _endLocally(String? message) async {
+    _endSession();
+    _message = message;
+    await _clearStored();
+    _set(AuthStatus.signedOut);
+    unawaited(_google?.signOut().catchError((Object _) {}));
+  }
+
   @override
   Future<String?> accessToken() async {
-    final session = _session;
+    final session = _session, due = _refreshDue;
     if (session == null) return (await _refreshing)?.accessToken;
-    if (_now().isBefore(session.accessTokenExpiresAt.subtract(refreshLeeway))) {
-      return session.accessToken;
-    }
+    if (due != null && _now().isBefore(due)) return session.accessToken;
     return (await _refresh())?.accessToken;
   }
 
@@ -409,13 +534,25 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     return (await _refresh())?.accessToken;
   }
 
-  /// Single-flight refresh.
-  Future<AuthSession?> _refresh() =>
-      _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
+  /// Single-flight refresh. A new generation drops the shared future, so
+  /// callers after a sign-out or sign-in never join a stale refresh.
+  Future<AuthSession?> _refresh() {
+    final existing = _refreshing;
+    if (existing != null) return existing;
+    late final Future<AuthSession?> future;
+    future = _doRefresh().whenComplete(() {
+      if (identical(_refreshing, future)) _refreshing = null;
+    });
+    return _refreshing = future;
+  }
 
   Future<AuthSession?> _doRefresh() async {
     final api = _api;
-    final token = _session?.refreshToken ?? await _store.read();
+    final generation = _generation;
+    // The newest refresh token: the in-memory session's, which is persisted
+    // before it is set (see [_accept]), or the stored one.
+    final token = _session?.refreshToken ?? await _readStored();
+    if (generation != _generation) return null;
     if (api == null || token == null) {
       _session = null;
       _set(enabled ? AuthStatus.signedOut : AuthStatus.disabled);
@@ -423,13 +560,21 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     }
     try {
       final session = await api.refresh(token);
-      await _accept(session);
-      return session;
+      if (generation != _generation) {
+        // Signed out (or in again) meanwhile: don't resurrect this session,
+        // and revoke the token the server just issued.
+        unawaited(api.logout(session.refreshToken).catchError((Object _) {}));
+        return null;
+      }
+      return await _accept(session, generation) ? session : null;
     } on ApiException catch (error) {
+      if (generation != _generation) return null;
       if (error.statusCode == 401 || error.statusCode == 403) {
         _timer?.cancel();
         _session = null;
-        await _store.clear();
+        _refreshDue = null;
+        _restoreFailed = false;
+        await _clearStored();
         _message = error.notInvited
             ? 'Your club invitation is no longer active.'
             : 'Your session ended. Sign in again.';
@@ -438,6 +583,7 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
       }
       return _keepAfterTransientFailure();
     } on Exception {
+      if (generation != _generation) return null;
       return _keepAfterTransientFailure();
     }
   }
@@ -445,25 +591,51 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
   /// Network trouble: keep the saved refresh token so a retry can succeed.
   AuthSession? _keepAfterTransientFailure() {
     if (_session == null) {
+      _restoreFailed = true;
       _message = 'Couldn’t reach the club server to restore your sign-in.';
       _set(AuthStatus.failed);
     }
     return null;
   }
 
-  Future<void> _accept(AuthSession session) async {
+  /// Takes a new session unless [generation] is stale. The refresh token is
+  /// persisted before the session is used, so the newest token is always the
+  /// one stored (the API's rotation grace window relies on that).
+  Future<bool> _accept(AuthSession session, int generation) async {
+    if (generation != _generation) return false;
+    final receivedAt = _now();
+    try {
+      await _store.write(session.refreshToken);
+    } on Object catch (error) {
+      // Still usable for this launch; the next launch asks to sign in.
+      debugPrint('Couldn’t save the sign-in: $error');
+    }
+    if (generation != _generation) return false;
     _session = session;
+    _refreshDue = receivedAt.add(_refreshAfter(session));
     _message = null;
+    _restoreFailed = false;
     _resetJoin();
-    await _store.write(session.refreshToken);
-    _schedule(session);
+    _schedule();
     _set(AuthStatus.signedIn);
+    return true;
   }
 
-  void _schedule(AuthSession session) {
+  /// How long after receiving [session] to refresh it: its lifetime on the
+  /// server's clock minus [refreshLeeway], never less than [minRefreshDelay].
+  /// Measured from the local receive time, so device clock skew doesn't
+  /// matter.
+  Duration _refreshAfter(AuthSession session) {
+    final wait = session.lifetime - refreshLeeway;
+    return wait < minRefreshDelay ? minRefreshDelay : wait;
+  }
+
+  void _schedule() {
     _timer?.cancel();
-    var wait = session.accessTokenExpiresAt.difference(_now()) - refreshLeeway;
-    if (wait.isNegative) wait = Duration.zero;
+    final due = _refreshDue;
+    if (due == null) return;
+    var wait = due.difference(_now());
+    if (wait < minRefreshDelay) wait = minRefreshDelay;
     _timer = Timer(wait, () => unawaited(_refresh()));
   }
 
@@ -478,4 +650,16 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     _timer?.cancel();
     super.dispose();
   }
+}
+
+/// Outcome of [AuthService.deleteAccount].
+enum DeleteAccountResult {
+  deleted,
+
+  /// 409 `last_admin`: the only admin can't delete their account.
+  lastAdmin,
+
+  /// 401: not signed in any more (now signed out).
+  sessionEnded,
+  failed,
 }

@@ -85,6 +85,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
   late final AppServices services;
   late final GoRouter router = buildRouter();
   StreamSubscription<Uri>? links;
+  late final AppLifecycleListener lifecycle;
 
   @override
   void initState() {
@@ -108,6 +109,11 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       prefs: prefs,
     );
     unawaited(auth.restore());
+    // A restore that failed offline at launch is retried when the app comes
+    // back to the foreground (the refresh token is still stored).
+    lifecycle = AppLifecycleListener(
+      onResume: () => unawaited(auth.retryRestore()),
+    );
     unawaited(services.teams.load());
     links = widget.deepLinks.listen(
       (uri) {
@@ -123,6 +129,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
   @override
   void dispose() {
     links?.cancel();
+    lifecycle.dispose();
     router.dispose();
     services.dispose();
     super.dispose();
