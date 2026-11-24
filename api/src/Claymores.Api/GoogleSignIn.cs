@@ -152,6 +152,9 @@ internal static class GoogleSignIn
                 if (context.User.IsInRole("admin") && context.RequestServices.GetService<JoinRequestStore>() is not null)
                     adminLink += $"""<a class="button" href="{JoinRequestAdminPage.Path}">Join requests</a>""";
                 var checkoutNotice = checkoutEnabled ? RenderCheckoutNotice(context.Request.Query["checkout"]) : "";
+                var deletion = context.RequestServices.GetService<AccountDeletion>() is null
+                    ? ""
+                    : RenderDeletion(context.Request.Query["deletion"]);
                 return RenderPage("Club account", $"""
                     <section class="account-header">
                       <div>
@@ -168,6 +171,7 @@ internal static class GoogleSignIn
                         <button class="button button-secondary" type="submit">Sign out</button>
                       </form>
                     </div>
+                    {deletion}
                     """);
             })
             .RequireAuthorization(RolePolicy)
@@ -290,6 +294,30 @@ internal static class GoogleSignIn
               <h2>My dues</h2>
               {paymentNote}
               <ul class="assessment-list">{string.Concat(entries)}</ul>
+            </section>
+            """;
+    }
+
+    /// <summary>The "Delete my account" form (POST /auth/account/delete), with its result notice.</summary>
+    private static string RenderDeletion(string? notice)
+    {
+        var message = notice switch
+        {
+            "confirm" => """<p class="checkout-note notice-error" role="status">Tick the box to confirm, then delete your account.</p>""",
+            "last-admin" => """<p class="checkout-note notice-error" role="status">You're the club's only admin. Make someone else an admin before deleting your account.</p>""",
+            _ => ""
+        };
+        return $"""
+            <section class="dues delete-account">
+              <h2>Delete my account</h2>
+              <p>This signs you out everywhere and removes your club sign-in and member record. The club keeps its
+                 records of dues you were charged and paid.</p>
+              {message}
+              <form class="admin-form" action="/auth/account/delete" method="post">
+                <label class="confirm-field"><input type="checkbox" name="confirm" value="delete" required>
+                  I understand this can't be undone</label>
+                <button class="button button-danger" type="submit">Delete my account</button>
+              </form>
             </section>
             """;
     }
@@ -433,5 +461,10 @@ internal static class GoogleSignIn
         .join-actions { display: grid; gap: .75rem; border-top: 1px solid var(--divider); margin-top: 1rem; padding-top: 1rem; }
         .join-actions form { display: flex; flex-wrap: wrap; align-items: end; gap: .55rem; }
         .join-actions .admin-field { width: auto; flex: 1 1 11rem; }
+        .delete-account { border-top: 1px solid var(--divider); padding-top: 1.25rem; }
+        .delete-account .admin-form { margin-top: 1rem; }
+        .confirm-field { display: flex; gap: .5rem; align-items: center; font-size: .9rem; }
+        .button-danger { background: #fff1f7; border-color: var(--pink); }
+        .button-danger:hover { background: #ffd9ea; }
         """;
 }

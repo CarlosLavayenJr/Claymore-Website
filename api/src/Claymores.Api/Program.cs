@@ -117,6 +117,9 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         builder.Services.AddSingleton<ClubInvitations>();
         builder.Services.AddSingleton<ClubMemberDirectory>();
         builder.Services.AddSingleton<JoinRequestStore>();
+        builder.Services.AddSingleton<AccountDeletion>();
+        builder.Services.AddHttpClient<IAppleAuthClient, AppleAuthClient>(AppleAuthClient.Configure);
+        builder.Services.AddSingleton<AppleTokenRevocation>();
     }
     if (duesEnabled)
         builder.Services.AddSingleton<DuesLedger>();
@@ -207,6 +210,7 @@ if (googleEnabled && migrator is not null)
 {
     InvitationEndpoints.Map(app);
     JoinRequestEndpoints.Map(app, mobileAuthEnabled);
+    AccountDeletion.Map(app);
 }
 if (duesEnabled)
 {

@@ -127,8 +127,9 @@ internal static class ClubRoles
         return null;
     }
 
-    public static string[] ConfiguredEmails(IConfiguration configuration) =>
-        new[] { "PlayerEmails", "AdminEmails" }
+    /// <summary>Normalized emails in the bootstrap lists: both, or one of "PlayerEmails" and "AdminEmails".</summary>
+    public static string[] ConfiguredEmails(IConfiguration configuration, params string[] groups) =>
+        (groups.Length == 0 ? ["PlayerEmails", "AdminEmails"] : groups)
             .SelectMany(group => configuration.GetSection($"Authentication:Google:{group}").GetChildren())
             .Select(entry => entry.Value is null ? null : ClubInvitations.Normalize(entry.Value))
             .OfType<string>()
