@@ -73,28 +73,58 @@ jobs:
           printf '%s\n' "$KEY" > "$RUNNER_TEMP/keys/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/keys/AuthKey.p8"
 
-      # The Runner target's Release config signs with "Apple Distribution"
-      # (an App Store profile): a development profile would need registered
-      # devices, and the team has none. Set there, not here, because a
-      # command-line identity would also hit the Swift packages' resource
-      # bundles, which must keep their default.
-      - name: Archive (signs with the API key)
+      # Archive unsigned, then sign it ad hoc with the app's entitlements
+      # (Sign in with Apple), so no Apple account or registered device is
+      # needed here. Automatic signing would ask for a development profile at
+      # this step, which needs a registered device; the team has none. The
+      # export below re-signs everything for the App Store.
+      - name: Archive
         run: >
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner
           -configuration Release -destination 'generic/platform=iOS'
           -archivePath "$RUNNER_TEMP/Runner.xcarchive" archive
+          CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM=57539PPNC3
+
+      - name: Sign the archive ad hoc with the entitlements
+        run: |
+          app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          for f in "$app"/Frameworks/*; do codesign --force --sign - "$f"; done
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$app"
+          codesign --verify --deep --strict "$app"
+
+      # Export signs for the App Store with automatic, cloud-managed signing:
+      # Xcode creates the distribution certificate and App Store profile with
+      # the API key. App Store profiles need no devices.
+      - name: Sign for the App Store
+        run: >
+          xcodebuild -exportArchive
+          -archivePath "$RUNNER_TEMP/Runner.xcarchive"
+          -exportOptionsPlist ios/ExportOptions-check.plist
+          -exportPath "$RUNNER_TEMP/export"
           -allowProvisioningUpdates
           -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8"
           -authenticationKeyID "$KEY_ID"
           -authenticationKeyIssuerID "$ISSUER_ID"
-          CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=57539PPNC3
+
+      - name: Check the signed app before uploading
+        run: |
+          cd "$RUNNER_TEMP/export"
+          unzip -q -o *.ipa -d ipa
+          app=$(ls -d ipa/Payload/*.app)
+          codesign -d --entitlements - --xml "$app" > entitlements.plist 2>/dev/null
+          codesign -dvv "$app" 2>&1 | grep -E "Authority|TeamIdentifier"
+          grep -q "com.apple.developer.applesignin" entitlements.plist \
+            || { echo "::error::Sign in with Apple entitlement missing from the signed app"; exit 1; }
+          grep -q "Apple Distribution" <(codesign -dvv "$app" 2>&1) \
+            || { echo "::error::Not signed with an Apple Distribution certificate"; exit 1; }
+          echo "Signed for distribution with Sign in with Apple."
 
       - name: Upload to TestFlight
         run: >
           xcodebuild -exportArchive
           -archivePath "$RUNNER_TEMP/Runner.xcarchive"
           -exportOptionsPlist ios/ExportOptions.plist
-          -exportPath "$RUNNER_TEMP/export"
+          -exportPath "$RUNNER_TEMP/upload"
           -allowProvisioningUpdates
           -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8"
           -authenticationKeyID "$KEY_ID"
