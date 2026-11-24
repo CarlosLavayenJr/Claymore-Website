@@ -55,8 +55,9 @@ public sealed record FixtureScrapeRequest(IReadOnlyList<int> ClubIds, IReadOnlyL
         : new([ClaymoresClubId], [seasonId ?? defaultSeasonId], true);
 }
 
+/// <param name="Retired">Scraper rows of this page that rugbyfl.com no longer lists, now retired (see ScrapeStore).</param>
 public sealed record PageSummary(int ClubId, int SeasonId, int Parsed, int Inserted, int Updated, int Unchanged,
-    int SkippedManualOverride, string? Error);
+    int SkippedManualOverride, string? Error, int Retired = 0);
 
 public sealed record FixtureScrapeResult(string Status, IReadOnlyList<PageSummary> Pages, IReadOnlyList<string> NewTeamsNeedingReview)
 {
@@ -99,9 +100,9 @@ public sealed class ScrapeService(IRugbyFlSource source, ScrapeStore store, ILog
                             : null;
                         upserts.Add(new FixtureUpsert(fixture, home, away, clubId, seasonId, venue));
                     }
-                    var counts = await store.UpsertFixturesAsync(upserts, scrapedAt, ct);
+                    var counts = await store.UpsertFixturesAsync(upserts, scrapedAt, ct, new ScrapedPage(clubId, seasonId));
                     pages.Add(new PageSummary(clubId, seasonId, fixtures.Length, counts.Inserted, counts.Updated,
-                        counts.Unchanged, counts.SkippedManualOverride, null));
+                        counts.Unchanged, counts.SkippedManualOverride, null, counts.Retired));
                     logger.LogInformation("Scraped club {ClubId} season {SeasonId}: {Parsed} games, {Counts}",
                         clubId, seasonId, fixtures.Length, counts);
                 }

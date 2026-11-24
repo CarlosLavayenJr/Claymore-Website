@@ -202,6 +202,101 @@ public sealed class ScraperPostgresTests(PostgresDatabase database) : IClassFixt
         Assert.Equal(2028, await Scalar<int>("SELECT DISTINCT season FROM fixtures WHERE fixture_date = '2027-10-02'"));
     }
 
+    private async Task<string[]> PublicIdsAsync(int season)
+    {
+        var fixtures = await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource)
+            .ListAsync(season, TestContext.Current.CancellationToken);
+        return fixtures.Select(fixture => fixture.GetProperty("id").GetString()!).ToArray();
+    }
+
+    [Fact]
+    public async Task Retires_rows_the_page_no_longer_lists_and_revives_them_when_they_return()
+    {
+        database.SkipIfUnavailable();
+        _site.ClubPages[(117, 40)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, March 2, 2030", "Claymores", "Brevard"),
+            new ClubPageBuilder.Game("Saturday, March 9, 2030", "Claymores", "Okapi"),
+            new ClubPageBuilder.Game("Saturday, March 16, 2030", "Claymores", "Sarasota"));
+        Assert.Equal(3, (await ScrapeAsync(40)).Pages.Single().Inserted);
+        // Another club's page for the same season is never retired by club 117's page.
+        _site.ClubPages[(51, 40)] = ClubPageBuilder.Build(new ClubPageBuilder.Game("Saturday, March 23, 2030", "IR/Claymores", "Lakeland"));
+        await Service().ScrapeFixturesAsync(new FixtureScrapeRequest([51], [40], false), "cli", TestContext.Current.CancellationToken);
+        var okapiId = await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2030-03-09'");
+        Assert.Equal(4, (await PublicIdsAsync(2030)).Length);
+
+        // Okapi is rescheduled to March 30; the Sarasota game is locked by hand and then dropped.
+        await Execute("UPDATE fixtures SET manual_override = true WHERE fixture_date = '2030-03-16'");
+        _site.ClubPages[(117, 40)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, March 2, 2030", "Claymores", "Brevard"),
+            new ClubPageBuilder.Game("Saturday, March 30, 2030", "Claymores", "Okapi"));
+        var page = (await ScrapeAsync(40)).Pages.Single();
+        Assert.Equal((1, 0, 1, 0, 1), (page.Inserted, page.Updated, page.Unchanged, page.SkippedManualOverride, page.Retired));
+
+        var publicIds = await PublicIdsAsync(2030);
+        Assert.DoesNotContain(okapiId, publicIds);
+        Assert.Equal(4, publicIds.Length); // Brevard, Okapi (new date), Sarasota (locked), Lakeland (club 51)
+        Assert.Contains("2030-03-16", (await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource)
+            .ListAsync(2030, TestContext.Current.CancellationToken)).Select(f => f.GetProperty("date").GetString()));
+        Assert.Equal(JsonValueKind.Undefined, (await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource)
+            .FindAsync(okapiId, TestContext.Current.CancellationToken)).ValueKind);
+        // Soft delete: the row and its history stay.
+        Assert.True(await Scalar<bool>($"SELECT retired_at IS NOT NULL FROM fixtures WHERE sanity_id = '{okapiId}'"));
+        Assert.DoesNotContain(await new ScrapeStore(_dataSource!).ScrapedFixturesAsync(TestContext.Current.CancellationToken),
+            f => f.Id == okapiId);
+        // The run log records the count.
+        Assert.Equal(1, await Scalar<int>("""
+            SELECT (summary->'pages'->0->>'retired')::int FROM scrape_runs
+            WHERE kind = 'fixtures' AND parameters->'clubIds' @> '[117]' AND parameters->'seasonIds' @> '[40]'
+            ORDER BY id DESC LIMIT 1
+            """));
+
+        // The game moves back: the old row is revived (same id), the March 30 row is retired.
+        _site.ClubPages[(117, 40)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, March 2, 2030", "Claymores", "Brevard"),
+            new ClubPageBuilder.Game("Saturday, March 9, 2030", "Claymores", "Okapi"));
+        page = (await ScrapeAsync(40)).Pages.Single();
+        Assert.Equal((0, 1, 1, 1), (page.Inserted, page.Updated, page.Unchanged, page.Retired));
+        Assert.Contains(okapiId, await PublicIdsAsync(2030));
+        Assert.Equal(0L, await Scalar<long>("SELECT count(*) FROM fixtures WHERE fixture_date = '2030-03-30' AND retired_at IS NULL"));
+        Assert.Equal(okapiId, await Scalar<string>(
+            "SELECT payload->>'id' FROM fixtures WHERE fixture_date = '2030-03-09' AND retired_at IS NULL"));
+
+        // An empty parse (changed markup) retires nothing.
+        _site.ClubPages[(117, 40)] = "<html><body><table></table></body></html>";
+        Assert.Equal(0, (await ScrapeAsync(40)).Pages.Single().Retired);
+        Assert.Equal(4, (await PublicIdsAsync(2030)).Length);
+    }
+
+    [Fact]
+    public async Task Retires_the_old_key_when_a_team_is_re_resolved()
+    {
+        database.SkipIfUnavailable();
+        _site.ClubPages[(117, 41)] = ClubPageBuilder.Build(new ClubPageBuilder.Game("Saturday, April 6, 2030", "Claymores", "Orlando D4"));
+        Assert.Equal(1, (await ScrapeAsync(41)).Pages.Single().Inserted);
+        Assert.Equal("Orlando Griffins", await Scalar<string>("SELECT away_team FROM fixtures WHERE fixture_date = '2030-04-06'"));
+        var oldId = await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2030-04-06'");
+
+        // Someone fixes the alias: "Orlando" is the Otters. The next scrape writes a new key.
+        await Execute("""
+            UPDATE team_aliases SET team_id = (SELECT id FROM teams WHERE name = 'Orlando Otters') WHERE alias_normalized = 'orlando'
+            """);
+        try
+        {
+            var page = (await ScrapeAsync(41)).Pages.Single();
+            Assert.Equal((1, 1), (page.Inserted, page.Retired));
+            var ids = await PublicIdsAsync(2030);
+            Assert.DoesNotContain(oldId, ids);
+            Assert.Equal("Orlando Otters", await Scalar<string>(
+                "SELECT away_team FROM fixtures WHERE fixture_date = '2030-04-06' AND retired_at IS NULL"));
+        }
+        finally
+        {
+            await Execute("""
+                UPDATE team_aliases SET team_id = (SELECT id FROM teams WHERE name = 'Orlando Griffins') WHERE alias_normalized = 'orlando'
+                """);
+        }
+    }
+
     [Fact]
     public async Task Promotes_raw_imported_team_names_instead_of_duplicating_them()
     {
