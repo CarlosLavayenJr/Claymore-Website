@@ -6,7 +6,7 @@ import { PracticeCard } from '@/components/event-cards'
 import MatchCalendar from '@/components/match-calendar'
 import MatchTypeBadge from '@/components/match-type-badge'
 import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
-import { matchSlug } from '@/lib/seo'
+import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
 import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
 
 function isClaymores(name: string) {
@@ -76,9 +76,10 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                             {upcomingItems.map(item => {
                                 if (item.kind === 'match') {
                                     const m = item.match
-                                    const opponent = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
+                                    const clubEvent = isClubEvent(m)
+                                    const opponent = clubEvent ? clubEventName(m) : isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
                                     const isHome = isClaymores(m.homeTeam)
-                                    const logo = findTeamLogo(opponent, teams)
+                                    const logo = m.homeTeamLogo && clubEvent ? m.homeTeamLogo : findTeamLogo(clubEvent ? m.homeTeam : opponent, teams)
                                     return (
                                         <Link
                                             key={`m-${m._id}`}
@@ -92,9 +93,9 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-semibold text-[#111111] flex items-center gap-2 flex-wrap">
                                                         <span className="truncate">{opponent}</span>
-                                                        <MatchTypeBadge matchType={m.matchType} size="compact" />
+                                                        {!clubEvent && <MatchTypeBadge matchType={m.matchType} size="compact" />}
                                                     </p>
-                                                    <p className="text-xs text-[#555555] mt-0.5">{isHome ? 'Home' : 'Away'}</p>
+                                                    <p className="text-xs text-[#555555] mt-0.5">{clubEvent ? 'Club event' : isHome ? 'Home' : 'Away'}</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">

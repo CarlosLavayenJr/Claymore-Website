@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import type { PracticeInstance } from '@/lib/practices'
 import { festivalSlug } from '@/lib/festivals'
-import { matchSlug } from '@/lib/seo'
+import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
 import MatchTypeBadge from '@/components/match-type-badge'
 
 // ── Team / match helpers ────────────────────────────────────────────────────
@@ -111,7 +111,38 @@ export function AddressLink({ address }: { address: string }) {
     )
 }
 
+/** A club event the source lists as Claymores vs Claymores: one crest and the event name. */
+function ClubEventCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
+    const name = clubEventName(m)
+    const logo = m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)
+    const result = getResult(m)
+    return (
+        <Link
+            href={`/fixtures/${matchSlug(m)}`}
+            className="flex items-center gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white hover:bg-[#F9F9F9] hover:border-[#77c3ef]/40 transition-colors cursor-pointer"
+            aria-label={`View event details: ${name}`}
+        >
+            <div className="flex flex-col items-center w-12 shrink-0">
+                {logo ? (
+                    <img src={logo} alt="Central Florida Claymores" className="w-8 h-8 object-contain" />
+                ) : (
+                    <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Club event</p>
+                <p className="text-sm font-semibold text-[#111111] truncate">{name}</p>
+                {m.kickoffTime && <p className="text-xs text-[#555555]">{m.kickoffTime}</p>}
+            </div>
+            {result === 'cancelled' && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${RESULT_PILL.cancelled}`}>Cancelled</span>
+            )}
+        </Link>
+    )
+}
+
 export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
+    if (isClubEvent(m)) return <ClubEventCard m={m} teams={teams} />
     const result = getResult(m)
     const weHome = isClaymores(m.homeTeam)
     const opponent = weHome ? m.awayTeam : m.homeTeam

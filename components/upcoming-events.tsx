@@ -9,6 +9,7 @@ import type { SanityMatch, SanityPractice, SanityTeam } from '@/sanity/lib/queri
 import { expandPractices, type PracticeInstance } from '@/lib/practices'
 import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { MatchCard, PracticeCard, isClaymores } from '@/components/event-cards'
+import { clubEventName, isClubEvent } from '@/lib/seo'
 
 interface UpcomingEventsProps {
     matches: SanityMatch[]
@@ -78,7 +79,8 @@ export default function UpcomingEvents({
         const evts: CalEvent[] = [
             ...inMonth.map<CalEvent>((m) => {
                 const opp = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
-                return { kind: 'match', date: m.date, key: `m-${m._id}`, label: `vs ${opp}`, time: m.kickoffTime, match: m }
+                const label = isClubEvent(m) ? clubEventName(m) : `vs ${opp}`
+                return { kind: 'match', date: m.date, key: `m-${m._id}`, label, time: m.kickoffTime, match: m }
             }),
             ...instances.map<CalEvent>((p) => ({
                 kind: 'practice',

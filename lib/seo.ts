@@ -89,6 +89,21 @@ export function seasonYearForUrl(label: string): string {
     return single ? single[0] : label
 }
 
+/**
+ * rugbyfl.com lists the club's own events (the Highland Games) with the
+ * Claymores as both teams. There is no opponent, so these render as a club
+ * event under their competition name instead of "Claymores vs Claymores".
+ */
+export function isClubEvent(m: { homeTeam: string; awayTeam: string }): boolean {
+    return isClaymores(m.homeTeam) && isClaymores(m.awayTeam)
+}
+
+/** A club event's display name: its competition in title case, or "Club event". */
+export function clubEventName(m: { competition?: string | null }): string {
+    const name = m.competition?.trim()
+    return name ? name.replace(/\b[a-z]/g, (c) => c.toUpperCase()) : 'Club event'
+}
+
 export function opponentOf(m: { homeTeam: string; awayTeam: string }): string {
     return isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
 }
@@ -118,6 +133,13 @@ export function matchOutcome(m: SanityMatch): 'win' | 'loss' | 'draw' | 'pending
 // Auto-generated match summary (used when editor hasn't written a recap)
 // ---------------------------------------------------------------------------
 export function autoMatchSummary(m: SanityMatch): string {
+    if (isClubEvent(m)) {
+        const name = clubEventName(m)
+        const when = `${formatMatchDateLong(m.date)}${m.kickoffTime ? ` at ${m.kickoffTime}` : ''}`
+        return m.status === 'cancelled'
+            ? `${name}, a ${CLUB_NAME} club event planned for ${formatMatchDateLong(m.date)}, was cancelled.`
+            : `${name} is a ${CLUB_NAME} club event on ${when}${m.venue ? ` at ${m.venue}` : ''}. Come out and support Orlando rugby.`
+    }
     const opp = opponentOf(m)
     const home = isHomeMatch(m)
     const dateStr = formatMatchDateLong(m.date)
@@ -256,7 +278,7 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
     return {
         '@context': 'https://schema.org',
         '@type': 'SportsEvent',
-        name: `${m.homeTeam} vs ${m.awayTeam}`,
+        name: isClubEvent(m) ? clubEventName(m) : `${m.homeTeam} vs ${m.awayTeam}`,
         description: autoMatchSummary(m),
         startDate,
         eventStatus,
@@ -277,16 +299,21 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
                   }
                 : undefined,
         },
-        homeTeam: {
-            '@type': 'SportsTeam',
-            name: m.homeTeam,
-            ...(m.homeTeamLogo ? { logo: m.homeTeamLogo } : {}),
-        },
-        awayTeam: {
-            '@type': 'SportsTeam',
-            name: m.awayTeam,
-            ...(m.awayTeamLogo ? { logo: m.awayTeamLogo } : {}),
-        },
+        // A club event has no opponent, so it lists no teams.
+        ...(isClubEvent(m)
+            ? {}
+            : {
+                  homeTeam: {
+                      '@type': 'SportsTeam',
+                      name: m.homeTeam,
+                      ...(m.homeTeamLogo ? { logo: m.homeTeamLogo } : {}),
+                  },
+                  awayTeam: {
+                      '@type': 'SportsTeam',
+                      name: m.awayTeam,
+                      ...(m.awayTeamLogo ? { logo: m.awayTeamLogo } : {}),
+                  },
+              }),
         organizer: {
             '@type': 'SportsOrganization',
             name: 'Florida Rugby Union',

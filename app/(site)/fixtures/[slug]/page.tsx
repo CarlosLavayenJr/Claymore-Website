@@ -12,8 +12,10 @@ import {
     autoMatchSummary,
     breadcrumbSchema,
     claymoresScore,
+    clubEventName,
     formatMatchDateLong,
     isClaymores,
+    isClubEvent,
     isHomeMatch,
     matchOutcome,
     matchSlug,
@@ -55,6 +57,15 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
             description: `${event.title}: Central Florida Claymores event details. ${event.venue ?? ''}`,
             alternates: { canonical: `/fixtures/${slug}` },
             openGraph: { title: event.title, url: `/fixtures/${slug}`, images: ogImage(`/fixtures/${slug}`) },
+        }
+    }
+    if (isClubEvent(match)) {
+        const title = `${clubEventName(match)} — ${formatMatchDateLong(match.date)}`
+        return {
+            title: `${title} | Orlando Rugby`,
+            description: autoMatchSummary(match).slice(0, 200),
+            alternates: { canonical: `/fixtures/${slug}` },
+            openGraph: { title, description: autoMatchSummary(match).slice(0, 200), url: `/fixtures/${slug}`, images: ogImage(`/fixtures/${slug}`) },
         }
     }
     const opp = opponentOf(match)
@@ -127,6 +138,8 @@ export default async function MatchPage({ params, searchParams }: Params) {
         ] } : event
         return <FestivalDetails event={previewEvent} teams={teams} preview={preview} />
     }
+
+    if (isClubEvent(match)) return <ClubEventPage match={match} slug={slug} teams={teams} />
 
     const opp = opponentOf(match)
     const oppSlug = (isHomeMatch(match) ? match.awayTeamSlug : match.homeTeamSlug)
@@ -343,6 +356,93 @@ export default async function MatchPage({ params, searchParams }: Params) {
                         Join the Claymores
                     </Link>
                 </div>
+            </div>
+        </div>
+    )
+}
+
+/**
+ * rugbyfl.com lists the club's own events (the Highland Games) as Claymores vs
+ * Claymores. Show them as a club event: one crest, the event name, no opponent.
+ */
+function ClubEventPage({ match, slug, teams }: { match: SanityMatch; slug: string; teams: SanityTeam[] }) {
+    const name = clubEventName(match)
+    const logo = match.homeTeamLogo ?? findTeam(match.homeTeam, teams)?.logoUrl
+    const dateLong = formatMatchDateLong(match.date)
+    const hasEditorRecap = Array.isArray(match.recap) && match.recap.length > 0
+    return (
+        <div className="container mx-auto px-4 py-12 max-w-4xl">
+            <JsonLd data={sportsEventSchema(match)} />
+            <JsonLd
+                data={breadcrumbSchema([
+                    { name: 'Home', path: '/' },
+                    { name: 'Fixtures', path: '/fixtures' },
+                    { name, path: `/fixtures/${slug}` },
+                ])}
+            />
+            <Breadcrumbs
+                items={[
+                    { name: 'Home', path: '/' },
+                    { name: 'Fixtures', path: '/fixtures' },
+                    { name, path: `/fixtures/${slug}` },
+                ]}
+            />
+            <div className="bg-white border border-[#EAEAEA] rounded-2xl p-6 md:p-10">
+                <div className="flex items-center justify-between gap-3 mb-6">
+                    <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold">
+                        Club event · {seasonLabel(match.season)}
+                    </p>
+                    {match.status === 'cancelled' && (
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider bg-[#EAEAEA] text-[#111111]">
+                            CANCELLED
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-5">
+                    {logo ? (
+                        <img src={logo} alt="Central Florida Claymores logo" className="w-16 h-16 md:w-24 md:h-24 object-contain shrink-0" />
+                    ) : (
+                        <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-[#EAEAEA] shrink-0" />
+                    )}
+                    <h1 className="font-claymore text-3xl md:text-5xl text-[#111111] leading-tight">{name}</h1>
+                </div>
+                <div className="border-t border-[#EAEAEA] mt-8 pt-6 grid sm:grid-cols-3 gap-4 text-sm">
+                    <div>
+                        <p className="text-xs uppercase tracking-wider text-[#555555] font-semibold">Date</p>
+                        <p className="text-[#111111] mt-1">{dateLong}</p>
+                    </div>
+                    {match.kickoffTime && (
+                        <div>
+                            <p className="text-xs uppercase tracking-wider text-[#555555] font-semibold">Start</p>
+                            <p className="text-[#111111] mt-1">{match.kickoffTime}</p>
+                        </div>
+                    )}
+                    {match.venue && (
+                        <div>
+                            <p className="text-xs uppercase tracking-wider text-[#555555] font-semibold">Venue</p>
+                            <p className="text-[#111111] mt-1">{match.venue}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="w-12 h-px bg-[#fd80b5] mt-12 mb-6" />
+            {hasEditorRecap ? (
+                <div className="prose prose-lg max-w-none text-[#333333] [&_h2]:font-claymore [&_h2]:text-[#111111] [&_p]:mb-5 [&_a]:text-[#77c3ef]">
+                    <PortableText value={match.recap as Parameters<typeof PortableText>[0]['value']} />
+                </div>
+            ) : (
+                <p className="text-lg text-[#555555] leading-relaxed">{autoMatchSummary(match)}</p>
+            )}
+            {match.note && <p className="mt-6 text-sm text-[#555555] italic">Note: {match.note}</p>}
+            <div className="mt-12 text-center bg-[#F9F9F9] rounded-xl p-8">
+                <h2 className="text-2xl font-claymore text-[#111111] mb-3">More Claymores Fixtures</h2>
+                <p className="text-[#555555] mb-6">Home matches in Orlando are free to attend.</p>
+                <Link
+                    href="/fixtures"
+                    className="inline-block bg-[#77c3ef] text-white font-claymore px-8 py-3 rounded-md hover:bg-[#a0d5f5] transition-colors"
+                >
+                    Full Fixture List
+                </Link>
             </div>
         </div>
     )

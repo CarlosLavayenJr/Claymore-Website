@@ -41,7 +41,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:graphics": "tsx --test lib/graphics/*.test.ts",
-    "test:auth": "tsx --test lib/claymores/*.test.ts"
+    "test:auth": "tsx --test lib/claymores/*.test.ts",
+    "test:seo": "tsx --test lib/club-event.test.ts"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",

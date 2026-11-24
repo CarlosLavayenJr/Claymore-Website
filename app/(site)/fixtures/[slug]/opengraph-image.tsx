@@ -2,7 +2,9 @@ import { getMatches } from '@/lib/claymores-api'
 import { type SanityMatch } from '@/sanity/lib/queries'
 import {
     formatMatchDateLong,
+    clubEventName,
     isClaymores,
+    isClubEvent,
     matchOutcome,
     matchSlug,
     opponentOf,
@@ -24,6 +26,13 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         })
     }
 
+    if (isClubEvent(match)) {
+        return brandedImageResponse({
+            eyebrow: `Claymores · ${formatMatchDateLong(match.date)}`,
+            title: clubEventName(match).toUpperCase(),
+            subtitle: match.venue ?? 'Central Florida Claymores club event',
+        })
+    }
     const opp = opponentOf(match)
     const outcome = matchOutcome(match)
     const home = isClaymores(match.homeTeam)

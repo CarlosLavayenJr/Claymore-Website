@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import Breadcrumbs from '@/components/breadcrumbs'
-import { isClaymores } from '@/lib/seo'
+import { isClaymores, isClubEvent } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
@@ -54,7 +54,7 @@ export default async function OpponentsIndexPage() {
 
     const byOpp = new Map<string, OppRow>()
     matches.forEach((m) => {
-        if (m.status === 'cancelled' || m.status === 'upcoming') return
+        if (m.status === 'cancelled' || m.status === 'upcoming' || isClubEvent(m)) return
         const oppName = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
         const team = findTeam(oppName, teams)
         const key = team?.name ?? oppName
