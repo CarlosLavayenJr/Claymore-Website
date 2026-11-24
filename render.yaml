@@ -53,6 +53,10 @@ services:
       # Sign in with Apple (iOS app): the bundle ID is the identity token's audience.
       - key: Authentication__Apple__ClientIds__0
         value: com.claymoresrfc.claymores
+      # Where Stripe returns website checkouts (returnTo "web"). Checkout itself stays off
+      # (Stripe__CheckoutEnabled unset) and Stripe__Mode defaults to test; see api/README.md.
+      - key: Stripe__WebReturnUrl
+        value: https://www.claymoresrfc.com/account
 
   # rugbyfl.com scraper: writes Postgres only. The web service serves these rows
   # (Fixtures__Source=scraper, Standings__Source=postgres above).

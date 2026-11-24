@@ -134,7 +134,10 @@ internal static class GoogleSignIn
 
         app.MapGet("/auth/account", async (HttpContext context, CancellationToken ct) =>
             {
-                var checkoutEnabled = context.RequestServices.GetService<DuesCheckout>() is not null;
+                var checkoutMode = context.RequestServices.GetService<DuesCheckout>() is not null
+                    ? context.RequestServices.GetRequiredService<CheckoutSettings>().Mode
+                    : (StripeMode?)null;
+                var checkoutEnabled = checkoutMode is not null;
                 SetPageHeaders(context, checkoutEnabled);
                 var name = HtmlEncoder.Default.Encode(
                     context.User.FindFirstValue("name") ?? context.User.FindFirstValue("email") ?? "Club member");
@@ -142,7 +145,7 @@ internal static class GoogleSignIn
                 var ledger = context.RequestServices.GetService<DuesLedger>();
                 var dues = ledger is null
                     ? ""
-                    : RenderDues(await ledger.ListAsync(context.User.FindFirstValue("sub")!, ct), checkoutEnabled);
+                    : RenderDues(await ledger.ListAsync(context.User.FindFirstValue("sub")!, ct), checkoutMode);
                 var adminLink = ledger is not null && context.User.IsInRole("admin")
                     ? $"""<a class="button" href="{DuesAdminPage.Path}">Manage dues</a>"""
                     : "";
@@ -249,7 +252,8 @@ internal static class GoogleSignIn
         </html>
         """, "text/html; charset=utf-8");
 
-    private static string RenderDues(IReadOnlyList<DuesAssessment> assessments, bool checkoutEnabled)
+    /// <param name="checkoutMode">The Stripe mode when checkout is enabled; null hides checkout.</param>
+    internal static string RenderDues(IReadOnlyList<DuesAssessment> assessments, StripeMode? checkoutMode)
     {
         if (assessments.Count == 0)
             return """<section class="dues"><h2>My dues</h2><p class="empty">No dues have been assigned.</p></section>""";
@@ -261,7 +265,7 @@ internal static class GoogleSignIn
             var description = HtmlEncoder.Default.Encode(assessment.Description);
             var dueDate = assessment.DueDate?.ToString("MMM d, yyyy", culture);
             var due = dueDate is null ? "" : $"""<p class="due-date">Due {dueDate}</p>""";
-            var checkout = checkoutEnabled ? RenderCheckout(assessment) : "";
+            var checkout = checkoutMode is { } mode ? RenderCheckout(assessment, mode) : "";
             return $"""
                 <li class="assessment">
                   <h3>{description}</h3>
@@ -275,9 +279,12 @@ internal static class GoogleSignIn
                 </li>
                 """;
         });
-        var paymentNote = checkoutEnabled
-            ? """<p class="payment-note">Test checkout is enabled. Choose an amount to try a payment through Stripe.</p>"""
-            : "";
+        var paymentNote = checkoutMode switch
+        {
+            StripeMode.Test => """<p class="payment-note">Test checkout is enabled. Choose an amount to try a payment through Stripe.</p>""",
+            StripeMode.Live => """<p class="payment-note">Pay by card. Choose an amount to pay securely through Stripe.</p>""",
+            _ => ""
+        };
         return $"""
             <section class="dues">
               <h2>My dues</h2>
@@ -294,17 +301,18 @@ internal static class GoogleSignIn
         _ => ""
     };
 
-    private static string RenderCheckout(DuesAssessment assessment)
+    private static string RenderCheckout(DuesAssessment assessment, StripeMode mode)
     {
         var action = $"/auth/dues/{assessment.Id:D}/checkout";
         if (assessment.PendingCheckoutCents > 0)
         {
             var pending = assessment.PendingCheckoutCents / 100m;
+            var payment = mode == StripeMode.Live ? "payment" : "test payment";
             return $"""
                 <form class="checkout" action="{action}" method="post">
-                  <p class="pending-payment">Pending test payment: {pending.ToString("C", CultureInfo.GetCultureInfo("en-US"))}</p>
+                  <p class="pending-payment">Pending {payment}: {pending.ToString("C", CultureInfo.GetCultureInfo("en-US"))}</p>
                   <input type="hidden" name="amount" value="{pending.ToString("0.00", CultureInfo.InvariantCulture)}">
-                  <button class="button" type="submit">Resume test payment</button>
+                  <button class="button" type="submit">Resume {payment}</button>
                 </form>
                 """;
         }

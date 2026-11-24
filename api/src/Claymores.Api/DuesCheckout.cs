@@ -12,6 +12,15 @@ internal sealed class DuesCheckout(
     internal const int MinimumCents = 50;
     internal const int MaximumCents = 99_999_999;
 
+    /// <summary>Metadata purpose of sessions created by this API, with a separate <c>mode</c> entry.</summary>
+    internal const string Purpose = "claymores-dues";
+
+    /// <summary>
+    /// Purpose (and idempotency key prefix <c>claymores-dues-test-</c>) used before Stripe:Mode existed.
+    /// Those sessions were all created in test mode and have no <c>mode</c> metadata.
+    /// </summary>
+    internal const string LegacyTestPurpose = "claymores-test-dues";
+
     /// <summary>Browser form on the account page: redirects to Stripe, then back to the account page.</summary>
     public async Task<IResult> StartAsync(Guid assessmentId, HttpContext context, CancellationToken ct)
     {
@@ -27,7 +36,7 @@ internal sealed class DuesCheckout(
             return Results.BadRequest("Enter a USD amount of at least $0.50 with at most two decimal places.");
 
         var outcome = await OpenAsync(assessmentId, context.User.FindFirstValue("sub")!, (int)(dollars * 100),
-            CheckoutReturn.AccountPage, ct);
+            CheckoutReturn.Account, ct);
         return outcome switch
         {
             { Url: { } url } => Results.Redirect(url.AbsoluteUri),
@@ -37,21 +46,37 @@ internal sealed class DuesCheckout(
     }
 
     /// <summary>
-    /// JSON for the app: returns the Stripe URL to open; Stripe then returns to Stripe:AppReturnUrl.
+    /// JSON for the app and the website: returns the Stripe URL to open. Stripe then returns to
+    /// Stripe:AppReturnUrl (<c>returnTo</c> "app", the default) or Stripe:WebReturnUrl ("web").
     /// Bearer callers need no CSRF check, but cookie callers must be same-origin (<see cref="SameOriginGuard"/>).
     /// </summary>
-    public async Task<IResult> StartForAppAsync(Guid assessmentId, CheckoutSessionRequest request, HttpContext context,
+    public async Task<IResult> StartForClientAsync(Guid assessmentId, CheckoutSessionRequest request, HttpContext context,
         CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
         if (!await SameOriginGuard.IsAllowedAsync(context))
             return Results.StatusCode(403);
         var bearer = await context.AuthenticateAsync(MobileAuth.Scheme);
+
+        CheckoutReturn target;
+        switch (request.ReturnTo)
+        {
+            case null or "app":
+                target = CheckoutReturn.App;
+                break;
+            case "web":
+                if (settings.WebReturnUrl is null)
+                    return Results.BadRequest(new { error = "web_checkout_unavailable" });
+                target = CheckoutReturn.Web;
+                break;
+            default:
+                return Results.BadRequest(new { error = "invalid_request", field = "returnTo" });
+        }
         if (request.AmountCents is < MinimumCents or > MaximumCents)
             return Results.Problem($"amountCents must be from {MinimumCents} to {MaximumCents}.", statusCode: 400);
 
         var subject = (bearer.Succeeded ? bearer.Principal! : context.User).FindFirstValue("sub")!;
-        var outcome = await OpenAsync(assessmentId, subject, request.AmountCents, CheckoutReturn.App, ct);
+        var outcome = await OpenAsync(assessmentId, subject, request.AmountCents, target, ct);
         return outcome switch
         {
             { Url: { } url } => Results.Ok(new CheckoutSessionResponse(url.AbsoluteUri)),
@@ -62,15 +87,24 @@ internal sealed class DuesCheckout(
     }
 
     /// <summary>
-    /// Shared by both entry points: reserve (or resume the pending reservation), then create
+    /// Shared by every entry point: reserve (or resume the pending reservation), then create
     /// or fetch the Stripe session under a stable idempotency key.
     /// </summary>
+    /// <remarks>
+    /// The return target is stored with the reservation. Resuming a pending checkout from another
+    /// surface (the app, the website, or the account page) reuses the original session, or creates it
+    /// with the original target, so the idempotency key always pairs with identical parameters.
+    /// Stripe then returns the player to wherever the checkout was first started.
+    /// </remarks>
     private async Task<CheckoutOutcome> OpenAsync(Guid assessmentId, string subject, int amountCents,
-        CheckoutReturn target, CancellationToken ct)
+        CheckoutReturn requested, CancellationToken ct)
     {
-        var reservation = await store.ReserveAsync(assessmentId, subject, amountCents, ct);
+        var reservation = await store.ReserveAsync(assessmentId, subject, amountCents, requested, settings.Mode, ct);
         if (reservation.Checkout is not { } attempt)
             return CheckoutOutcome.Failed(reservation.ErrorStatus, reservation.Error);
+        if ((attempt.Mode ?? StripeMode.Test) != settings.Mode)
+            return CheckoutOutcome.Failed(409,
+                "A checkout started in another Stripe mode is still pending. Ask the treasurer to reconcile it.");
 
         Session session;
         try
@@ -85,13 +119,21 @@ internal sealed class DuesCheckout(
                 if (DateTime.UtcNow >= attempt.CreatedAt.AddHours(12))
                     return CheckoutOutcome.Failed(409, "This checkout needs reconciliation before you can start a new one.");
 
+                // Legacy rows (no stored target) keep their original key and parameters.
+                var legacy = attempt.ReturnTo is null;
+                var target = attempt.ReturnTo ?? requested;
+                if (ReturnUrl(target, "returned") is not { } success || ReturnUrl(target, "cancelled") is not { } cancel)
+                    return CheckoutOutcome.Failed(503, "This checkout's return page is not configured.");
+
                 var options = new SessionCreateOptions
                 {
                     Mode = "payment",
                     ClientReferenceId = attempt.Id.ToString("D"),
-                    SuccessUrl = ReturnUrl(target, "returned"),
-                    CancelUrl = ReturnUrl(target, "cancelled"),
-                    Metadata = new Dictionary<string, string> { ["purpose"] = "claymores-test-dues" },
+                    SuccessUrl = success,
+                    CancelUrl = cancel,
+                    Metadata = legacy
+                        ? new Dictionary<string, string> { ["purpose"] = LegacyTestPurpose }
+                        : new Dictionary<string, string> { ["purpose"] = Purpose, ["mode"] = settings.ModeName },
                     LineItems =
                     [
                         new()
@@ -101,22 +143,25 @@ internal sealed class DuesCheckout(
                             {
                                 Currency = "usd",
                                 UnitAmount = attempt.AmountCents,
-                                ProductData = new() { Name = "Claymores RFC dues (test)" }
+                                ProductData = new() { Name = legacy ? "Claymores RFC dues (test)" : settings.ProductName }
                             }
                         }
                     ]
                 };
                 options.AddExtraParam("payment_method_types", new[] { "card" });
-                session = await stripe.CreateAsync(
-                    options, new RequestOptions { IdempotencyKey = $"claymores-dues-test-{attempt.Id:D}" }, ct);
+                var key = legacy
+                    ? $"claymores-dues-test-{attempt.Id:D}"
+                    : $"claymores-dues-{settings.ModeName}-{Name(target)}-{attempt.Id:D}";
+                session = await stripe.CreateAsync(options, new RequestOptions { IdempotencyKey = key }, ct);
             }
         }
         catch (StripeException error)
         {
-            logger.LogWarning("Stripe test checkout request failed with status {Status} for attempt {Attempt}.",
-                error.HttpStatusCode, attempt.Id);
-            return CheckoutOutcome.Failed(502,
-                "Test checkout is temporarily unavailable. Try again to resume the same payment.");
+            logger.LogWarning("Stripe {Mode} checkout request failed with status {Status} for attempt {Attempt}.",
+                settings.ModeName, error.HttpStatusCode, attempt.Id);
+            return CheckoutOutcome.Failed(502, settings.Mode == StripeMode.Live
+                ? "Checkout is temporarily unavailable. Try again to resume the same payment."
+                : "Test checkout is temporarily unavailable. Try again to resume the same payment.");
         }
 
         if (!MatchesAttempt(session, attempt.Id, attempt.AmountCents))
@@ -134,11 +179,17 @@ internal sealed class DuesCheckout(
         return new CheckoutOutcome(url);
     }
 
-    private string ReturnUrl(CheckoutReturn target, string status) => target switch
+    internal static string Name(CheckoutReturn target) => target switch
     {
-        CheckoutReturn.App => settings.AppReturnUrl is { } app
-            ? $"{app}?checkout={status}"
-            : throw new InvalidOperationException("Stripe:AppReturnUrl is not configured."),
+        CheckoutReturn.App => "app",
+        CheckoutReturn.Web => "web",
+        _ => "account"
+    };
+
+    private string? ReturnUrl(CheckoutReturn target, string status) => target switch
+    {
+        CheckoutReturn.App => settings.AppReturnUrl is { } app ? $"{app}?checkout={status}" : null,
+        CheckoutReturn.Web => settings.WebReturnUrl is { } web ? CheckoutSettings.WithQuery(web, $"checkout={status}") : null,
         _ => $"{settings.Origin}/auth/account?checkout={status}"
     };
 
@@ -170,9 +221,10 @@ internal sealed class DuesCheckout(
         var paid = stripeEvent.Type == "checkout.session.completed";
         if (!paid && stripeEvent.Type != "checkout.session.expired")
             return Results.Ok();
-        if (stripeEvent.Livemode || stripeEvent.Data?.Object is not Session session)
-            return Results.BadRequest("Invalid Stripe test checkout event.");
-        if (session.Metadata?.GetValueOrDefault("purpose") != "claymores-test-dues")
+        // Test mode accepts only test events; live mode only live events.
+        if (stripeEvent.Livemode != (settings.Mode == StripeMode.Live) || stripeEvent.Data?.Object is not Session session)
+            return Results.BadRequest($"Invalid Stripe {settings.ModeName} checkout event.");
+        if (session.Metadata?.GetValueOrDefault("purpose") is not (Purpose or LegacyTestPurpose))
             return Results.Ok();
 
         if (!Guid.TryParse(session.ClientReferenceId, out var attempt) ||
@@ -181,18 +233,25 @@ internal sealed class DuesCheckout(
                   : session.Status != "expired" || session.PaymentStatus != "unpaid"))
             return Results.BadRequest("Invalid Stripe checkout status or amount.");
 
-        if (await store.ApplyEventAsync(attempt, session.Id, amount, paid, ct))
+        if (await store.ApplyEventAsync(attempt, session.Id, amount, paid, settings.Mode, ct))
             return Results.Ok();
 
-        logger.LogError("Stripe test event {Event} could not be matched to checkout {Attempt}.", stripeEvent.Id, attempt);
+        logger.LogError("Stripe {Mode} event {Event} could not be matched to checkout {Attempt}.",
+            settings.ModeName, stripeEvent.Id, attempt);
         return Results.Problem("Checkout needs reconciliation.", statusCode: 500);
     }
 
-    private static bool MatchesAttempt(Session session, Guid attempt, long amount) =>
-        !session.Livemode && session.Id?.StartsWith("cs_test_", StringComparison.Ordinal) == true && session.Mode == "payment" &&
-        session.Currency == "usd" && session.AmountTotal == amount &&
-        session.Metadata?.GetValueOrDefault("purpose") == "claymores-test-dues" &&
-        Guid.TryParse(session.ClientReferenceId, out var reference) && reference == attempt;
+    private bool MatchesAttempt(Session session, Guid attempt, long amount)
+    {
+        var live = settings.Mode == StripeMode.Live;
+        var purpose = session.Metadata?.GetValueOrDefault("purpose");
+        var ours = (purpose == Purpose && session.Metadata?.GetValueOrDefault("mode") == settings.ModeName) ||
+                   (!live && purpose == LegacyTestPurpose);
+        return ours && session.Livemode == live &&
+               session.Id?.StartsWith(live ? "cs_live_" : "cs_test_", StringComparison.Ordinal) == true &&
+               session.Mode == "payment" && session.Currency == "usd" && session.AmountTotal == amount &&
+               Guid.TryParse(session.ClientReferenceId, out var reference) && reference == attempt;
+    }
 
     public static void Map(WebApplication app, bool appCheckout)
     {
@@ -201,7 +260,7 @@ internal sealed class DuesCheckout(
                     checkout.StartAsync(assessmentId, context, ct))
             .RequireAuthorization(GoogleSignIn.RolePolicy)
             .WithTags("Dues")
-            .WithSummary("Start or resume a player dues checkout in Stripe test mode")
+            .WithSummary("Start or resume a player dues checkout in Stripe (test or live per Stripe:Mode)")
             .Accepts<IFormCollection>("application/x-www-form-urlencoded")
             .Produces(302).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409).Produces(502);
 
@@ -209,12 +268,13 @@ internal sealed class DuesCheckout(
         {
             app.MapPost("/v1/dues/{assessmentId:guid}/checkout-session",
                     (Guid assessmentId, CheckoutSessionRequest request, DuesCheckout checkout, HttpContext context,
-                        CancellationToken ct) => checkout.StartForAppAsync(assessmentId, request, context, ct))
+                        CancellationToken ct) => checkout.StartForClientAsync(assessmentId, request, context, ct))
                 .RequireAuthorization(GoogleSignIn.RolePolicy)
                 .WithTags("Dues")
-                .WithSummary("Start or resume a dues checkout in Stripe test mode and get its URL")
-                .WithDescription("For the app. Stripe returns to Stripe:AppReturnUrl with ?checkout=returned or " +
-                    "?checkout=cancelled. A pending checkout for the assessment is resumed with its original amount.")
+                .WithSummary("Start or resume a dues checkout in Stripe and get its URL")
+                .WithDescription("For the app and the website. returnTo is \"app\" (default; Stripe returns to " +
+                    "Stripe:AppReturnUrl) or \"web\" (Stripe:WebReturnUrl), with ?checkout=returned or ?checkout=cancelled. " +
+                    "A pending checkout for the assessment is resumed with its original amount and original return target.")
                 .Produces<CheckoutSessionResponse>()
                 .ProducesProblem(400).Produces(401).Produces(403).ProducesProblem(404).ProducesProblem(409)
                 .ProducesProblem(502);
@@ -223,36 +283,82 @@ internal sealed class DuesCheckout(
         app.MapPost("/v1/webhooks/stripe",
                 (DuesCheckout checkout, HttpContext context, CancellationToken ct) => checkout.WebhookAsync(context, ct))
             .WithTags("Dues")
-            .WithSummary("Receive signed Stripe test checkout events")
+            .WithSummary("Receive signed Stripe checkout events for the configured Stripe:Mode")
             .Produces(200).Produces(400).Produces(413).Produces(500);
     }
 }
 
-internal enum CheckoutReturn { AccountPage, App }
+internal enum CheckoutReturn { Account, App, Web }
+
+internal enum StripeMode { Test, Live }
 
 internal sealed record CheckoutOutcome(Uri? Url, bool Finished = false, int ErrorStatus = 0, string? Error = null)
 {
     public static CheckoutOutcome Failed(int status, string? error) => new(null, false, status, error);
 }
 
-internal sealed record CheckoutSessionRequest(int AmountCents);
+/// <param name="ReturnTo">"app" (default) or "web".</param>
+internal sealed record CheckoutSessionRequest(int AmountCents, string? ReturnTo = null);
 internal sealed record CheckoutSessionResponse(string Url);
 
-internal sealed record CheckoutSettings(string SecretKey, string WebhookSecret, string Origin, string? AppReturnUrl = null)
+internal sealed record CheckoutSettings(
+    string SecretKey, string WebhookSecret, string Origin, string? AppReturnUrl = null,
+    StripeMode Mode = StripeMode.Test, string? WebReturnUrl = null)
 {
-    public static CheckoutSettings Read(IConfiguration config)
+    public string ModeName => Mode == StripeMode.Live ? "live" : "test";
+    public string ProductName => Mode == StripeMode.Live ? "Claymores RFC dues" : "Claymores RFC dues (test)";
+    public string RecordedBy => RecordedByFor(Mode);
+    internal static string RecordedByFor(StripeMode mode) => mode == StripeMode.Live ? "stripe" : "stripe-test";
+
+    public static CheckoutSettings Read(IConfiguration config, string environmentName)
     {
+        var mode = ReadMode(config["Stripe:Mode"]);
         var key = config["Stripe:SecretKey"];
+        var keyMode = key switch
+        {
+            _ when key is null => (StripeMode?)null,
+            _ when key.StartsWith("sk_test_", StringComparison.Ordinal) || key.StartsWith("rk_test_", StringComparison.Ordinal)
+                => StripeMode.Test,
+            _ when key.StartsWith("sk_live_", StringComparison.Ordinal) || key.StartsWith("rk_live_", StringComparison.Ordinal)
+                => StripeMode.Live,
+            _ => null
+        };
+        var modeName = mode == StripeMode.Live ? "live" : "test";
+        if (keyMode is null)
+            throw new InvalidOperationException(
+                $"Stripe:SecretKey must be a Stripe {modeName} secret or restricted key (sk_{modeName}_ or rk_{modeName}_).");
+        if (keyMode != mode)
+            throw new InvalidOperationException(
+                $"Stripe:Mode is {modeName} but Stripe:SecretKey is a {(keyMode == StripeMode.Live ? "live" : "test")} key. " +
+                $"Use an sk_{modeName}_ or rk_{modeName}_ key, or change Stripe:Mode.");
+
+        if (mode == StripeMode.Live)
+        {
+            if (environmentName != Environments.Production)
+                throw new InvalidOperationException(
+                    "Stripe:Mode=live runs only with ASPNETCORE_ENVIRONMENT=Production.");
+            if (!bool.TryParse(config["Stripe:LiveConfirmed"], out var confirmed) || !confirmed)
+                throw new InvalidOperationException(
+                    "Stripe:Mode=live also needs Stripe:LiveConfirmed=true. See the go-live checklist in api/README.md.");
+        }
+
         var webhook = config["Stripe:WebhookSecret"];
         var origin = config["Stripe:ReturnOrigin"];
-        if (key?.StartsWith("sk_test_", StringComparison.Ordinal) != true ||
-            webhook?.StartsWith("whsec_", StringComparison.Ordinal) != true ||
+        if (webhook?.StartsWith("whsec_", StringComparison.Ordinal) != true ||
             !Uri.TryCreate(origin, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps ||
             url.AbsolutePath != "/" || url.UserInfo.Length != 0 || url.Query.Length != 0 || url.Fragment.Length != 0)
-            throw new InvalidOperationException("Stripe test checkout needs a test secret key, webhook secret, and HTTPS return origin.");
+            throw new InvalidOperationException("Stripe checkout needs a webhook secret (whsec_) and an HTTPS return origin.");
 
-        return new(key, webhook, url.GetLeftPart(UriPartial.Authority), ReadAppReturnUrl(config["Stripe:AppReturnUrl"]));
+        return new(key!, webhook, url.GetLeftPart(UriPartial.Authority), ReadAppReturnUrl(config["Stripe:AppReturnUrl"]),
+            mode, ReadWebReturnUrl(config["Stripe:WebReturnUrl"], environmentName));
     }
+
+    internal static StripeMode ReadMode(string? value) => value?.Trim() switch
+    {
+        null or "" or "test" => StripeMode.Test,
+        "live" => StripeMode.Live,
+        _ => throw new InvalidOperationException("Stripe:Mode must be test or live.")
+    };
 
     /// <summary>The app's return link, such as claymores://dues: a custom scheme or HTTPS, with no query or fragment.</summary>
     internal static string? ReadAppReturnUrl(string? value)
@@ -267,4 +373,29 @@ internal sealed record CheckoutSettings(string SecretKey, string WebhookSecret, 
                 "Stripe:AppReturnUrl must be an app link such as claymores://dues or an HTTPS URL, without a query or fragment.");
         return value;
     }
+
+    /// <summary>
+    /// The website's return page, such as https://www.claymoresrfc.com/account: an absolute HTTPS URL
+    /// (HTTP only for a loopback host in Development), optionally with a query, without a fragment.
+    /// </summary>
+    internal static string? ReadWebReturnUrl(string? value, string environmentName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        value = value.Trim();
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var url) || url.UserInfo.Length != 0 || value.Contains('#') ||
+            url.Host.Length == 0 ||
+            !(url.Scheme == Uri.UriSchemeHttps ||
+              (url.Scheme == Uri.UriSchemeHttp && url.IsLoopback && environmentName == Environments.Development)))
+            throw new InvalidOperationException(
+                "Stripe:WebReturnUrl must be an absolute HTTPS URL without a fragment, such as https://www.claymoresrfc.com/account " +
+                "(HTTP is allowed only for localhost in Development).");
+        return value;
+    }
+
+    /// <summary>Appends a query parameter, keeping any query the URL already has.</summary>
+    internal static string WithQuery(string url, string parameter) =>
+        !url.Contains('?') ? $"{url}?{parameter}"
+        : url.EndsWith('?') || url.EndsWith('&') ? url + parameter
+        : $"{url}&{parameter}";
 }
