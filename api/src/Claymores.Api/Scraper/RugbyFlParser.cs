@@ -225,11 +225,22 @@ public static partial class RugbyFlParser
         var source = StandingsSource.StandingsTable;
         if (rows.Count == 0 && schedule.Count > 0)
         {
+            // The schedule has no pool column, so ExcludePools below has nothing to drop here.
             rows = ComputeStandingsFromSchedule(schedule);
             source = StandingsSource.ComputedFromSchedule;
         }
+        rows = ExcludePools(rows);
         return rows.Count == 0 ? null : new ParsedChampionship(Rank(rows), ExtractPlayoffs(schedule), source);
     }
+
+    /// <summary>
+    /// rugbyfl.com lists out-of-state guest sides (Austin Blacks, Detroit Tradesmen, ...) in a pool called
+    /// "Unique". They are not part of the league table the site shows, so they are dropped before ranking.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ExcludedPools = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Unique" };
+
+    public static List<StandingsRow> ExcludePools(IEnumerable<StandingsRow> rows) =>
+        rows.Where(row => !ExcludedPools.Contains(row.Pool.Trim())).ToList();
 
     public static IReadOnlyList<StandingsRow> ParseStandings(string html)
     {

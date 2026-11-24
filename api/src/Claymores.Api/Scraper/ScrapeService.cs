@@ -218,7 +218,8 @@ public sealed class ScrapeService(IRugbyFlSource source, ScrapeStore store, ILog
 public sealed record ScraperCommand(string Name, FixtureScrapeRequest? Fixtures, StandingsScrapeRequest? Standings)
 {
     public static readonly string[] Names =
-        ["--scrape-fixtures", "--scrape-standings", "--compare-with-sanity", "--import-reference-data"];
+        ["--scrape-fixtures", "--scrape-standings", "--compare-with-sanity", "--import-reference-data",
+            "--adopt-sanity-overrides"];
 
     public static bool IsScraperCommand(string[] args) => args.Length > 0 && Names.Contains(args[0]);
 

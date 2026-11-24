@@ -32,7 +32,7 @@ public static class SanityComparison
         foreach (var (key, docs) in sanity.Where(pair => pair.Value.Length > 1))
             lines.Add($"DUPLICATE in Sanity {key}: {string.Join(", ", docs.Select(d => Text(d, "id")))}");
 
-        int matched = 0, differences = 0, enriched = 0;
+        int matched = 0, differences = 0, enriched = 0, locked = 0;
         foreach (var key in sanity.Keys.Union(postgres.Keys).Order(StringComparer.Ordinal))
         {
             var inSanity = sanity.TryGetValue(key, out var docs);
@@ -63,7 +63,7 @@ public static class SanityComparison
                 ["venue"] = row.Venue,
             };
             var changed = FixtureFields
-                .Select(field => (field, theirs: Normalize(Text(doc, field)), ours: Normalize(ours[field])))
+                .Select(field => (field, theirs: Normalize(field, Text(doc, field)), ours: Normalize(field, ours[field])))
                 .Where(item => !string.Equals(item.theirs, item.ours, StringComparison.Ordinal))
                 .ToArray();
             if (changed.Any(item => item.theirs is null && EnrichedFields.Contains(item.field)))
@@ -75,12 +75,15 @@ public static class SanityComparison
             if (fieldDiffs.Length == 0)
             {
                 matched++;
+                if (row.ManualOverride) locked++;
                 continue;
             }
             differences++;
             lines.Add($"DIFFERENT {key} ({Text(doc, "id")} / {row.Id}{(row.ManualOverride ? ", manual override" : "")}): " +
                       string.Join("; ", fieldDiffs));
         }
+        if (locked > 0)
+            lines.Add($"LOCKED {locked} matching games are manual-override rows (adopted from Sanity or edited by hand).");
         if (enriched > 0)
             lines.Add($"ENRICHED {enriched} games have a kickoff time or venue that Sanity leaves blank (not counted as differences).");
         return new ComparisonReport("fixtures", matched, differences, lines);
@@ -146,6 +149,12 @@ public static class SanityComparison
         resolver.Resolve(name) is { } match ? $"#{match.TeamId}" : "?" + TeamNameResolver.Normalize(name);
 
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : TeamNameResolver.Clean(value);
+
+    // Sanity editors type kickoffs freely ("1:00pm"); compare them as times.
+    private static string? Normalize(string field, string? value) =>
+        field == "kickoffTime" && SanityAdoption.ParseKickoff(value) is { } time
+            ? SanityAdoption.FormatKickoff(time)
+            : Normalize(value);
     private static string Show(string? value) => value is null ? "null" : $"\"{value}\"";
 
     private static string? Text(JsonElement element, string property) =>

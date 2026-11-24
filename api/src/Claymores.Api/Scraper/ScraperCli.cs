@@ -39,6 +39,22 @@ public static class ScraperCli
                     Console.WriteLine("Sanity has no complete leagueChampionship singleton; championship_config unchanged.");
                 return 0;
             }
+            case "--adopt-sanity-overrides":
+            {
+                // Reads Sanity only; writes scraper rows in Postgres. Never run automatically.
+                var docs = await services.GetRequiredService<SanityData>().FixturesForAdoptionAsync(ct);
+                var result = await SanityAdoption.RunAsync(store, docs, ct);
+                Console.WriteLine($"Sanity hand edits: {result.Adopted} adopted (new rows), {result.Updated} updated, " +
+                                  $"{result.Unchanged} unchanged, {result.UnresolvedNames.Count} unresolved names, " +
+                                  $"{result.Skipped.Count} skipped.");
+                foreach (var line in result.Lines)
+                    Console.WriteLine("  " + line);
+                foreach (var name in result.UnresolvedNames)
+                    Console.WriteLine("  UNRESOLVED " + name);
+                foreach (var reason in result.Skipped)
+                    Console.WriteLine("  SKIPPED " + reason);
+                return 0;
+            }
             case "--compare-with-sanity":
             {
                 var sanity = services.GetRequiredService<SanityData>();

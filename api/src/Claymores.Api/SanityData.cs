@@ -31,6 +31,18 @@ public sealed class SanityData(HttpClient client)
         return result.EnumerateArray().Select(item => item.Clone()).ToArray();
     }
 
+    /// <summary>Every match with the fields --adopt-sanity-overrides needs, including manualOverride.</summary>
+    public async Task<JsonElement[]> FixturesForAdoptionAsync(CancellationToken ct)
+    {
+        var result = await QueryAsync("""
+            *[_type == "match"] | order(date asc, _id asc) {
+              "id": _id, date, season, homeTeam, awayTeam, homeScore, awayScore, status,
+              venue, kickoffTime, note, matchType, competition, manualOverride
+            }
+            """, null, ct);
+        return result.EnumerateArray().Select(item => item.Clone()).ToArray();
+    }
+
     public Task<JsonElement> FixtureAsync(string id, CancellationToken ct) =>
         QueryAsync("*[_type == \"match\" && _id == $id][0] " + FixtureFields, ("id", id), ct);
 
