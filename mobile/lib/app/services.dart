@@ -8,6 +8,7 @@ import '../data/teams.dart';
 import '../features/auth/auth_service.dart';
 import '../features/club/notifications.dart';
 import '../features/fixtures/availability.dart';
+import 'config.dart';
 
 /// The schedule shared by Home, Fixtures and match details.
 class ClubDataController extends ChangeNotifier {
@@ -78,8 +79,13 @@ class AppServices {
   final SharedPreferencesAsync prefs;
   final ClubNotifications notifications;
 
-  /// Club tab "Player preview" switch; shows availability pickers.
-  final playerPreview = ValueNotifier(false);
+  /// Whether fixtures show availability pickers: signed-in members only, and
+  /// only in builds with `ENABLE_AVAILABILITY`.
+  late final showAvailability = AvailabilityGate(
+    auth,
+    () => auth.signedIn,
+    enabled: AppConfig.availabilityEnabled,
+  );
 
   void dispose() {
     club.dispose();
@@ -87,7 +93,7 @@ class AppServices {
     teams.dispose();
     auth.dispose();
     availability.dispose();
-    playerPreview.dispose();
+    showAvailability.dispose();
   }
 }
 
@@ -105,4 +111,26 @@ class AppScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppScope oldWidget) => services != oldWidget.services;
+}
+
+/// True only when availability is enabled for the build and a member is
+/// signed in. The app is public; sign-in is just for member features.
+class AvailabilityGate extends ValueNotifier<bool> {
+  AvailabilityGate(this._source, this._signedIn, {required bool enabled})
+    : _enabled = enabled,
+      super(enabled && _signedIn()) {
+    _source.addListener(_update);
+  }
+
+  final Listenable _source;
+  final bool Function() _signedIn;
+  final bool _enabled;
+
+  void _update() => value = _enabled && _signedIn();
+
+  @override
+  void dispose() {
+    _source.removeListener(_update);
+    super.dispose();
+  }
 }

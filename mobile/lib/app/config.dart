@@ -6,6 +6,10 @@ abstract final class AppConfig {
   /// Shows the dues section and the profile's dues ledger.
   static const duesEnabled = bool.fromEnvironment('ENABLE_DUES');
 
+  /// Match availability pickers. Off until responses sync with the API; even
+  /// then they only show to signed-in members. Everything else is public.
+  static const availabilityEnabled = bool.fromEnvironment('ENABLE_AVAILABILITY');
+
   /// Shows Google sign-in under the Club tab.
   static const signInEnabled = bool.fromEnvironment('ENABLE_SIGN_IN');
 

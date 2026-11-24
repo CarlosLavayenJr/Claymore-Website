@@ -19,10 +19,10 @@ class _FixturesPageState extends State<FixturesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final preview = AppScope.of(context).playerPreview;
+    final preview = AppScope.of(context).showAvailability;
     return ValueListenableBuilder(
       valueListenable: preview,
-      builder: (context, playerPreview, _) => ClubDataView(
+      builder: (context, showAvailability, _) => ClubDataView(
         storageKey: 'fixtures',
         builder: (context, clubData) {
           final today = clubToday();
@@ -76,7 +76,7 @@ class _FixturesPageState extends State<FixturesPage> {
                   key: ValueKey(fixture.id),
                   fixture: fixture,
                   availability:
-                      playerPreview && !history && fixture.status == 'upcoming',
+                      showAvailability && !history && fixture.status == 'upcoming',
                 ),
               ),
           ];

@@ -1,6 +1,6 @@
 # Claymores RFC · Flutter starter
 
-A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. Club contains the player preview, notification settings and (when configured) Google sign-in and, on iOS, Sign in with Apple, which leads to a profile with dues and card payments.
+A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. The whole app is public. Signing in is only for member features: today that's dues, and later game availability. Club contains notification settings and (when configured) Google sign-in and, on iOS, Sign in with Apple, which leads to a profile with dues and card payments.
 
 ## Run it
 
@@ -13,9 +13,9 @@ flutter run -d chrome
 
 The browser preview uses a labeled November 23, 2026 Sanity snapshot. Native builds fetch the published Sanity feed and fall back to the snapshot when the feed is unavailable. To use live Sanity in a browser deployment, allow its exact origin in Sanity and build with `--dart-define=SANITY_WEB_LIVE=true`.
 
-To try availability, open **Club**, turn on **Player preview**, return to **Home**, and tap a response on the fixture. Responses are saved by fixture ID on this device and are also shown for that fixture on the Fixtures tab. Preview mode resets when you restart the app. It is a UI demo for the eventual signed-in player experience.
+Match availability is hidden until it syncs with the API. Build with `--dart-define=ENABLE_AVAILABILITY=true` to show the pickers; even then they appear only for signed-in members. Responses are still saved on the device by fixture ID.
 
-Dues are off by default (`--dart-define=ENABLE_DUES=true`). Without sign-in, turning on Player preview shows a placeholder. With sign-in, the profile lists your dues and lets you pay by card (below).
+Dues are off by default (`--dart-define=ENABLE_DUES=true`) and only appear once a member signs in. The profile then lists their dues and lets them pay by card (below).
 
 ## Code layout
 
@@ -105,6 +105,7 @@ Sign-in and dues are behind dart-defines so a release build without the config s
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID (iOS only). |
 | `ENABLE_APPLE_SIGN_IN` | Sign in with Apple, iOS only. Defaults to `true`; set `false` to hide it. |
 | `ENABLE_DUES=true` | Shows dues on the profile. |
+| `ENABLE_AVAILABILITY=true` | Shows match availability pickers to signed-in members (local only for now). |
 
 ```sh
 flutter run --dart-define=ENABLE_SIGN_IN=true --dart-define=ENABLE_DUES=true \

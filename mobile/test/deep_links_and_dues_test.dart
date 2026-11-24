@@ -101,7 +101,7 @@ void main() {
     );
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('CLUB'), findsOneWidget);
+    expect(find.text('NOTIFICATIONS'), findsOneWidget);
   });
 
   group('PayDuesForm', () {

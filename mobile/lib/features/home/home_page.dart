@@ -12,10 +12,10 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = AppScope.of(context).playerPreview;
+    final preview = AppScope.of(context).showAvailability;
     return ValueListenableBuilder(
       valueListenable: preview,
-      builder: (context, playerPreview, _) => ClubDataView(
+      builder: (context, showAvailability, _) => ClubDataView(
         storageKey: 'home',
         builder: (context, clubData) {
           final today = clubToday();
@@ -35,7 +35,7 @@ class HomePage extends StatelessWidget {
               FixtureCard(
                 key: ValueKey(next.id),
                 fixture: next,
-                availability: playerPreview,
+                availability: showAvailability,
                 featured: true,
               ),
             const SizedBox(height: 24),

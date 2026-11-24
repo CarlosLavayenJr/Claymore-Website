@@ -56,12 +56,12 @@ class _Details extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = MaterialLocalizations.of(context);
-    final preview = AppScope.of(context).playerPreview;
+    final preview = AppScope.of(context).showAvailability;
     final upcoming =
         fixture.status == 'upcoming' && !fixture.date.isBefore(clubToday());
     return ValueListenableBuilder(
       valueListenable: preview,
-      builder: (context, playerPreview, _) => PageList(
+      builder: (context, showAvailability, _) => PageList(
         children: [
           Eyebrow(localizations.formatFullDate(fixture.date)),
           const SizedBox(height: 12),
@@ -96,7 +96,7 @@ class _Details extends StatelessWidget {
               ],
             ),
           ),
-          if (playerPreview && upcoming) ...[
+          if (showAvailability && upcoming) ...[
             const SizedBox(height: 12),
             Panel(child: AvailabilityPicker(fixtureId: fixture.id)),
           ],

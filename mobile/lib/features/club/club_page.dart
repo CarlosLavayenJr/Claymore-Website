@@ -17,26 +17,12 @@ class ClubPage extends StatelessWidget {
     final services = AppScope.of(context);
     final auth = services.auth;
     return ListenableBuilder(
-      listenable: Listenable.merge([services.playerPreview, auth]),
+      listenable: auth,
       builder: (context, _) {
-        final playerPreview = services.playerPreview.value;
         return PageList(
           storageKey: 'club',
           children: [
-            const SectionHeading('CLUB'),
-            Panel(
-              child: SwitchListTile(
-                title: const Text('Player preview'),
-                subtitle: const Text(
-                  'Try match availability. Responses stay on this device.',
-                ),
-                value: playerPreview,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (value) => services.playerPreview.value = value,
-              ),
-            ),
             if (auth.enabled) ...[
-              const SizedBox(height: 20),
               const SectionHeading('ACCOUNT'),
               const Panel(child: SignInCard()),
             ] else if (AppConfig.signInEnabled && kDebugMode) ...[
@@ -56,28 +42,21 @@ class ClubPage extends StatelessWidget {
                 prefs: services.prefs,
               ),
             ),
-            if (AppConfig.duesEnabled && (playerPreview || auth.signedIn)) ...[
+            if (AppConfig.duesEnabled && auth.signedIn) ...[
               const SizedBox(height: 20),
               const SectionHeading('PLAYER DUES'),
               Panel(
-                child: auth.signedIn
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('See your balance and pay by card.'),
-                          const SizedBox(height: 12),
-                          OutlinedButton(
-                            onPressed: () => context.push(profilePath),
-                            child: const Text('VIEW DUES'),
-                          ),
-                        ],
-                      )
-                    : Text(
-                        auth.enabled
-                            ? 'Sign in to see your dues and pay by card.'
-                            : 'Dues preview. Payment and balance tracking '
-                                  'need sign-in.',
-                      ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('See your balance and pay by card.'),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => context.push(profilePath),
+                      child: const Text('VIEW DUES'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],

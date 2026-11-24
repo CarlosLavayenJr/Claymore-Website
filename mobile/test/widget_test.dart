@@ -1,8 +1,8 @@
 import 'package:claymores/data/club_repository.dart';
-import 'package:claymores/app/config.dart';
 import 'package:claymores/data/club_time.dart';
 import 'package:claymores/main.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:claymores/app/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -53,29 +53,29 @@ void main() {
     expect(find.text('31–5'), findsOneWidget);
   });
 
-  testWidgets('Player response is restored on the fixture in another tab', (
-    tester,
-  ) async {
+  testWidgets('The app is public: no sign-in gate, no availability or dues',
+      (tester) async {
     await tester.pumpWidget(ClaymoresApp(repository: TestClubRepository()));
     await tester.pumpAndSettle();
+    expect(find.text('NEXT MATCH'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Available'), findsNothing);
     await tester.tap(find.text('Club'));
     await tester.pumpAndSettle();
+    expect(find.text('Player preview'), findsNothing);
     expect(find.text('PLAYER DUES'), findsNothing);
-    await tester.tap(find.text('Player preview'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('PLAYER DUES'),
-      AppConfig.duesEnabled ? findsOneWidget : findsNothing,
-    );
-    await tester.tap(find.text('Home'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Available'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Fixtures'));
-    await tester.pumpAndSettle();
-    final response = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, 'Available'),
-    );
-    expect(response.selected, isTrue);
+  });
+
+  test('Availability shows only when enabled and signed in', () {
+    final signedIn = ValueNotifier(false);
+    final gate = AvailabilityGate(signedIn, () => signedIn.value, enabled: true);
+    expect(gate.value, isFalse);
+    signedIn.value = true;
+    expect(gate.value, isTrue);
+    signedIn.value = false;
+    expect(gate.value, isFalse);
+    final off = AvailabilityGate(signedIn, () => true, enabled: false);
+    expect(off.value, isFalse);
+    gate.dispose();
+    off.dispose();
   });
 }
