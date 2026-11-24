@@ -20,7 +20,7 @@ export default function robots(): MetadataRoute.Robots {
             {
                 userAgent: '*',
                 allow: '/',
-                disallow: ['/studio', '/api/'],
+                disallow: ['/studio', '/api/', '/account'],
             },
             ...TRAINING_CRAWLERS_TO_BLOCK.map((bot) => ({
                 userAgent: bot,

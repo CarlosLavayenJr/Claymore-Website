@@ -90,7 +90,7 @@ Both roles start at the same Google sign-in URL. The API checks the verified Goo
    ```
 
 3. Open [Google sign-in](https://localhost:7057/auth/google) directly in your browser. It redirects back to `/auth/account`, where you can see your role and sign out. The JSON session check is at `/auth/session`. Use an incognito window to test the second account, and verify that a Google account outside both lists gets `403`. Use Swagger separately to explore the public API.
-4. To test from the website, start the local integration branch with `CLAYMORES_GOOGLE_SIGN_IN_ORIGIN=https://localhost:7057` alongside the site variables below. Open `/sign-in` and select **Continue with Google**. The website entry is available only with an HTTPS auth origin and is disabled on Vercel Production.
+4. To test from the website, see [Member sign-in](../README.md#member-sign-in-sign-in-sign-up-account-accountadmin) in the root README. The website signs in with Google itself (Auth.js) and exchanges the id_token through [mobile sign-in](#mobile-sign-in).
 
 ### Invite members
 
@@ -111,7 +111,7 @@ Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and
 
 Every write that can be authenticated by the browser session cookie (`/auth/logout`, the dues and invitation admin writes, join request decisions, and both checkout entry points) checks `Sec-Fetch-Site: same-origin` **only when the cookie authenticated the request**. The cookie is an ambient credential, so a cross-site page could otherwise make the browser send it. A request that carries the cookie fails without the header even if it also has a bearer token. Requests authenticated only by an API bearer token pass: browsers never attach that token on their own. This lets a server-side web client (for example the website's admin page, holding an admin's access token) call the admin API.
 
-The website entry hands off to the API-hosted account page. The Flutter app uses [mobile sign-in](#mobile-sign-in) instead. Keep local OAuth client settings separate from any future preview or production settings.
+The website and the Flutter app both use [mobile sign-in](#mobile-sign-in). Keep local OAuth client settings separate from any future preview or production settings.
 
 ## Mobile sign-in
 
