@@ -52,6 +52,7 @@ Swagger is enabled by default in Development. To expose it in another environmen
 | `GET /v1/practices` | Public | `200` and an array of published practice and event records. |
 | `GET /v1/practices/schedule` | Public | `200` and the practice schedule, or `404` when no schedule is published. |
 | `GET /v1/me` | Bearer token | `200` and `{"subject","name","email","role"}` from the token, or `401` for a missing or invalid token. `role` is set for tokens from [mobile sign-in](#mobile-sign-in). |
+| `DELETE /v1/me` | Player or admin (bearer, or cookie same-origin) | Deletes the caller's club account. `204`, or `409 {"error":"last_admin"}`. See [Delete my account](#delete-my-account). |
 | `POST /v1/internal/scrape/{fixtures\|standings}` | `Scraper:Secret` bearer | Runs the rugbyfl.com scraper. See [Scraper](#scraper). `404` unless the secret and Postgres are configured. Not in Swagger. |
 
 Fixture filters take a numeric year from 1900 through 2200. Standings filters take a season label in `YYYY-YYYY` format. Invalid filters return `400`. A successful fixture list with no matches returns `[]`. Health reports process liveness. To verify the data path, request fixtures or standings as well.
@@ -109,7 +110,7 @@ Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and
 
 ### Same-origin rule
 
-Every write that can be authenticated by the browser session cookie (`/auth/logout`, the dues and invitation admin writes, join request decisions, and both checkout entry points) checks `Sec-Fetch-Site: same-origin` **only when the cookie authenticated the request**. The cookie is an ambient credential, so a cross-site page could otherwise make the browser send it. A request that carries the cookie fails without the header even if it also has a bearer token. Requests authenticated only by an API bearer token pass: browsers never attach that token on their own. This lets a server-side web client (for example the website's admin page, holding an admin's access token) call the admin API.
+Every write that can be authenticated by the browser session cookie (`/auth/logout`, the dues and invitation admin writes, checkout releases, join request decisions, both checkout entry points, and account deletion) checks `Sec-Fetch-Site: same-origin` **only when the cookie authenticated the request**. The cookie is an ambient credential, so a cross-site page could otherwise make the browser send it. A request that carries the cookie fails without the header even if it also has a bearer token. Requests authenticated only by an API bearer token pass: browsers never attach that token on their own. This lets a server-side web client (for example the website's admin page, holding an admin's access token) call the admin API.
 
 The website and the Flutter app both use [mobile sign-in](#mobile-sign-in). Keep local OAuth client settings separate from any future preview or production settings.
 
@@ -133,7 +134,8 @@ The Flutter app signs in with native Google sign-in, then trades the Google ID t
 ```
 
 - **Access tokens** are JWTs signed by the API (HS256 with `Authentication:Tokens:SigningKey`, issuer and audience `claymores-api`), valid for one hour. Send them as `Authorization: Bearer <token>` to `/v1/me`, `/v1/dues/mine`, `/v1/dues/mine/{id}`, and `/v1/dues/{id}/checkout-session`. The invitation is re-checked on every request, so removing or changing an invitation takes effect within 30 seconds. An admin's token also works for the `/v1/admin/...` routes, writes included, without a `Sec-Fetch-Site` header (see [Same-origin rule](#same-origin-rule)).
-- **Refresh tokens** last 60 days and rotate on every refresh. Only a SHA-256 hash is stored. Presenting a token that was already rotated or revoked revokes every token in that sign-in session, so the app must store the newest refresh token before using it, and must not refresh twice in parallel.
+- **Refresh tokens** last 60 days and rotate on every refresh. Only a SHA-256 hash is stored. Presenting a token that was already rotated or revoked revokes every token in that sign-in session, so the app must store the newest refresh token before using it.
+- **Grace window for parallel refreshes:** a token that was *rotated* less than `MobileAuth:RefreshGraceSeconds` (default 60, 0 to 600) ago, and whose successor is still active, returns that same successor with a new access token instead of counting as reuse. Two refreshes the app sends at once both succeed with the same new refresh token. Outside the window, or once the successor itself was rotated or revoked, reuse detection applies as before. Logout and reuse revocation have no grace: after logout every token of the session fails. Since only hashes are stored, a rotation's successor is derived from the presented token (HMAC-SHA256 under a key derived from `Authentication:Tokens:SigningKey`), so the server can hand it out again; changing the signing key ends the grace for rotations made before the change.
 - **Signing key:** base64 for at least 32 random bytes, for example `openssl rand -base64 32`. The API refuses to start with mobile sign-in on and no valid key. Changing the key invalidates current access tokens at once; the app recovers by refreshing.
 
 ### Google Cloud setup
@@ -166,11 +168,15 @@ App Store guideline 4.8 requires Sign in with Apple in an iOS app that offers Go
 1. In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) > **Identifiers**, open the App ID `com.claymoresrfc.claymores` and enable the **Sign in with Apple** capability ("Enable as a primary App ID"). Save, then regenerate any manually managed provisioning profiles. Automatic signing in Xcode picks it up.
 2. The app already has `ios/Runner/Runner.entitlements` with `com.apple.developer.applesignin = [Default]`.
 
-Nothing else is needed for native sign-in. The identity token's audience is the bundle ID, and the API verifies it with Apple's public keys, so there is **no Services ID and no Sign in with Apple key**. Those are needed only for:
+Nothing else is needed for native sign-in. The identity token's audience is the bundle ID, and the API verifies it with Apple's public keys, so sign-in needs **no Services ID and no Sign in with Apple key**. A key is needed for revoking Apple tokens when a member deletes their account (guideline 5.1.1(v); see [Delete my account](#delete-my-account)):
 
-- Sign in with Apple on Android or the web (a Services ID with a return URL). The app doesn't offer it there.
-- Calling Apple's REST API (`/auth/token`, `/auth/revoke`) with a client secret signed by a Sign in with Apple private key. Apple asks apps that offer account deletion (guideline 5.1.1(v)) to revoke the user's Apple tokens when the account is deleted. Members are invitation-based and the app has no account deletion yet; if it adds one, create a key and use `/auth/revoke` then.
-- Server-to-server notifications (email forwarding changes, account deletion) are optional and can be added later on the App ID.
+3. **Owner step.** In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/authkeys/list) > **Keys**, create a key with **Sign in with Apple** enabled and configure it for the primary App ID `com.claymoresrfc.claymores`. Download the `.p8` file (Apple offers it once) and note the **Key ID**.
+4. Put the Key ID in `render.yaml` as `Authentication__Apple__KeyId` (a value, not secret). The Team ID `57539PPNC3` is already there as `Authentication__Apple__TeamId`.
+5. In the Render dashboard only (never in `render.yaml` or the repository), set `Authentication__Apple__PrivateKey` to the full contents of the `.p8` file, including the `-----BEGIN PRIVATE KEY-----` lines. Literal `\n` sequences are accepted in place of line breaks.
+
+Until all of TeamId, KeyId, PrivateKey and `ClientIds__0` are set, deletion still works and logs that Apple revocation was skipped. The client ID used with Apple's REST API is `Authentication:Apple:ClientIds:0` (the bundle ID).
+
+Still not needed: a Services ID (Sign in with Apple on Android or the web, which the app doesn't offer) and server-to-server notifications (optional, can be added later on the App ID).
 
 ### Request to join
 
@@ -185,7 +191,7 @@ When sign-in returns `403 {"error":"not_invited"}`, the app can ask to join with
 
 - **Fields:** `name` is required, 1 to 80 characters after trimming. `phone` is optional, up to 30 characters of digits, spaces, and `+ ( ) - .`. `message` is optional, up to 500 characters. Blank optional fields are stored as null.
 - **Resubmitting** updates the name, phone, and message and keeps the request pending. An approved request whose invitation was later removed can ask again. A denied one can ask again 24 hours after the denial.
-- **Rate limit:** the four routes share a fixed window of `JoinRequests:PermitsPerMinute` (default 10) requests per minute per client IP. Over the limit: `429 {"error":"rate_limited"}` with `Retry-After`. Behind Render, the client IP comes from the forwarded headers.
+- **Rate limit:** the four routes share a fixed window of `JoinRequests:PermitsPerMinute` (default 10) requests per minute per client IP. Over the limit: `429 {"error":"rate_limited"}` with `Retry-After`. Behind Render (`RENDER=true`, or `ForwardedHeaders:Enabled=true`), `UseForwardedHeaders` runs first in the pipeline, before `UseRateLimiter`, and the limiter partitions on `HttpContext.Connection.RemoteIpAddress` after it. `ForwardLimit` is 1, so only the right-most `X-Forwarded-For` entry is used: the address Render's proxy appended for the connection it received. Entries to its left are client-supplied and ignored, so sending a made-up `X-Forwarded-For` doesn't get a client a fresh limit. The known-proxy lists are cleared because Render's proxy addresses aren't fixed, which is safe only because the service is reachable solely through that proxy.
 - **Notification:** no email yet (sending through Resend is a later step). A new request logs `New join request from {email}` at Information. Admins check `/auth/admin/join-requests`, linked from the account page and the dues admin page.
 
 Admins (cookie or bearer, `ClubAdmin`) decide:
@@ -193,10 +199,33 @@ Admins (cookie or bearer, `ClubAdmin`) decide:
 | Method and path | Body | Response |
 | --- | --- | --- |
 | `GET /v1/admin/join-requests?status=pending` | | `200 [{"id","provider","email","name","phone","message","status","createdAt","updatedAt"}]`, oldest first. `status` is optional (`pending`, `approved`, `denied`); anything else is `400`. |
-| `POST /v1/admin/join-requests/{id}/approve` | `{"role":"player"}` or `{"role":"admin"}` | `200` with the updated request. Creates or updates the `club_invitations` row for the request's email (normalized), then records the approver's email and time. Works for pending, denied, or already approved requests (to change the role). `400` with `"field":"role"`, `404` for an unknown ID. |
+| `POST /v1/admin/join-requests/{id}/approve` | `{"role":"player"}` or `{"role":"admin"}` | `200` with the updated request. Creates or updates the `club_invitations` row for the request's email (normalized) and records the approver's email and time, in one transaction. `409 {"error":"not_pending"}` unless the request is pending, so a stale page or a retry can't change a role; change roles with `PUT /v1/admin/invitations/{email}`. An approval never lowers an existing admin invitation: approving as player keeps `admin` (the page says so). `400` with `"field":"role"`, `404` for an unknown ID. |
 | `POST /v1/admin/join-requests/{id}/deny` | `{"reason":"..."}` (optional, up to 500 characters, never shown to the applicant) | `200` with the updated request. `409 {"error":"not_pending"}` unless the request is pending. `404` for an unknown ID. |
 
 The API-hosted page `/auth/admin/join-requests` lists pending and recently decided requests with approve (choose a role) and deny forms. Approving lets the person sign in at once; the app can poll `request-status` or simply retry sign-in.
+
+Inviting an email directly (`PUT /v1/admin/invitations/{email}`, or `--invite`) also marks that email's pending join requests approved, with `decided_by` set to the inviting admin, so they leave the pending list.
+
+### Delete my account
+
+App Store guideline 5.1.1(v) requires in-app account deletion. Members delete their own account with `DELETE /v1/me` (the app, or the website server-side, with the member's bearer token), or with **Delete my account** on the API-hosted `/auth/account` page (a form with a confirmation box that posts to `/auth/account/delete`). Both require the `ClubMember` policy; a request authenticated by the session cookie must be same-origin (see [Same-origin rule](#same-origin-rule)).
+
+| Request | Response |
+| --- | --- |
+| `DELETE /v1/me`, optional body `{"appleAuthorizationCode":"<code>"}` | `204`. `409 {"error":"last_admin"}` when the caller is an admin and no other admin would remain (admins in `Authentication:Google:AdminEmails` count). `400 {"error":"invalid_request"}` for a malformed body. `401`/`403` as for other member routes. |
+| `POST /auth/account/delete` (form, `confirm=delete`) | `303` to `/auth/account-deleted`, or back to `/auth/account?deletion=confirm` (box not ticked) or `?deletion=last-admin` |
+
+In one transaction, deletion:
+
+- revokes every mobile refresh token of the caller's subject (all devices; access tokens stop working within 30 seconds because the invitation is gone),
+- deletes the `club_invitations` row for the caller's email, every join request for the subject or email, and the `club_members` row,
+- cancels the caller's pending checkouts that have no Stripe session (`status = 'expired'`, `released_by = 'account deletion'`).
+
+**Dues are retained.** `dues_assessments`, `dues_payments` and `dues_checkouts` stay, keyed by the old subject: they are the club's financial records. A pending checkout already bound to a Stripe session also stays, so a payment the member completed is still credited by the webhook. A browser session cookie is signed out.
+
+**Configured emails.** An email in `Authentication:Google:AdminEmails` or `PlayerEmails` can't be removed by deletion. The member's sessions, member record, invitation row and join requests are still deleted and the API logs a warning, but the email can sign in again until the owner removes it from configuration (the Render dashboard for `AdminEmails__0`).
+
+**Apple.** For an `apple|` subject, the app should get a fresh authorization code from Sign in with Apple and send it as `appleAuthorizationCode`. When Apple revocation is configured (`Authentication:Apple:TeamId`, `KeyId`, `PrivateKey`, and `ClientIds:0` as the client ID; see [Apple Developer setup](#apple-developer-setup)), the API signs an ES256 `client_secret` JWT (`iss` team ID, `sub` client ID, `aud` `https://appleid.apple.com`, `kid` key ID, five minutes), exchanges the code at `https://appleid.apple.com/auth/token`, and revokes the refresh token (or the access token) at `https://appleid.apple.com/auth/revoke`. Failures are logged and never fail the deletion. Without the configuration, or without a code, the API logs that revocation was skipped.
 
 ### App checkout and the `claymores://` link
 
@@ -352,6 +381,8 @@ These are fixed compared with the website scraper:
 
 1. **Dedupe** uses the natural key (date, home team, away team) after name resolution, enforced by the partial unique index `fixtures_scraper_natural_key`. Two games on the same day are both kept. The website matched on date alone. The same game listed under clubs 117 and 51 is stored once. Scraped rows have the ID `rfl-{date}-{homeTeamId}-{awayTeamId}`.
 2. **Re-scrapes update** scores, status, note, competition, match type, kickoff, and venue on existing rows, unless `manual_override` is true. An unchanged row only has `last_scraped_at` touched. A kickoff or venue that a run didn't capture keeps its stored value.
+   - **Retirement (migration 013):** after a club page (club and season) is fetched and parsed, that page's scraper rows that the run didn't see (`last_scraped_at` older than the run) get `retired_at`. That covers a rescheduled game (new date, so a new key), a team re-resolved to another team after an alias fix (new key), and a removed game. Retired rows stay in the table but `GET /v1/fixtures[/{id}]` and `--compare-with-sanity` skip them. A retired row that a later run sees again is un-retired with its old ID. Rows with `manual_override` (every adopted row has it) are never retired, and neither are other clubs' or seasons' rows. A page that parses to zero games retires nothing, because that more likely means the markup changed. Each page's count is `retired` in the JSON summary and in `scrape_runs.summary`.
+   - **IDs never collide:** a new row's ID is `rfl-{date}-{home}-{away}`, or that with `-2`, `-3` appended when another row (such as an adopted row that moved) already holds it, so one conflict can't roll back a page's batch.
 3. **Kickoff and venue** are captured. Kickoff comes from the `TableRowBig` time ("1:00 PM", stored as `time`). Venue comes from the "Field:" line and street address on each game's `Game_Detail.asp` page. "Pending", "TBD", and missing fields stay null.
 4. **One name resolver** (`TeamNameResolver`) replaces the four normalizers in the website:
    - **Normalize:** lowercase, then strip parentheticals, a leading "IR/", "F.C.", "RFC", "FC", "Rugby Football Club", "Rugby Club", "Rugby", trailing D1–D4 tokens, and trailing season years such as "Orlando Otters 2026", which appears on rugbyfl.com. Collapse punctuation.
@@ -375,7 +406,7 @@ SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT 20;
 Render one-off jobs don't run through a shell, so run each step as its own job (`dotnet Claymores.Api.dll <command>`), in this order:
 
 1. **Scrape.** `--import-reference-data` once (logos, slugs, aliases and the current championship from Sanity), then `--scrape-fixtures --all`, `--scrape-fixtures` (adds venues for the current season), and `--scrape-standings --force` plus any backfills (`--scrape-standings --championship-id 191 --season-label 2025-2026`).
-2. **Adopt.** `--adopt-sanity-overrides`. Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
+2. **Adopt.** `--adopt-sanity-overrides`. Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row and gives it a new ID derived from its new key (`origin_sanity_id` still links it to the document), so a later scrape that still lists the old date can insert it without a primary key conflict. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
 3. **Compare.** `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Kickoffs are compared as times ("1:00pm" equals "1:00 PM"). Locked rows that equal Sanity count as matching and are tallied on a `LOCKED` line. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference. Standings rows are compared by team, and playoff lists are compared too. Review what is left and resolve teams in `needs_review`.
 4. **Serve Postgres.** `render.yaml` sets `Fixtures__Source=scraper` and `Standings__Source=postgres` on the web service (see [Read sources](#scraper)). This changes what the Vercel preview and the app read. The production website still reads Sanity directly. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity. To roll back, set either value to `sanity`.
 5. **Point the production website at the API** (`CLAYMORES_API_BASE_URL` in the Vercel Production environment) once the preview is verified.
@@ -398,6 +429,7 @@ Member routes accept the browser session cookie or, with mobile sign-in on, an A
 | `GET /v1/admin/dues/{id}` | Admin | Shows a specific assessment and its payment history |
 | `POST /v1/admin/dues` | Admin | Assigns an assessment to a member's Google subject |
 | `POST /v1/admin/dues/{id}/payments` | Admin | Records an already-received payment, including a partial payment |
+| `POST /v1/admin/dues/{id}/checkouts/{checkoutId}/release` | Admin | With checkout enabled: releases a pending checkout that never got a Stripe session, after checking Stripe. See [Releasing a stuck reservation](#stripe-test-checkout). |
 
 Sign in once with the invited player’s Google account. The treasurer can then sign in with an admin account, open **Manage dues** from the account page, and pick that player by name or email. The page supports assigning dues, entering payments already received, and opening a history with the recorded time in Eastern Time. Take care when recording a payment received earlier. The timestamp is when the entry was recorded.
 
@@ -443,7 +475,16 @@ The account page lets a player choose a partial or full USD amount and opens Str
 
 The player can resume one pending checkout per assessment. The reserved amount reduces what an admin can manually credit. A signed paid event inserts one ledger entry, and a signed expiration releases the reservation. A browser return never records a payment.
 
-Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session_id, created_at FROM dues_checkouts WHERE status = 'pending';`. If a bound session stays pending, inspect the session in the Stripe test dashboard and replay the verified event. If a create attempt lost its response, retry from the account page to reuse its idempotency key. After 12 hours with no bound session, reconcile the attempt ID against Stripe before releasing the reservation. Do not clear a pending row solely because it is old. Payment credits can be matched to provider sessions through `dues_payments.checkout_id`. Refunds are not supported.
+Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session_id, created_at FROM dues_checkouts WHERE status = 'pending';`. If a bound session stays pending, inspect the session in the Stripe test dashboard and replay the verified event. If a create attempt lost its response, retry from the account page to reuse its idempotency key. Payment credits can be matched to provider sessions through `dues_payments.checkout_id`. Refunds are not supported.
+
+**Releasing a stuck reservation.** A pending checkout with no bound Stripe session (the create's response was lost and the member didn't retry) blocks new checkouts for its assessment, and after 12 hours it can't be resumed. Once it is an hour old, the treasurer page shows **Check Stripe and release** on that assessment, and admins can call `POST /v1/admin/dues/{id}/checkouts/{checkoutId}/release` (cookie same-origin, or admin bearer). The API lists Stripe sessions created from the reservation's start through its 12-hour create cut-off and keeps those whose `client_reference_id` is the checkout ID (every session the API creates sets it):
+
+| Stripe has | Result |
+| --- | --- |
+| no session, or only expired ones | Released: the row becomes `expired` with `released_by` (admin email) and `released_at` (migration 013). `200 {"status":"released"}` |
+| an open or complete session | Bound to the row, which stays pending; resume and the webhook take over. `200 {"status":"bound","sessionId","sessionStatus"}` |
+
+`409` with `not_pending`, `bound` (already has a session), `other_mode` (created in the other Stripe mode), or `too_recent` (under an hour); `404` for an unknown checkout; `502` when Stripe can't be reached or the session doesn't match the reservation. Don't clear a pending row by hand.
 
 ### Stripe mode
 
@@ -503,6 +544,7 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `DuesCheckout.cs` | Stripe checkout (test or live per `Stripe:Mode`), return targets, and signed webhooks |
 | `DuesCheckoutStore.cs` | Durable reservations, payment credits, and expiration |
 | `JoinRequests.cs` | Request to join: app endpoints, admin decisions, rate limit, and the `/auth/admin/join-requests` page |
+| `AccountDeletion.cs` | `DELETE /v1/me`, the account page's delete form, and Apple token revocation (`IAppleAuthClient`) |
 | `SameOriginGuard.cs` | The same-origin check for cookie-authenticated writes |
 | `sql/` | Numbered Postgres migrations |
 
