@@ -33,6 +33,7 @@ const notices: Record<string, string> = {
     denied: 'Request denied.',
     invited: 'Invitation saved.',
     removed: 'Invitation removed.',
+    dues_removed: 'Dues removed. They won’t be assigned to that player again automatically.',
 }
 
 const errors: Record<string, string> = {

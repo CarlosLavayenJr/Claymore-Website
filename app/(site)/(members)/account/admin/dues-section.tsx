@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { AssignDuesForm, RecordPaymentForm, type MemberOption } from './dues-forms'
+import { AssignDuesForm, AutomaticDuesForm, RecordPaymentForm, RemoveDuesButton, type MemberOption } from './dues-forms'
 import { CardHeading, formatDate, MemberCard, Notice } from '@/components/members/member-ui'
 import {
+    canRemoveDues,
     centsToDollarsInput,
     mapWithConcurrency,
     memberLabel,
+    normalizeAutomaticDues,
     paymentMethodLabel,
     recordableCents,
     sortMembers,
@@ -109,6 +111,11 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
                             before recording another payment.
                         </Notice>
                     )}
+                    {canRemoveDues(current) && (
+                        <div className="border-t border-[#EAEAEA] pt-4">
+                            <RemoveDuesButton assessmentId={current.id} context={context} />
+                        </div>
+                    )}
                 </div>
             </details>
         </li>
@@ -116,7 +123,7 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
 }
 
 export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
-    const [dues, members] = await Promise.all([api.allDues(), api.members()])
+    const [dues, members, automatic] = await Promise.all([api.allDues(), api.members(), api.getAutomaticDues()])
 
     if (!dues.ok && dues.status === 404) {
         return (
@@ -164,7 +171,25 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
                 through Stripe record themselves.
             </p>
 
-            <h3 className="mt-6 text-lg font-semibold text-[#111111]">Assign dues</h3>
+            {/* 404 means dues are switched off (or this API predates automatic dues): hide the card. */}
+            {(automatic.ok || automatic.status !== 404) && (
+                <section aria-labelledby="automatic-dues-heading" className="mt-6">
+                    <h3 id="automatic-dues-heading" className="text-lg font-semibold text-[#111111]">Automatic dues for new players</h3>
+                    <div className="mt-3">
+                        {automatic.ok ? (
+                            <AutomaticDuesForm saved={normalizeAutomaticDues(automatic.data)} />
+                        ) : (
+                            <Notice tone="error" title="Automatic dues couldn’t load">
+                                {automatic.status === 403
+                                    ? 'Only club admins can change automatic dues.'
+                                    : 'The club server didn’t respond. Refresh in a minute.'}
+                            </Notice>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            <h3 className="mt-8 text-lg font-semibold text-[#111111]">Assign dues</h3>
             <div className="mt-3 space-y-3">
                 {!members.ok && (
                     <Notice tone="error" title="The member list couldn’t load">

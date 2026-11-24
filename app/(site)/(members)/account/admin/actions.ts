@@ -6,12 +6,15 @@ import { redirect } from 'next/navigation'
 import {
     ALL_MEMBERS,
     allMembersSummary,
+    automaticDuesSummary,
     duesWriteOutcome,
     isUuid,
     paymentMethodLabel,
     parseAssignDuesForm,
+    parseAutomaticDuesForm,
     parseRecordPaymentForm,
     type AssignDuesValues,
+    type AutomaticDuesValues,
     type RecordPaymentValues,
 } from '@/lib/claymores/admin-dues'
 import { formatCents, type ApiResult, type AssignAllResult, type Role } from '@/lib/claymores/api-client'
@@ -148,4 +151,41 @@ export async function recordDuesPayment(_previous: RecordPaymentState, formData:
         message: `Recorded ${formatCents(payment.amountCents)} (${paymentMethodLabel(payment.method)}).`,
         nextId: randomUUID(),
     }
+}
+
+// PUT and DELETE are idempotent on their own, so these two carry no idempotency id.
+
+export type AutomaticDuesState = {
+    status: 'idle' | 'success' | 'error'
+    message: string | null
+    values?: AutomaticDuesValues
+}
+
+export async function saveAutomaticDues(_previous: AutomaticDuesState, formData: FormData): Promise<AutomaticDuesState> {
+    const parsed = parseAutomaticDuesForm(formData)
+    if (!parsed.ok) return { status: 'error', message: parsed.message, values: parsed.values }
+    // Never set up and left off: already the saved state, and the API won't take an amount of 0.
+    if (parsed.value === null) return { status: 'success', message: automaticDuesSummary({ enabled: false, description: '', amountCents: 0 }) }
+
+    const result = await (await admin()).saveAutomaticDues(parsed.value)
+    const outcome = duesWriteOutcome(result, 'automatic')
+    if (outcome.kind === 'sign-in') redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
+    if (outcome.kind === 'error') return { status: 'error', message: outcome.message, values: parsed.values }
+    revalidatePath(ADMIN)
+    // A 200 means the API saved exactly what was sent.
+    return { status: 'success', message: automaticDuesSummary(parsed.value) }
+}
+
+export type RemoveDuesState = { status: 'idle' | 'error'; message: string | null }
+
+export async function removeDues(_previous: RemoveDuesState, formData: FormData): Promise<RemoveDuesState> {
+    const id = String(formData.get('assessmentId') ?? '').trim()
+    if (!id || id.length > 100) return { status: 'error', message: 'The form expired. Refresh the page and try again.' }
+
+    const outcome = duesWriteOutcome(await (await admin()).removeDues(id), 'remove')
+    if (outcome.kind === 'sign-in') redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
+    if (outcome.kind === 'error') return { status: 'error', message: outcome.message }
+    // The row disappears on success, so confirm at the top of the page instead of inline.
+    revalidatePath(ADMIN)
+    done('dues_removed')
 }

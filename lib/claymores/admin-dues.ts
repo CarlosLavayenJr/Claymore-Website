@@ -6,6 +6,8 @@ import {
     formatCents,
     parseDollarsToCents,
     type ApiResult,
+    type AutomaticDues,
+    type AutomaticDuesInput,
     type ClubMember,
     type DuesAssessment,
     type ManualPaymentMethod,
@@ -175,6 +177,83 @@ export function parseRecordPaymentForm(form: FormLike): Parsed<{ assessmentId: s
     }
 }
 
+/** What the admin typed into the automatic-dues form, echoed back after a failed save. */
+export type AutomaticDuesValues = { enabled: boolean; description: string; amount: string; dueDate: string }
+
+/**
+ * Parses the "Automatic dues for new players" form. Besides the visible fields it reads two
+ * hidden ones carrying what was last loaded from the API (`savedAmountCents`, `savedDescription`),
+ * so switching automatic dues off never fails over an empty field: a blank amount or description
+ * keeps the saved one. An amount is only required while automatic dues are on.
+ *
+ * `value` is null when there is nothing to save: dues were never set up (saved amount 0) and the
+ * admin is leaving them off without an amount. The API rejects an amount of 0, and the setting is
+ * already off, so the caller should skip the request.
+ */
+export function parseAutomaticDuesForm(form: FormLike): Parsed<AutomaticDuesInput | null, AutomaticDuesValues> {
+    const values: AutomaticDuesValues = {
+        // Unchecked checkboxes are absent from form data; the form sends "on" when checked.
+        enabled: text(form, 'enabled') !== '',
+        description: text(form, 'description').slice(0, 500),
+        amount: text(form, 'amount').slice(0, 20),
+        dueDate: text(form, 'dueDate').slice(0, 20),
+    }
+    const savedCents = Number(text(form, 'savedAmountCents'))
+    const savedAmountCents = Number.isSafeInteger(savedCents) && savedCents > 0 && savedCents <= DUES_LIMITS.maxCents ? savedCents : 0
+    const savedDescription = text(form, 'savedDescription').slice(0, DUES_LIMITS.description)
+
+    let description = values.description
+    if (!description) {
+        if (values.enabled) return { ok: false, message: 'Enter a description, like “Season dues”.', values }
+        description = savedDescription || DEFAULT_DUES_DESCRIPTION
+    }
+    if (description.length > DUES_LIMITS.description) {
+        return { ok: false, message: `Keep the description to ${DUES_LIMITS.description} characters or fewer.`, values }
+    }
+
+    let amountCents: number
+    if (!values.amount && !values.enabled) {
+        if (savedAmountCents === 0) return { ok: true, value: null, values }
+        amountCents = savedAmountCents
+    } else {
+        const amount = parsePositiveDollars(values.amount)
+        if (!amount.ok) return { ok: false, message: amount.message, values }
+        amountCents = amount.cents
+    }
+
+    if (values.dueDate && !isIsoDate(values.dueDate)) return { ok: false, message: 'Enter a valid due date, or leave it blank.', values }
+    return {
+        ok: true,
+        values,
+        value: { enabled: values.enabled, description, amountCents, dueDate: values.dueDate || null },
+    }
+}
+
+/** Reads the API's setting defensively so a missing or odd field can't break the form. */
+export function normalizeAutomaticDues(data: Partial<AutomaticDues> | null | undefined): AutomaticDues {
+    const cents = data?.amountCents
+    return {
+        enabled: data?.enabled === true,
+        description: typeof data?.description === 'string' && data.description.trim()
+            ? data.description.trim().slice(0, DUES_LIMITS.description)
+            : DEFAULT_DUES_DESCRIPTION,
+        amountCents: typeof cents === 'number' && Number.isSafeInteger(cents) && cents > 0 && cents <= DUES_LIMITS.maxCents ? cents : 0,
+        dueDate: typeof data?.dueDate === 'string' && isIsoDate(data.dueDate) ? data.dueDate : null,
+    }
+}
+
+/** Success line after saving the automatic dues setting. */
+export function automaticDuesSummary(saved: Pick<AutomaticDues, 'enabled' | 'description' | 'amountCents'>): string {
+    return saved.enabled
+        ? `Automatic dues are on: every player who signs in gets ${formatCents(saved.amountCents)} “${saved.description}”.`
+        : 'Automatic dues are off. Nobody new gets dues automatically.'
+}
+
+/** Only untouched dues can be removed: nothing paid and no card checkout in progress. */
+export function canRemoveDues(dues: Pick<DuesAssessment, 'paidCents' | 'pendingCheckoutCents'>): boolean {
+    return dues.paidCents === 0 && dues.pendingCheckoutCents === 0
+}
+
 export type DuesWriteOutcome =
     | { kind: 'ok' }
     | { kind: 'sign-in' }
@@ -191,7 +270,9 @@ function readable(error: string | null): string | null {
     return trimmed && /\s/.test(trimmed) && trimmed.length <= 300 ? trimmed : null
 }
 
-export function duesWriteOutcome(result: ApiResult<unknown>, action: 'assign' | 'payment'): DuesWriteOutcome {
+export type DuesWriteAction = 'assign' | 'payment' | 'automatic' | 'remove'
+
+export function duesWriteOutcome(result: ApiResult<unknown>, action: DuesWriteAction): DuesWriteOutcome {
     if (result.ok) return { kind: 'ok' }
     switch (result.status) {
         case 401:
@@ -203,7 +284,9 @@ export function duesWriteOutcome(result: ApiResult<unknown>, action: 'assign' | 
                 kind: 'error',
                 message: action === 'payment'
                     ? 'That dues item wasn’t found. Dues may be switched off, or it was removed. Refresh the page.'
-                    : 'Dues are switched off on the club server.',
+                    : action === 'remove'
+                        ? 'That dues item wasn’t found. It may already have been removed. Refresh the page.'
+                        : 'Dues are switched off on the club server.',
                 retry: false,
             }
         case 400:
@@ -214,13 +297,17 @@ export function duesWriteOutcome(result: ApiResult<unknown>, action: 'assign' | 
                 message: readable(result.error)
                     ?? (action === 'payment'
                         ? 'That payment conflicts with the current balance. Refresh the page and try again.'
-                        : 'That conflicts with an existing dues item. Refresh the page and try again.'),
+                        : action === 'remove'
+                            ? 'This item has payments or a card checkout in progress, so it can’t be removed.'
+                            : 'That conflicts with an existing dues item. Refresh the page and try again.'),
                 retry: false,
             }
         default:
             return {
                 kind: 'error',
-                message: 'The club server didn’t respond. Submit again to retry — it won’t be recorded twice.',
+                message: action === 'assign' || action === 'payment'
+                    ? 'The club server didn’t respond. Submit again to retry — it won’t be recorded twice.'
+                    : 'The club server didn’t respond. Try again in a minute.',
                 retry: true,
             }
     }
