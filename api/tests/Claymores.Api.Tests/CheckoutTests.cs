@@ -202,6 +202,23 @@ public sealed class CheckoutTests(PostgresDatabase database) : IClassFixture<Pos
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("garbage")]
+    [InlineData("t=1,v1=00")]
+    public async Task Unsigned_or_badly_signed_webhooks_are_rejected(string? signature)
+    {
+        database.SkipIfUnavailable();
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/webhooks/stripe")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        if (signature is not null) request.Headers.TryAddWithoutValidation("Stripe-Signature", signature);
+        var response = await Client().SendAsync(request, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("desktop")]
     [InlineData("APP")]
     [InlineData("")]

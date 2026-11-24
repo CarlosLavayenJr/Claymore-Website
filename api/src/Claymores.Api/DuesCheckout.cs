@@ -288,16 +288,24 @@ internal sealed class DuesCheckout(
 
         using var reader = new StreamReader(request.Body, Encoding.UTF8);
         var body = await reader.ReadToEndAsync(ct);
+        // Stripe always signs its calls; anything without the header is not from Stripe.
+        var signature = request.Headers["Stripe-Signature"].ToString();
+        if (string.IsNullOrWhiteSpace(signature))
+            return Results.BadRequest("Invalid Stripe webhook.");
         Event stripeEvent;
         try
         {
-            stripeEvent = EventUtility.ConstructEvent(body, request.Headers["Stripe-Signature"], settings.WebhookSecret);
+            stripeEvent = EventUtility.ConstructEvent(body, signature, settings.WebhookSecret);
         }
         catch (StripeException)
         {
             return Results.BadRequest("Invalid Stripe webhook.");
         }
         catch (Newtonsoft.Json.JsonException)
+        {
+            return Results.BadRequest("Invalid Stripe webhook.");
+        }
+        catch (ArgumentException)
         {
             return Results.BadRequest("Invalid Stripe webhook.");
         }
