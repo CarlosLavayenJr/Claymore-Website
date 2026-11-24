@@ -274,6 +274,128 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
         return rows.ToArray();
     }
 
+    /// <summary>
+    /// Writes Sanity hand edits onto scraper rows (see <see cref="SanityAdoption"/>), in one transaction.
+    /// The row is found by (date, home team, away team), else by the Sanity document it was adopted
+    /// from earlier (the document's date or teams changed, so the row moves), else it is inserted.
+    /// Sanity's values win, except that a blank kickoff or venue keeps the stored one. Every adopted
+    /// row gets manual_override, so later scrapes leave it alone. Rerunning changes nothing.
+    /// </summary>
+    public async Task<AdoptionOutcome[]> AdoptFixturesAsync(IReadOnlyList<AdoptionItem> items, CancellationToken ct)
+    {
+        var outcomes = new AdoptionOutcome[items.Count];
+        if (items.Count == 0) return outcomes;
+
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var ids = new List<string>();
+        for (var i = 0; i < items.Count; i++)
+        {
+            var (c, home, away) = (items[i].Candidate, items[i].Home, items[i].Away);
+            void Bind(NpgsqlParameterCollection p)
+            {
+                p.AddWithValue("date", c.Date);
+                p.AddWithValue("season", c.Season);
+                p.AddWithValue("home", home.Name);
+                p.AddWithValue("away", away.Name);
+                p.AddWithValue("home_id", home.Id);
+                p.AddWithValue("away_id", away.Id);
+                p.AddWithValue("home_raw", TeamNameResolver.DisplayName(c.HomeTeam));
+                p.AddWithValue("away_raw", TeamNameResolver.DisplayName(c.AwayTeam));
+                p.AddWithValue("status", c.Status);
+                p.Add("match_type", NpgsqlDbType.Text).Value = (object?)c.MatchType ?? DBNull.Value;
+                p.Add("competition", NpgsqlDbType.Text).Value = (object?)c.Competition ?? DBNull.Value;
+                p.Add("note", NpgsqlDbType.Text).Value = (object?)c.Note ?? DBNull.Value;
+                p.Add("home_score", NpgsqlDbType.Integer).Value = c.HomeScore is { } hs ? hs : DBNull.Value;
+                p.Add("away_score", NpgsqlDbType.Integer).Value = c.AwayScore is { } @as ? @as : DBNull.Value;
+                p.Add("kickoff", NpgsqlDbType.Time).Value = c.Kickoff is { } kickoff ? kickoff : DBNull.Value;
+                p.Add("venue", NpgsqlDbType.Text).Value = (object?)c.Venue ?? DBNull.Value;
+                p.AddWithValue("origin", c.SanityId);
+            }
+
+            string? existing;
+            bool moved = false;
+            await using (var find = new NpgsqlCommand("""
+                SELECT sanity_id FROM fixtures
+                WHERE source = 'scraper' AND fixture_date = @date AND home_team_id = @home_id AND away_team_id = @away_id
+                """, connection, transaction))
+            {
+                find.Parameters.AddWithValue("date", c.Date);
+                find.Parameters.AddWithValue("home_id", home.Id);
+                find.Parameters.AddWithValue("away_id", away.Id);
+                existing = (string?)await find.ExecuteScalarAsync(ct);
+            }
+            if (existing is null)
+            {
+                await using var byOrigin = new NpgsqlCommand("""
+                    SELECT sanity_id FROM fixtures WHERE source = 'scraper' AND origin_sanity_id = @origin
+                    ORDER BY sanity_id LIMIT 1
+                    """, connection, transaction);
+                byOrigin.Parameters.AddWithValue("origin", c.SanityId);
+                existing = (string?)await byOrigin.ExecuteScalarAsync(ct);
+                moved = existing is not null;
+            }
+
+            if (existing is null)
+            {
+                var id = FixtureId(c.Date, home.Id, away.Id);
+                await using var insert = new NpgsqlCommand("""
+                    INSERT INTO fixtures (
+                        sanity_id, source, fixture_date, season, home_team, away_team, home_team_id, away_team_id,
+                        home_team_raw, away_team_raw, status, match_type, competition, note, home_score, away_score,
+                        kickoff_time, venue, manual_override, origin_sanity_id, updated_at, payload)
+                    VALUES (
+                        @id, 'scraper', @date, @season, @home, @away, @home_id, @away_id,
+                        @home_raw, @away_raw, @status, @match_type, @competition, @note, @home_score, @away_score,
+                        @kickoff, @venue, true, @origin, now(), '{}'::jsonb)
+                    """, connection, transaction);
+                insert.Parameters.AddWithValue("id", id);
+                Bind(insert.Parameters);
+                await insert.ExecuteNonQueryAsync(ct);
+                ids.Add(id);
+                outcomes[i] = AdoptionOutcome.Adopted;
+                continue;
+            }
+
+            // A moved row takes the document's date, teams and names; otherwise the scraped names stay.
+            await using var update = new NpgsqlCommand("""
+                UPDATE fixtures f SET
+                    fixture_date = @date, home_team = @home, away_team = @away, home_team_id = @home_id, away_team_id = @away_id,
+                    home_team_raw = CASE WHEN @moved THEN @home_raw ELSE f.home_team_raw END,
+                    away_team_raw = CASE WHEN @moved THEN @away_raw ELSE f.away_team_raw END,
+                    season = @season, status = @status, match_type = @match_type, competition = @competition, note = @note,
+                    home_score = @home_score, away_score = @away_score,
+                    kickoff_time = COALESCE(@kickoff, f.kickoff_time), venue = COALESCE(@venue, f.venue),
+                    manual_override = true, origin_sanity_id = @origin, updated_at = now()
+                WHERE f.sanity_id = @id AND (
+                    f.fixture_date, f.home_team_id, f.away_team_id, f.season, f.status, f.match_type, f.competition, f.note,
+                    f.home_score, f.away_score, f.kickoff_time, f.venue, f.manual_override, f.origin_sanity_id)
+                    IS DISTINCT FROM (
+                    @date, @home_id, @away_id, @season, @status, @match_type, @competition, @note,
+                    @home_score, @away_score, COALESCE(@kickoff, f.kickoff_time), COALESCE(@venue, f.venue), true, @origin)
+                """, connection, transaction);
+            update.Parameters.AddWithValue("id", existing);
+            update.Parameters.AddWithValue("moved", moved);
+            Bind(update.Parameters);
+            if (await update.ExecuteNonQueryAsync(ct) == 1)
+            {
+                ids.Add(existing);
+                outcomes[i] = AdoptionOutcome.Updated;
+            }
+            else
+                outcomes[i] = AdoptionOutcome.Unchanged;
+        }
+
+        if (ids.Count > 0)
+        {
+            await using var refresh = new NpgsqlCommand(RefreshPayloadSql + " AND f.sanity_id = ANY(@ids)", connection, transaction);
+            refresh.Parameters.AddWithValue("ids", ids.ToArray());
+            await refresh.ExecuteNonQueryAsync(ct);
+        }
+        await transaction.CommitAsync(ct);
+        return outcomes;
+    }
+
     // ── Championship config and standings ───────────────────────────────────
 
     public async Task<ChampionshipConfig?> ChampionshipConfigAsync(CancellationToken ct)

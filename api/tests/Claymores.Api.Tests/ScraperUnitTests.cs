@@ -254,7 +254,7 @@ public sealed class RugbyFlParserTests
         Assert.NotNull(parsed);
         Assert.Equal(StandingsSource.StandingsTable, parsed.Source);
         var raw = RugbyFlParser.ParseStandings(RugbyFlPages.Read("championship-191.html"));
-        Assert.Equal(raw.Count, parsed.Rows.Count);
+        Assert.Equal(raw.Count(r => r.Pool != "Unique"), parsed.Rows.Count);
         Assert.Contains(new StandingsRow("Ft. Lauderdale Knights RFC (D3)", "Combo", 7, 5, 2, 0, 168, 57, 111, 0, 18), raw);
         Assert.Equal(Enumerable.Range(1, parsed.Rows.Count), parsed.Rows.Select(r => r.Position));
         Assert.True(parsed.Rows.Zip(parsed.Rows.Skip(1)).All(pair =>
@@ -262,6 +262,45 @@ public sealed class RugbyFlParserTests
             (pair.First.Row.TotalPoints == pair.Second.Row.TotalPoints &&
              pair.First.Row.PointsDifference >= pair.Second.Row.PointsDifference)));
         Assert.Contains(parsed.Rows, r => TeamNameResolver.IsClaymores(r.Row.TeamName));
+    }
+
+    [Fact]
+    public void Drops_the_unique_pool_and_reranks_like_the_website_table()
+    {
+        var html = RugbyFlPages.Read("championship-191.html");
+        var raw = RugbyFlParser.ParseStandings(html);
+        Assert.Equal(19, raw.Count);
+        Assert.Equal(["Austin Blacks", "New Orleans", "Detroit Tradesmen", "Life West Gladiators", "Syracuse Chargers"],
+            raw.Where(r => r.Pool == "Unique").Select(r => r.TeamName));
+
+        var parsed = RugbyFlParser.ParseChampionship(html)!;
+        Assert.Equal(14, parsed.Rows.Count);
+        Assert.DoesNotContain(parsed.Rows, r => r.Row.Pool == "Unique");
+        Assert.Equal(Enumerable.Range(1, 14), parsed.Rows.Select(r => r.Position));
+        // The order Sanity's leagueStandings for championship 191 lists (checked against production on 2026-11-24).
+        // Sanity numbers its last three 18-20 because rows were deleted by hand without renumbering; we re-rank to 12-14.
+        Assert.Equal(
+        [
+            "Palm Beach Panthers RFC", "Ft. Lauderdale Knights RFC (D3)", "Jacksonville RFC", "Brevard Old Red Eye RFC",
+            "Sarasota Surge RFC", "FSU B", "Bay Area Pelican RFC (D3)", "Central Florida Claymores RFC",
+            "Gainesville Hogs RFC", "SWFL Hammerheads RFC", "Tampa Bay Krewe RFC (D3)", "Orlando Griffins RFC (D3)",
+            "Daytona Beach Coconuts RFC", "Lakeland Lancers RFC",
+        ], parsed.Rows.Select(r => r.Row.TeamName));
+        Assert.Equal(8, parsed.Rows.Single(r => TeamNameResolver.IsClaymores(r.Row.TeamName)).Position);
+        Assert.Equal(12, parsed.Rows.Single(r => r.Row.TeamName.StartsWith("Orlando Griffins", StringComparison.Ordinal)).Position);
+    }
+
+    [Theory]
+    [InlineData("Unique")]
+    [InlineData(" unique ")]
+    [InlineData("UNIQUE")]
+    public void Pool_exclusion_ignores_case_and_whitespace(string pool)
+    {
+        var rows = RugbyFlParser.ExcludePools([
+            new StandingsRow("A", pool, 1, 1, 0, 0, 10, 0, 10, 0, 4),
+            new StandingsRow("B", "North", 1, 0, 1, 0, 0, 10, -10, 0, 0),
+        ]);
+        Assert.Equal(["B"], rows.Select(r => r.TeamName));
     }
 
     [Fact]
@@ -423,6 +462,25 @@ public sealed class SanityComparisonTests
         Assert.Contains(report.Lines, line => line.StartsWith("ONLY IN POSTGRES 2026-05-01", StringComparison.Ordinal));
         Assert.Contains(report.Lines, line => line.Contains("venue: sanity=\"Barnett Park\" postgres=null", StringComparison.Ordinal));
         Assert.Contains(report.Lines, line => line.StartsWith("ENRICHED 1 games", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Counts_a_locked_row_equal_to_sanity_as_matching_and_compares_kickoffs_as_times()
+    {
+        var resolver = RugbyFlPages.SeedResolver();
+        var claymores = resolver.Resolve("Claymores")!.TeamId;
+        var sanity = JsonSerializer.Deserialize<JsonElement[]>("""
+            [{"id":"h","date":"2027-01-16","homeTeam":"Claymores","awayTeam":"Claymores","homeScore":0,"awayScore":0,
+              "status":"upcoming","matchType":"friendly","competition":"Annual Highland games","kickoffTime":"1:00pm",
+              "venue":"Central Winds Park"}]
+            """)!;
+        var report = SanityComparison.CompareFixtures(sanity,
+        [
+            new StoredFixture("rfl", DateOnly.Parse("2027-01-16"), "Claymores", "Claymores", claymores, claymores, 0, 0,
+                "upcoming", "friendly", "Annual Highland games", null, "1:00 PM", "Central Winds Park", true),
+        ], resolver);
+        Assert.Equal((1, 0), (report.Matched, report.Differences));
+        Assert.Contains(report.Lines, line => line.StartsWith("LOCKED 1 ", StringComparison.Ordinal));
     }
 
     [Fact]

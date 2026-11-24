@@ -262,6 +262,7 @@ The API can scrape rugbyfl.com into Postgres. It ports the website's `app/api/sc
 | `dotnet run -- --scrape-standings [--force]` | Scrapes the championship in `championship_config`. `--force` runs even when `active` is false. |
 | `dotnet run -- --scrape-standings --championship-id 162 --season-label 2023-2024 [--division-name ...]` | Backfills one championship without stamping `championship_config` |
 | `dotnet run -- --import-reference-data` | Copies Sanity team profiles to Postgres (slug, city, website, logo URL, aliases) and copies the `leagueChampionship` singleton to `championship_config`. It never writes to Sanity. |
+| `dotnet run -- --adopt-sanity-overrides` | Copies Sanity's hand edits onto scraper rows and locks them with `manual_override`. Reads Sanity only. Nothing runs it automatically. See [Cutover](#cutover). |
 | `dotnet run -- --compare-with-sanity` | Reports differences between scraped Postgres data and Sanity. See [Cutover](#cutover). |
 
 Each command applies pending migrations first, then prints a JSON summary. A run where every page fails exits with code 1. Every run is logged in `scrape_runs` with its kind, trigger, parameters, status, summary, and error.
@@ -288,6 +289,7 @@ These carry over unchanged from the website scraper:
 - **Standings table:** the first table whose first row mentions pos, pool, team, played, and total. Rows need at least 19 direct cells and a `Team.asp` link in cell 2. Cells used: 1 pool, 3–6 P/W/L/D, 11–13 PF/PA/difference, 17 bonus, 18 total.
 - **Fallback from the schedule** when no standings are published (header has date, home, tries, away and two "bp" columns; rows need 14 cells; "(31)" is a played score). Skip cancelled games (note matches `/game not played/i`, or starts with "cancel(l)ed" and doesn't mention a forfeit), playoff games, and unplayed games. A win is 4 points and a draw is 2. A team earns +1 for four or more tries and +1 for losing by seven or fewer. Forfeits earn no bonus points.
 - **Ranking:** total points descending, then points difference descending, then team name. Positions are numbered from 1.
+- **Excluded pools (new):** rows in the pool "Unique" (case-insensitive, trimmed) are dropped before ranking, so positions stay contiguous. rugbyfl.com lists out-of-state guest sides there (Austin Blacks, Detroit Tradesmen, Life West Gladiators, New Orleans, Syracuse Chargers in championship 191), and the website table leaves them out. The schedule fallback has no pool column, so nothing is dropped there. Sanity's 2025-2026 rows were trimmed by hand without renumbering (its last three are 18–20); the API numbers them 12–14, so `--compare-with-sanity` reports those three positions.
 - **Playoffs:** any non-cancelled schedule game whose note matches semi-final, quarter-final, state final, gulf coast, super regional, cup/grand/championship/clubs final, playoff, or 3rd/third place. Each is classified as quarter, semi, third, then final, in that order. "QF1" is not a keyword, as before.
 - **Championship config:** `active` is the off-season switch. A scrape records `last_scraped_at` and `last_scrape_status`, which is "success", "success (computed from schedule)", "HTTP n", "fetch error: …", "parsed 0 rows — page structure may have changed", or "write error: …". Backfills with an explicit championship don't stamp it. Each scrape replaces that championship's standings and playoffs.
 
@@ -315,10 +317,14 @@ SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT 20;
 
 ### Cutover
 
-1. Run `--import-reference-data` once so logos, slugs, aliases, and the current championship come from Sanity. Then run `--scrape-fixtures --all` and `--scrape-fixtures` (to add venues), plus `--scrape-standings` and the standings backfills you need.
-2. Run `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Standings rows are compared by team, and playoff lists are compared too. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference.
-3. Review each difference. Sanity edits made by hand show up as differences, such as a status changed to `cancelled` or a renamed competition. Set `manual_override = true` on those rows after copying the values, or the next scrape replaces them. Resolve teams in `needs_review`.
-4. Set `Fixtures__Source=scraper` on the web service to serve scraped fixtures, then turn off the Vercel crons. Standings endpoints need a Postgres read path before they can switch.
+Render one-off jobs don't run through a shell, so run each step as its own job (`dotnet Claymores.Api.dll <command>`), in this order:
+
+1. **Scrape.** `--import-reference-data` once (logos, slugs, aliases and the current championship from Sanity), then `--scrape-fixtures --all`, `--scrape-fixtures` (adds venues for the current season), and `--scrape-standings --force` plus any backfills (`--scrape-standings --championship-id 191 --season-label 2025-2026`).
+2. **Adopt.** `--adopt-sanity-overrides`. Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
+3. **Compare.** `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Kickoffs are compared as times ("1:00pm" equals "1:00 PM"). Locked rows that equal Sanity count as matching and are tallied on a `LOCKED` line. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference. Standings rows are compared by team, and playoff lists are compared too. Review what is left and resolve teams in `needs_review`.
+4. **Serve scraped fixtures.** Set `Fixtures__Source=scraper` on the web service. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity.
+5. **Standings read path.** Standings endpoints still read Sanity. Add a Postgres read path for `standings`/`standings_rows`/`standings_playoffs` and switch it before Sanity's standings go stale.
+6. **Disable the Vercel crons** (`app/api/scrape-rugby`, `app/api/scrape-standings`) so nothing writes to Sanity any more. Do this only after steps 4 and 5, since the website still reads Sanity until then.
 
 ## Player dues
 
@@ -403,6 +409,7 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `Scraper/ScrapeStore.cs` | Scraper writes: team resolution, fixture upserts, standings, and the run log |
 | `Scraper/ScrapeEndpoints.cs`, `Scraper/ScraperCli.cs` | The protected HTTP trigger and the command-line tasks |
 | `Scraper/SanityComparison.cs` | The `--compare-with-sanity` report |
+| `Scraper/SanityAdoption.cs` | `--adopt-sanity-overrides`: which Sanity documents are hand edits, and how they become locked scraper rows |
 | `ClubMemberDirectory.cs` | Member directory populated after Google sign-in |
 | `GoogleSignIn.cs` | Google sign-in, session cookie, and account page |
 | `MobileAuth.cs` | App sign-in: Google ID-token check, API access tokens, rotating refresh tokens |
