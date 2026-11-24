@@ -125,6 +125,8 @@ internal static class MobileAuth
                     return NotInvited();
 
                 await directory.ObserveSignInAsync(member, ct);
+                if (context.RequestServices.GetService<AutomaticDues>() is { } automatic)
+                    await automatic.EnsureAsync(member.Subject, role, ct);
                 var refresh = await sessions.StartAsync(member, ct);
                 return Results.Ok(tokens.Issue(member, role, refresh));
             })

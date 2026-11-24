@@ -18,7 +18,7 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         await using var tx = await connection.BeginTransactionAsync(ct);
         await using var assessment = new NpgsqlCommand("""
             SELECT amount_cents FROM dues_assessments
-            WHERE id = @id AND player_subject = @subject FOR UPDATE
+            WHERE id = @id AND player_subject = @subject AND removed_at IS NULL FOR UPDATE
             """, connection, tx);
         assessment.Parameters.AddWithValue("id", assessmentId);
         assessment.Parameters.AddWithValue("subject", subject);

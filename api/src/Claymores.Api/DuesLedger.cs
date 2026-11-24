@@ -45,11 +45,12 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
           COALESCE((SELECT sum(amount_cents) FROM dues_checkouts
                     WHERE assessment_id = a.id AND status = 'pending'), 0)
         FROM dues_assessments a
+        WHERE a.removed_at IS NULL
         """;
 
     public async Task<List<DuesAssessment>> ListAsync(string? subject, CancellationToken ct)
     {
-        var sql = AssessmentQuery + (subject is null ? "" : " WHERE a.player_subject = @subject") +
+        var sql = AssessmentQuery + (subject is null ? "" : " AND a.player_subject = @subject") +
             " ORDER BY a.created_at DESC, a.id";
         await using var cmd = dataSource.CreateCommand(sql);
         if (subject is not null) cmd.Parameters.AddWithValue("subject", subject);
@@ -63,7 +64,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
-        var sql = AssessmentQuery + " WHERE a.id = @id" + (subject is null ? "" : " AND a.player_subject = @subject");
+        var sql = AssessmentQuery + " AND a.id = @id" + (subject is null ? "" : " AND a.player_subject = @subject");
         DuesAssessment assessment;
         await using (var cmd = new NpgsqlCommand(sql, connection, transaction))
         {
@@ -146,7 +147,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
             if (request.SkipExisting)
             {
                 await using var has = new NpgsqlCommand("""
-                    SELECT EXISTS (SELECT 1 FROM dues_assessments
+                    SELECT EXISTS (SELECT 1 FROM dues_assessments -- removed ones count: an admin took them off
                                    WHERE player_subject = @subject AND lower(btrim(description)) = lower(@description))
                     """, connection, transaction);
                 Bind(has.Parameters, id, subject);
@@ -177,6 +178,38 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         }
     }
 
+    /// <summary>
+    /// Takes an assessment off a member's dues. Only while nothing has been paid against it and no
+    /// card checkout is in progress; otherwise record what was paid instead. The row is kept with
+    /// removed_at, so automatic and "everyone" assignment never add it back.
+    /// </summary>
+    public async Task<RemoveResult> RemoveAsync(Guid id, string admin, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var lockRow = new NpgsqlCommand(
+            "SELECT 1 FROM dues_assessments WHERE id = @id AND removed_at IS NULL FOR UPDATE", connection, transaction))
+        {
+            lockRow.Parameters.AddWithValue("id", id);
+            if (await lockRow.ExecuteScalarAsync(ct) is null) return RemoveResult.NotFound;
+        }
+        await using (var used = new NpgsqlCommand("""
+            SELECT EXISTS (SELECT 1 FROM dues_payments WHERE assessment_id = @id)
+                OR EXISTS (SELECT 1 FROM dues_checkouts WHERE assessment_id = @id AND status = 'pending')
+            """, connection, transaction))
+        {
+            used.Parameters.AddWithValue("id", id);
+            if ((bool)(await used.ExecuteScalarAsync(ct))!) return RemoveResult.HasPayments;
+        }
+        await using var remove = new NpgsqlCommand(
+            "UPDATE dues_assessments SET removed_at = now(), removed_by = @admin WHERE id = @id", connection, transaction);
+        remove.Parameters.AddWithValue("id", id);
+        remove.Parameters.AddWithValue("admin", admin);
+        await remove.ExecuteNonQueryAsync(ct);
+        await transaction.CommitAsync(ct);
+        return RemoveResult.Removed;
+    }
+
     public async Task<PaymentResult> RecordAsync(Guid assessmentId, RecordDuesPayment payment, string admin, CancellationToken ct)
     {
         if (payment.Normalize() is not var (method, note)) return PaymentResult.Invalid;
@@ -184,7 +217,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         await using var transaction = await connection.BeginTransactionAsync(ct);
         // Serialize payments for one assessment so concurrent partial payments cannot overpay it.
         await using var assessment = new NpgsqlCommand(
-            "SELECT amount_cents FROM dues_assessments WHERE id = @id FOR UPDATE", connection, transaction);
+            "SELECT amount_cents FROM dues_assessments WHERE id = @id AND removed_at IS NULL FOR UPDATE", connection, transaction);
         assessment.Parameters.AddWithValue("id", assessmentId);
         if (await assessment.ExecuteScalarAsync(ct) is not int amount) return PaymentResult.NotFound;
 
@@ -237,14 +270,20 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 
 internal enum PaymentResult { Recorded, NotFound, Conflict, Overpayment, Invalid }
 
+internal enum RemoveResult { Removed, NotFound, HasPayments }
+
 internal static class DuesEndpoints
 {
     public static void Map(WebApplication app)
     {
         var member = app.MapGroup("/v1/dues").WithTags("Dues").RequireAuthorization(GoogleSignIn.RolePolicy);
         member.AddEndpointFilter(NoStore);
-        member.MapGet("/mine", async (ClaimsPrincipal user, DuesLedger ledger, CancellationToken ct) =>
-            Results.Ok(await ledger.ListAsync(user.FindFirstValue("sub")!, ct)))
+        member.MapGet("/mine", async (ClaimsPrincipal user, DuesLedger ledger, AutomaticDues automatic, CancellationToken ct) =>
+            {
+                // A player who hasn't signed in since automatic dues were turned on gets them here.
+                await automatic.EnsureAsync(user, ct);
+                return Results.Ok(await ledger.ListAsync(user.FindFirstValue("sub")!, ct));
+            })
             .WithSummary("List my dues and balances").Produces<List<DuesAssessment>>().Produces(401);
         member.MapGet("/mine/{id:guid}", async (Guid id, ClaimsPrincipal user, DuesLedger ledger, CancellationToken ct) =>
             await ledger.DetailAsync(id, user.FindFirstValue("sub")!, ct) is { } detail
@@ -278,6 +317,31 @@ internal static class DuesEndpoints
                 : Results.Conflict(new { error = "Assessment ID is already in use." });
         }).AddEndpointFilter(SameOrigin)
             .WithSummary("Assign dues to a member").Produces(201).Produces(400).Produces(401).Produces(403).Produces(409);
+        admin.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, DuesLedger ledger, CancellationToken ct) =>
+                await ledger.RemoveAsync(id, user.FindFirstValue("email") ?? user.FindFirstValue("sub")!, ct) switch
+                {
+                    RemoveResult.Removed => Results.NoContent(),
+                    RemoveResult.NotFound => Results.NotFound(),
+                    _ => Results.Conflict(new { error = "This item has payments or a card checkout in progress, so it can't be removed." }),
+                })
+            .AddEndpointFilter(SameOrigin)
+            .WithSummary("Remove dues from a member (only while nothing has been paid against them)")
+            .Produces(204).Produces(401).Produces(403).Produces(404).Produces(409);
+        admin.MapGet("/automatic", async (AutomaticDues automatic, CancellationToken ct) =>
+                Results.Ok(await automatic.GetAsync(ct)))
+            .WithSummary("Get the automatic dues setting").Produces<AutomaticDuesSetting>().Produces(401).Produces(403);
+        admin.MapPut("/automatic", async (AutomaticDuesSetting request, ClaimsPrincipal user, AutomaticDues automatic, CancellationToken ct) =>
+            {
+                var description = request.Description?.Trim();
+                if (request.AmountCents <= 0 || description is null || description.Length is < 1 or > 120)
+                    return Results.BadRequest(new { error = "Provide a description and a positive amount in cents." });
+                var saved = request with { Description = description };
+                await automatic.SaveAsync(saved, user.FindFirstValue("email") ?? user.FindFirstValue("sub")!, ct);
+                return Results.Ok(saved);
+            })
+            .AddEndpointFilter(SameOrigin)
+            .WithSummary("Turn automatic dues for players on or off, and set what they are")
+            .Produces<AutomaticDuesSetting>().Produces(400).Produces(401).Produces(403);
         admin.MapPost("/all-members", async (AssignToAll request, DuesLedger ledger, ClubMemberDirectory members, CancellationToken ct) =>
         {
             var description = request.Description?.Trim();

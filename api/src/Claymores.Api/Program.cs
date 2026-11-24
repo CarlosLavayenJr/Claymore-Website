@@ -122,7 +122,10 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         builder.Services.AddSingleton<AppleTokenRevocation>();
     }
     if (duesEnabled)
+    {
         builder.Services.AddSingleton<DuesLedger>();
+        builder.Services.AddSingleton<AutomaticDues>();
+    }
 }
 
 if (checkoutEnabled)

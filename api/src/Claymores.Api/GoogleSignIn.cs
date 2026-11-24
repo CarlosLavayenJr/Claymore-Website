@@ -97,6 +97,9 @@ internal static class GoogleSignIn
                 {
                     var member = new ClubMember(subject, email, context.Principal?.FindFirstValue("name"));
                     await directory.ObserveSignInAsync(member, context.HttpContext.RequestAborted);
+                    var automatic = context.HttpContext.RequestServices.GetService<AutomaticDues>();
+                    if (automatic is not null && context.Principal is { } principal)
+                        await automatic.EnsureAsync(principal, context.HttpContext.RequestAborted);
                 }
             };
             options.Events.OnRemoteFailure = context =>
