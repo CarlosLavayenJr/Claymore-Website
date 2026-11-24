@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../app/services.dart';
 import '../../app/theme.dart';
 import '../../data/standings_repository.dart';
+import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 
 class StandingsPage extends StatefulWidget {
@@ -13,9 +14,12 @@ class StandingsPage extends StatefulWidget {
 }
 
 class _StandingsPageState extends State<StandingsPage> {
-  StandingsRepository? repository;
+  StandingsController? controller;
   Future<List<StandingsSeason>>? seasons;
-  Future<Standings?>? table;
+
+  /// The table for a picked [season]. The current season comes from the
+  /// shared [StandingsController], which the Home preview also reads.
+  Future<Standings?>? picked;
 
   /// Null shows the API's current season.
   String? season;
@@ -23,35 +27,41 @@ class _StandingsPageState extends State<StandingsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final next = AppScope.of(context).standings;
-    if (next != repository) {
-      repository = next;
-      if (next.available) load();
+    final next = AppScope.of(context).standingsTable;
+    if (next != controller) {
+      controller = next;
+      if (next.available) loadSeasons();
     }
   }
 
-  void load() {
-    final repo = repository!;
-    seasons = repo.seasons().catchError((Object _) => <StandingsSeason>[]);
-    table = repo.standings(season: season);
+  void loadSeasons() {
+    seasons = controller!.repository.seasons().catchError(
+      (Object _) => <StandingsSeason>[],
+    );
   }
 
   Future<void> refresh() async {
-    setState(load);
-    await table?.then<void>((_) {}, onError: (Object _) {});
+    final shared = controller!;
+    setState(() {
+      loadSeasons();
+      if (season != null) picked = shared.repository.standings(season: season);
+    });
+    if (season == null) return shared.reload();
+    await picked?.then<void>((_) {}, onError: (Object _) {});
   }
 
   void pickSeason(String? value) {
     if (value == null) return;
     setState(() {
       season = value;
-      table = repository!.standings(season: value);
+      picked = controller!.repository.standings(season: value);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!(repository?.available ?? false)) {
+    final shared = controller;
+    if (shared == null || !shared.available) {
       return const PageList(
         storageKey: 'standings',
         children: [
@@ -65,6 +75,13 @@ class _StandingsPageState extends State<StandingsPage> {
         ],
       );
     }
+    return ListenableBuilder(
+      listenable: shared,
+      builder: (context, _) => _page(season == null ? shared.current : picked),
+    );
+  }
+
+  Widget _page(Future<Standings?>? table) {
     return FutureBuilder<Standings?>(
       future: table,
       builder: (context, snapshot) {
@@ -248,21 +265,29 @@ class LeagueTable extends StatelessWidget {
           cell(
             row == null
                 ? Text('TEAM', style: header)
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                : Row(
                     children: [
-                      Text(
-                        row.teamName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: cellStyle(row),
+                      TeamLogo(name: row.teamName, size: 24),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.teamName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: cellStyle(row),
+                            ),
+                            if (showPools && row.pool.isNotEmpty)
+                              Text(row.pool, style: textTheme.bodySmall),
+                          ],
+                        ),
                       ),
-                      if (showPools && row.pool.isNotEmpty)
-                        Text(row.pool, style: textTheme.bodySmall),
                     ],
                   ),
-            width: 150,
+            width: 176,
             start: true,
           ),
         ],
@@ -376,6 +401,8 @@ class PlayoffList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
+          TeamLogo(name: team, size: 22),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               team,

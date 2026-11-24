@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import 'api_base.dart';
 import 'api_client.dart';
 import 'models/account.dart';
+import 'models/join.dart';
+
+export 'models/join.dart';
 
 /// The mobile auth endpoints. These calls never carry a bearer token, so they
 /// use an [ApiClient] without a token source.
@@ -40,6 +45,92 @@ class AuthApi {
       '/v1/auth/mobile/logout',
       body: {'refreshToken': refreshToken},
     );
+  }
+
+  /// Asks the club to let this Google account join. [phone] and [message]
+  /// are sent only when non-empty.
+  Future<JoinReply> requestAccessWithGoogle({
+    required String idToken,
+    required String name,
+    String? phone,
+    String? message,
+  }) => _requestAccess('/v1/auth/mobile/google/request-access', {
+    'idToken': idToken,
+    ..._joinFields(name, phone, message),
+  });
+
+  /// As [requestAccessWithGoogle] for Apple. [rawNonce] must be fresh: one
+  /// Apple authorization per request.
+  Future<JoinReply> requestAccessWithApple({
+    required String identityToken,
+    required String rawNonce,
+    required String name,
+    String? phone,
+    String? message,
+  }) => _requestAccess('/v1/auth/mobile/apple/request-access', {
+    'identityToken': identityToken,
+    'rawNonce': rawNonce,
+    ..._joinFields(name, phone, message),
+  });
+
+  /// Where this Google account's join request stands. 401: invalid token.
+  Future<JoinRequestStatus> requestStatusWithGoogle(String idToken) =>
+      _requestStatus('/v1/auth/mobile/google/request-status', {
+        'idToken': idToken,
+      });
+
+  Future<JoinRequestStatus> requestStatusWithApple({
+    required String identityToken,
+    required String rawNonce,
+  }) => _requestStatus('/v1/auth/mobile/apple/request-status', {
+    'identityToken': identityToken,
+    'rawNonce': rawNonce,
+  });
+
+  static Map<String, String> _joinFields(
+    String name,
+    String? phone,
+    String? message,
+  ) => {
+    'name': name.trim(),
+    if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+    if (message != null && message.trim().isNotEmpty) 'message': message.trim(),
+  };
+
+  Future<JoinReply> _requestAccess(
+    String path,
+    Map<String, String> body,
+  ) async {
+    final response = await _api.send('POST', path, body: body);
+    final json = _object(response);
+    String? text(String key) =>
+        json[key] is String ? json[key] as String : null;
+    return switch (response.statusCode) {
+      202 || 200 => JoinReply(JoinReplyKind.pending, email: text('email')),
+      409 => const JoinReply(JoinReplyKind.alreadyMember),
+      429 => const JoinReply(JoinReplyKind.deniedRecently),
+      400 => JoinReply(JoinReplyKind.invalid, field: text('field')),
+      401 => const JoinReply(JoinReplyKind.invalidToken),
+      _ => throw ApiException.fromResponse(response),
+    };
+  }
+
+  Future<JoinRequestStatus> _requestStatus(
+    String path,
+    Map<String, String> body,
+  ) async {
+    final response = await _api.send('POST', path, body: body);
+    if (response.statusCode != 200) throw ApiException.fromResponse(response);
+    return JoinRequestStatus.parse(_object(response)['status']);
+  }
+
+  static Map<String, dynamic> _object(http.Response response) {
+    try {
+      final json = jsonDecode(utf8.decode(response.bodyBytes));
+      return json is Map<String, dynamic> ? json : const {};
+    } on FormatException {
+      return const {};
+    }
   }
 
   Future<AuthSession> _session(String path, Map<String, String> body) async {

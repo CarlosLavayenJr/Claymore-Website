@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/club_repository.dart';
 import '../data/member_repository.dart';
 import '../data/standings_repository.dart';
+import '../data/teams.dart';
 import '../features/auth/auth_service.dart';
 import '../features/club/notifications.dart';
 import '../features/fixtures/availability.dart';
@@ -23,6 +24,27 @@ class ClubDataController extends ChangeNotifier {
   }
 }
 
+/// The current-season table, shared by the Home preview and the Standings
+/// tab so the app fetches it once.
+class StandingsController extends ChangeNotifier {
+  StandingsController(this.repository);
+
+  final StandingsRepository repository;
+  Future<Standings?>? _current;
+
+  bool get available => repository.available;
+
+  /// Loaded on first use.
+  Future<Standings?> get current => _current ??= repository.standings();
+
+  Future<void> reload() async {
+    final request = repository.standings();
+    _current = request;
+    notifyListeners();
+    await request.then<void>((_) {}, onError: (Object _) {});
+  }
+}
+
 /// Everything screens need, handed down once through [AppScope].
 ///
 /// State is plain `ChangeNotifier`/`ValueNotifier`: the app has a handful of
@@ -32,6 +54,7 @@ class AppServices {
   AppServices({
     required this.club,
     required this.standings,
+    required this.teams,
     required this.auth,
     required this.members,
     required this.availability,
@@ -41,6 +64,12 @@ class AppServices {
 
   final ClubDataController club;
   final StandingsRepository standings;
+
+  /// Current-season table shared by Home and Standings.
+  late final standingsTable = StandingsController(standings);
+
+  /// Resolves fixture/standings names to clubs and logos.
+  final TeamDirectory teams;
   final AuthService auth;
 
   /// Null when the build has no API base URL.
@@ -54,6 +83,8 @@ class AppServices {
 
   void dispose() {
     club.dispose();
+    standingsTable.dispose();
+    teams.dispose();
     auth.dispose();
     availability.dispose();
     playerPreview.dispose();
@@ -67,6 +98,10 @@ class AppScope extends InheritedWidget {
 
   static AppServices of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!.services;
+
+  /// Null outside the app (e.g. a widget pumped alone in a test).
+  static AppServices? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppScope>()?.services;
 
   @override
   bool updateShouldNotify(AppScope oldWidget) => services != oldWidget.services;

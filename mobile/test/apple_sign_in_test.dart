@@ -197,7 +197,10 @@ void main() {
         );
       }
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      expect(const NativeAppleCredentialSource(enabled: false).supported, false);
+      expect(
+        const NativeAppleCredentialSource(enabled: false).supported,
+        false,
+      );
     });
 
     Future<void> pumpButtons(WidgetTester tester, AuthService auth) =>
@@ -214,22 +217,20 @@ void main() {
         apple: const NativeAppleCredentialSource(),
       );
       await pumpButtons(tester, auth);
-      expect(find.text('SIGN IN WITH GOOGLE'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsOneWidget);
       expect(find.byType(SignInWithAppleButton), findsNothing);
       auth.dispose();
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('the Apple button shows next to Google on iOS', (
-      tester,
-    ) async {
+    testWidgets('the Apple button shows next to Google on iOS', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       final auth = service(
         google: FakeGoogle(),
         apple: const NativeAppleCredentialSource(),
       );
       await pumpButtons(tester, auth);
-      expect(find.text('SIGN IN WITH GOOGLE'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsOneWidget);
       expect(find.byType(SignInWithAppleButton), findsOneWidget);
       expect(find.text('Sign in with Apple'), findsOneWidget);
       auth.dispose();
