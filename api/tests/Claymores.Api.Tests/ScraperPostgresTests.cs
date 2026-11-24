@@ -188,6 +188,26 @@ public sealed class ScraperPostgresTests(PostgresDatabase database) : IClassFixt
     }
 
     [Fact]
+    public async Task Shows_team_names_without_division_markers()
+    {
+        database.SkipIfUnavailable();
+        var ct = TestContext.Current.CancellationToken;
+        _site.ClubPages[(117, 30)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, January 23, 2027", "Claymores (D3)", "Lakeland (D3)"),
+            new ClubPageBuilder.Game("Saturday, January 30, 2027", "Jacksonville D3", "Claymores"),
+            new ClubPageBuilder.Game("Saturday, February 6, 2027", "Tampa 2nd XV", "Claymores"));
+        await ScrapeAsync(30);
+
+        var names = (await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource).ListAsync(null, ct))
+            .Select(f => $"{f.GetProperty("homeTeam").GetString()} v {f.GetProperty("awayTeam").GetString()}")
+            .ToArray();
+        Assert.Equal(["Claymores v Lakeland", "Jacksonville v Claymores", "Tampa 2nd XV v Claymores"], names);
+        // rugbyfl.com's own spelling stays stored.
+        Assert.Equal("Lakeland (D3)", await Scalar<string>(
+            "SELECT away_team_raw FROM fixtures WHERE fixture_date = '2027-01-23'"));
+    }
+
+    [Fact]
     public async Task Hidden_fixtures_stay_hidden_when_rescraped()
     {
         database.SkipIfUnavailable();

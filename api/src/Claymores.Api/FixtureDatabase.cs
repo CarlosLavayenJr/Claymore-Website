@@ -16,8 +16,10 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
     /// built from the typed columns and the teams table at read time, so team logo, slug and city
     /// changes show up without a rescrape. Columns: id, fixture_date, season, payload.
     /// <list type="bullet">
-    /// <item>Names are the stored display names minus a trailing season year: rugbyfl.com lists
-    /// "Orlando Otters 2026", Sanity (and so the website's fixture slugs) shows "Orlando Otters".</item>
+    /// <item>Names are the stored display names minus a trailing division marker and season year:
+    /// rugbyfl.com lists "Lakeland (D3)" and "Orlando Otters 2026", Sanity (and so the website's
+    /// fixture slugs, which are built from the names) shows "Lakeland" and "Orlando Otters". The
+    /// division is already in the competition. The stored raw names are untouched.</item>
     /// <item>Logo, slug and city come from the team's profile: the team row itself when it carries
     /// profile data (copied from Sanity by --import-reference-data), else the profile team that owns
     /// the team's name as an alias. That is how the seeded "Claymores" row gets the "Central Florida
@@ -33,8 +35,10 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
             'updatedAt', to_char(f.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
             'date', to_char(f.fixture_date, 'YYYY-MM-DD'),
             'season', f.season,
-            'homeTeam', COALESCE(NULLIF(regexp_replace(f.home_team_raw, '\s+(19|20)[0-9]{2}$', ''), ''), f.home_team_raw),
-            'awayTeam', COALESCE(NULLIF(regexp_replace(f.away_team_raw, '\s+(19|20)[0-9]{2}$', ''), ''), f.away_team_raw),
+            'homeTeam', COALESCE(NULLIF(regexp_replace(regexp_replace(f.home_team_raw,
+                '\s*\(\s*D[1-4]\s*\)\s*$|\s+D[1-4]\s*$', '', 'i'), '\s+(19|20)[0-9]{2}$', ''), ''), f.home_team_raw),
+            'awayTeam', COALESCE(NULLIF(regexp_replace(regexp_replace(f.away_team_raw,
+                '\s*\(\s*D[1-4]\s*\)\s*$|\s+D[1-4]\s*$', '', 'i'), '\s+(19|20)[0-9]{2}$', ''), ''), f.away_team_raw),
             'homeScore', f.home_score,
             'awayScore', f.away_score,
             'status', f.status,
