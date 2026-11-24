@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { client } from '@/sanity/lib/client'
-import { playersQuery } from '@/sanity/lib/queries'
+import { getPlayers } from '@/lib/claymores-api'
 import type { SanityPlayer } from '@/sanity/lib/queries'
 import TeamGrid from '@/components/team-grid'
 import { ogImage } from '@/lib/og'
@@ -26,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function TeamPage() {
     const [players, schedule]: [SanityPlayer[], Awaited<ReturnType<typeof getPracticeSchedule>>] = await Promise.all([
-        client.fetch(playersQuery),
+        getPlayers(),
         getPracticeSchedule(),
     ])
 

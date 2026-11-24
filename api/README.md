@@ -1,0 +1,636 @@
+# Claymores API
+
+A standalone ASP.NET Core 10 API for the Claymores site and Flutter app. It exposes public fixtures, standings, teams, players, and practice data and validates bearer access tokens for protected routes. The website is the first integration target. Local website integration is in the separate `codex/claymores-api-integration` worktree. The production website and Flutter app have yet to switch.
+
+With no database connection configured, fixture endpoints read published fixtures from Sanity. Once Postgres is configured and seeded, fixture endpoints read from Postgres. Standings, teams, players, and practice data come from Sanity in both modes. The importer reads Sanity and writes to Postgres.
+
+## Handoff
+
+The website is the first integration target. The local branch `codex/claymores-api-integration` is at `b96e2d9` in the `work/claymores-website-api` worktree and has no remote tracking branch. Desktop and mobile Playwright checks passed. The API source is in `api/` and the Flutter source is in `mobile/` in this repository, on the same branch as the website integration. The branch has not been pushed.
+
+| Local surface | URL |
+| --- | --- |
+| API-backed website | [Website preview](http://127.0.0.1:5300) |
+| API-backed Flutter web build | [Flutter preview](http://127.0.0.1:8766) |
+| API explorer | [Swagger](http://localhost:5294/swagger) |
+
+Resume with one invited player and one admin signing in through the development Google OAuth client. Use the prepared local Postgres preview, assign $100.00 in dues, then complete a $25.00 Stripe sandbox payment and confirm $75.00 remains after the webhook. Google redirect and role checks, the treasurer UI, and the Stripe flow with a simulated provider passed locally. Real Google account sign-in and a payment through the Stripe sandbox are pending. Keep OAuth and payment credentials in local secrets.
+
+Production still reads Sanity. Keep source documents and assets in place while the website and API depend on them. No push, deployment, live charge, or Sanity deletion is part of this handoff.
+
+## Run locally
+
+Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The API project is in [`src/Claymores.Api`](src/Claymores.Api) and its tests are in [`tests/Claymores.Api.Tests`](tests/Claymores.Api.Tests). From `src/Claymores.Api`, run:
+
+```sh
+dotnet --version
+dotnet restore
+dotnet run --launch-profile http
+```
+
+The HTTP profile starts in Development at `http://localhost:5294`. A first run needs internet access to restore packages and query the published Sanity dataset.
+
+- [Swagger UI](http://localhost:5294/swagger)
+- [OpenAPI JSON](http://localhost:5294/swagger/v1/swagger.json)
+- [Health check](http://localhost:5294/health)
+
+Swagger is enabled by default in Development. To expose it in another environment, set `Swagger__Enabled=true`.
+
+## Endpoints
+
+| Method and path | Access | Response |
+| --- | --- | --- |
+| `GET /health` | Public | `200` and `{"status":"ok"}` when the API process is running |
+| `GET /health/ready` | Public | `200` when Postgres is reachable and fully migrated (or not configured). `503` otherwise. Render uses this as the health check. |
+| `GET /v1/fixtures` | Public | `200` and an array sorted by date and ID. Add `?season=2027` to filter by fixture year. |
+| `GET /v1/fixtures/{id}` | Public | `200` and the fixture object, or `404` for an unknown ID. Copy an `id` from the list. |
+| `GET /v1/standings` | Public | `200` and the current standings document. Add `?season=2025-2026` to request a specific season. Returns `404` when no standings match. |
+| `GET /v1/standings/seasons` | Public | `200` and an array of season summaries for the standings index. |
+| `GET /v1/teams` | Public | `200` and an array of published teams. |
+| `GET /v1/players` | Public | `200` and an array of published active player profiles ordered by name. |
+| `GET /v1/players/{slug}` | Public | `200` and the active player profile, or `404` for an unknown or inactive profile. |
+| `GET /v1/practices` | Public | `200` and an array of published practice and event records. |
+| `GET /v1/practices/schedule` | Public | `200` and the practice schedule, or `404` when no schedule is published. |
+| `GET /v1/me` | Bearer token | `200` and `{"subject","name","email","role"}` from the token, or `401` for a missing or invalid token. `role` is set for tokens from [mobile sign-in](#mobile-sign-in). |
+| `DELETE /v1/me` | Player or admin (bearer, or cookie same-origin) | Deletes the caller's club account. `204`, or `409 {"error":"last_admin"}`. See [Delete my account](#delete-my-account). |
+| `POST /v1/internal/scrape/{fixtures\|standings}` | `Scraper:Secret` bearer | Runs the rugbyfl.com scraper. See [Scraper](#scraper). `404` unless the secret and Postgres are configured. Not in Swagger. |
+
+Fixture filters take a numeric year from 1900 through 2200. Standings filters take a season label in `YYYY-YYYY` format. Invalid filters return `400`. A successful fixture list with no matches returns `[]`. Health reports process liveness. To verify the data path, request fixtures or standings as well.
+
+```sh
+curl -fsS 'http://localhost:5294/v1/fixtures?season=2027'
+curl -fsS 'http://localhost:5294/v1/standings'
+curl -fsS 'http://localhost:5294/v1/standings?season=2025-2026'
+curl -fsS 'http://localhost:5294/v1/standings/seasons'
+curl -fsS 'http://localhost:5294/v1/teams'
+curl -fsS 'http://localhost:5294/v1/players'
+curl -fsS 'http://localhost:5294/v1/practices'
+curl -i 'http://localhost:5294/v1/practices/schedule'
+curl -i 'http://localhost:5294/v1/me'
+```
+
+## Google sign-in for players and admins
+
+Both roles start at the same Google sign-in URL. The API checks the verified Google email against the configured club invitations and assigns either `player` or `admin`. The roster remains public and does not grant access. These configuration lists are for the initial preview, before invitation management moves into Postgres.
+
+1. In Google Cloud, make a separate **Web application** OAuth client for local development. Register `https://localhost:7057/signin-google` as its authorized redirect URI. If the Google consent screen is in testing, add the test accounts there too.
+2. Set the client ID and client secret in .NET user secrets. Add the invited emails in the matching role list. The admin list takes precedence if an email is on both lists.
+
+   ```sh
+   dotnet user-secrets init
+   dotnet user-secrets set 'Authentication:Google:ClientId' '<client ID>'
+   printf 'Google client secret: '
+   read -rs CLAYMORES_GOOGLE_SECRET
+   printf '\n'
+   dotnet user-secrets set 'Authentication:Google:ClientSecret' "$CLAYMORES_GOOGLE_SECRET"
+   unset CLAYMORES_GOOGLE_SECRET
+   dotnet user-secrets set 'Authentication:Google:AdminEmails:0' '<admin Google email>'
+   dotnet user-secrets set 'Authentication:Google:PlayerEmails:0' '<player Google email>'
+   dotnet dev-certs https --trust
+   dotnet run --launch-profile https
+   ```
+
+3. Open [Google sign-in](https://localhost:7057/auth/google) directly in your browser. It redirects back to `/auth/account`, where you can see your role and sign out. The JSON session check is at `/auth/session`. Use an incognito window to test the second account, and verify that a Google account outside both lists gets `403`. Use Swagger separately to explore the public API.
+4. To test from the website, see [Member sign-in](../README.md#member-sign-in-sign-in-sign-up-account-accountadmin) in the root README. The website signs in with Google itself (Auth.js) and exchanges the id_token through [mobile sign-in](#mobile-sign-in).
+
+### Invite members
+
+Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and `PlayerEmails` settings still work and are meant for bootstrapping: set one admin email there, then invite everyone else. An admin role from either source wins. Role changes take effect within 30 seconds, including for members who are already signed in.
+
+- From the command line, with the database configured: `dotnet run -- --invite player@example.com player` (or `admin`).
+- Through the API, signed in as an admin on the API origin:
+
+  | Method and path | Behavior |
+  | --- | --- |
+  | `GET /v1/admin/invitations` | Lists invited emails and roles |
+  | `PUT /v1/admin/invitations/{email}` with `{"role":"player"}` or `{"role":"admin"}` | Invites a member or changes their role |
+  | `DELETE /v1/admin/invitations/{email}` | Removes an invitation. Admins can't remove or demote themselves. |
+
+  Signed in with the browser session cookie, the `PUT` and `DELETE` requests must come from the same origin, like the other admin writes. An admin's API bearer token works from anywhere (see [Same-origin rule](#same-origin-rule)).
+
+### Same-origin rule
+
+Every write that can be authenticated by the browser session cookie (`/auth/logout`, the dues and invitation admin writes, checkout releases, join request decisions, both checkout entry points, and account deletion) checks `Sec-Fetch-Site: same-origin` **only when the cookie authenticated the request**. The cookie is an ambient credential, so a cross-site page could otherwise make the browser send it. A request that carries the cookie fails without the header even if it also has a bearer token. Requests authenticated only by an API bearer token pass: browsers never attach that token on their own. This lets a server-side web client (for example the website's admin page, holding an admin's access token) call the admin API.
+
+The website and the Flutter app both use [mobile sign-in](#mobile-sign-in). Keep local OAuth client settings separate from any future preview or production settings.
+
+## Mobile sign-in
+
+The Flutter app signs in with native Google sign-in, then trades the Google ID token for API tokens. The same invitations decide who gets in and with which role. Set `MobileAuth:Enabled=true`; it requires Google sign-in and Postgres to be configured, and the refresh tokens live in `mobile_refresh_tokens` (migration `008`).
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/google` | `{"idToken":"<Google ID token>"}` | `200` with tokens (below). `401 {"error":"invalid_token"}` for a bad, expired, wrong-audience, or unverified-email token. `403 {"error":"not_invited"}` when the email isn't invited. |
+| `POST /v1/auth/mobile/refresh` | `{"refreshToken":"..."}` | `200` with new tokens. The old refresh token stops working. `401` for an unknown, expired, or revoked token. `403 {"error":"not_invited"}` if the invitation was removed (the session is revoked). |
+| `POST /v1/auth/mobile/logout` | `{"refreshToken":"..."}` | `204`. Revokes that sign-in session. |
+
+```json
+{
+  "accessToken": "<JWT>",
+  "accessTokenExpiresAt": "2026-11-24T18:00:00+00:00",
+  "refreshToken": "<43 characters>",
+  "user": { "subject": "<Google subject>", "name": "Pat Player", "email": "pat@example.com", "role": "player" }
+}
+```
+
+- **Access tokens** are JWTs signed by the API (HS256 with `Authentication:Tokens:SigningKey`, issuer and audience `claymores-api`), valid for one hour. Send them as `Authorization: Bearer <token>` to `/v1/me`, `/v1/dues/mine`, `/v1/dues/mine/{id}`, and `/v1/dues/{id}/checkout-session`. The invitation is re-checked on every request, so removing or changing an invitation takes effect within 30 seconds. An admin's token also works for the `/v1/admin/...` routes, writes included, without a `Sec-Fetch-Site` header (see [Same-origin rule](#same-origin-rule)).
+- **Refresh tokens** last 60 days and rotate on every refresh. Only a SHA-256 hash is stored. Presenting a token that was already rotated or revoked revokes every token in that sign-in session, so the app must store the newest refresh token before using it.
+- **Grace window for parallel refreshes:** a token that was *rotated* less than `MobileAuth:RefreshGraceSeconds` (default 60, 0 to 600) ago, and whose successor is still active, returns that same successor with a new access token instead of counting as reuse. Two refreshes the app sends at once both succeed with the same new refresh token. Outside the window, or once the successor itself was rotated or revoked, reuse detection applies as before. Logout and reuse revocation have no grace: after logout every token of the session fails. Since only hashes are stored, a rotation's successor is derived from the presented token (HMAC-SHA256 under a key derived from `Authentication:Tokens:SigningKey`), so the server can hand it out again; changing the signing key ends the grace for rotations made before the change.
+- **Signing key:** base64 for at least 32 random bytes, for example `openssl rand -base64 32`. The API refuses to start with mobile sign-in on and no valid key. Changing the key invalidates current access tokens at once; the app recovers by refreshing.
+
+### Google Cloud setup
+
+In the same Google Cloud project as the web client:
+
+1. Create an **iOS** OAuth client with the app's bundle ID. Put its client ID in the Flutter app (and the reversed client ID URL scheme in `Info.plist`).
+2. Create an **Android** OAuth client with the package name and the SHA-1 of each signing certificate (debug, upload, and Play app signing).
+3. Native Google sign-in on Android asks for an ID token for a *server* client ID. Use the existing **Web application** client ID for that (`serverClientId` in `google_sign_in`).
+4. List every client ID that can appear as a token's audience in `Authentication:Google:MobileClientIds` (`Authentication__Google__MobileClientIds__0`, `__1`, and so on): at least the iOS client ID. The web `Authentication:Google:ClientId` is always accepted, which covers Android tokens minted for the server client ID.
+
+The API checks each ID token's signature against Google's published keys, its issuer (`https://accounts.google.com` or `accounts.google.com`), its audience, its expiry, and `email_verified`.
+
+### Sign in with Apple
+
+App Store guideline 4.8 requires Sign in with Apple in an iOS app that offers Google sign-in. The app uses native Sign in with Apple and trades Apple's identity token for the same API tokens. `POST /v1/auth/mobile/apple` is mapped only when `MobileAuth:Enabled` is on and at least one `Authentication:Apple:ClientIds` entry is set (`Authentication__Apple__ClientIds__0=com.claymoresrfc.claymores`, already in `render.yaml`). No migration is needed.
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/apple` | `{"identityToken":"<Apple identity token>","rawNonce":"<nonce before hashing>","fullName":"Pat Player"}` (`fullName` optional) | `200` with the same tokens as Google. `401 {"error":"invalid_token"}` for a bad, expired, or wrong-audience token, a nonce mismatch, or an unverified email. `403 {"error":"not_invited"}` when the email isn't invited, or `403 {"error":"not_invited","email":"<relay address>"}` when it is an `@privaterelay.appleid.com` address. |
+
+- **Token checks:** RS256 signature against Apple's keys at `https://appleid.apple.com/auth/keys` (cached, and fetched again once when a token names an unknown key ID), issuer `https://appleid.apple.com`, audience in `Authentication:Apple:ClientIds`, expiry, `email_verified` (Apple sends it as a string or a boolean), and the `nonce` claim. The app sends Apple the lowercase hex SHA-256 of a random raw nonce and sends the raw nonce here; the API hashes it and compares. A token can't be replayed with a different nonce.
+- **Subjects:** stored as `apple|<Apple sub>` in `club_members`, `mobile_refresh_tokens` and `dues_assessments.player_subject`, so they can't collide with Google subjects (which stay unprefixed). The same person signing in with Google and with Apple has two member records; assign dues to the one they use.
+- **Role:** resolved from the email in the token, like Google. Refresh re-checks the invitation with the email stored on the session.
+- **Name:** Apple sends the name to the app only on the first authorization. The API stores `fullName` when it is present and otherwise keeps the stored name.
+- **Hide My Email:** a member who hides their email signs in with an address like `x7k2@privaterelay.appleid.com`, which won't match their invitation. The `403` includes that address and the app shows it. An admin can invite that exact address (`PUT /v1/admin/invitations/{email}`, as for any email), or the member can use Google or sign in with Apple again after choosing **Share My Email** (first remove the app under Settings > [your name] > Sign-In & Security > Sign in with Apple).
+
+#### Apple Developer setup
+
+1. In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list) > **Identifiers**, open the App ID `com.claymoresrfc.claymores` and enable the **Sign in with Apple** capability ("Enable as a primary App ID"). Save, then regenerate any manually managed provisioning profiles. Automatic signing in Xcode picks it up.
+2. The app already has `ios/Runner/Runner.entitlements` with `com.apple.developer.applesignin = [Default]`.
+
+Nothing else is needed for native sign-in. The identity token's audience is the bundle ID, and the API verifies it with Apple's public keys, so sign-in needs **no Services ID and no Sign in with Apple key**. A key is needed for revoking Apple tokens when a member deletes their account (guideline 5.1.1(v); see [Delete my account](#delete-my-account)):
+
+3. **Owner step.** In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/authkeys/list) > **Keys**, create a key with **Sign in with Apple** enabled and configure it for the primary App ID `com.claymoresrfc.claymores`. Download the `.p8` file (Apple offers it once) and note the **Key ID**.
+4. Put the Key ID in `render.yaml` as `Authentication__Apple__KeyId` (a value, not secret). The Team ID `57539PPNC3` is already there as `Authentication__Apple__TeamId`.
+5. In the Render dashboard only (never in `render.yaml` or the repository), set `Authentication__Apple__PrivateKey` to the full contents of the `.p8` file, including the `-----BEGIN PRIVATE KEY-----` lines. Literal `\n` sequences are accepted in place of line breaks.
+
+Until all of TeamId, KeyId, PrivateKey and `ClientIds__0` are set, deletion still works and logs that Apple revocation was skipped. The client ID used with Apple's REST API is `Authentication:Apple:ClientIds:0` (the bundle ID).
+
+Still not needed: a Services ID (Sign in with Apple on Android or the web, which the app doesn't offer) and server-to-server notifications (optional, can be added later on the App ID).
+
+### Request to join
+
+When sign-in returns `403 {"error":"not_invited"}`, the app can ask to join with the same identity token. Requests live in `join_requests` (migration `011`), one per identity (provider plus subject; Apple subjects are `apple|<sub>`). These routes are mapped with mobile sign-in; the Apple ones only when Apple is configured. The token is checked exactly as at sign-in (`401 {"error":"invalid_token"}` otherwise). Responses are `no-store`.
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `POST /v1/auth/mobile/google/request-access` | `{"idToken","name","phone"?,"message"?}` | `202 {"status":"pending","email":"<email from the token>"}`. `409 {"status":"already_member"}` when the email is already invited. `429 {"status":"denied_recently"}` within 24 hours of a denial. `400 {"error":"invalid_request","field":"name"}` (or `phone`, `message`). |
+| `POST /v1/auth/mobile/apple/request-access` | `{"identityToken","rawNonce","name","phone"?,"message"?}` | Same as Google. |
+| `POST /v1/auth/mobile/google/request-status` | `{"idToken"}` | `200 {"status":"none\|pending\|approved\|denied"}` |
+| `POST /v1/auth/mobile/apple/request-status` | `{"identityToken","rawNonce"}` | Same as Google. |
+
+- **Fields:** `name` is required, 1 to 80 characters after trimming. `phone` is optional, up to 30 characters of digits, spaces, and `+ ( ) - .`. `message` is optional, up to 500 characters. Blank optional fields are stored as null.
+- **Resubmitting** updates the name, phone, and message and keeps the request pending. An approved request whose invitation was later removed can ask again. A denied one can ask again 24 hours after the denial.
+- **Rate limit:** the four routes share a fixed window of `JoinRequests:PermitsPerMinute` (default 10) requests per minute per client IP. Over the limit: `429 {"error":"rate_limited"}` with `Retry-After`. Behind Render (`RENDER=true`, or `ForwardedHeaders:Enabled=true`), `UseForwardedHeaders` runs first in the pipeline, before `UseRateLimiter`, and the limiter partitions on `HttpContext.Connection.RemoteIpAddress` after it. `ForwardLimit` is 1, so only the right-most `X-Forwarded-For` entry is used: the address Render's proxy appended for the connection it received. Entries to its left are client-supplied and ignored, so sending a made-up `X-Forwarded-For` doesn't get a client a fresh limit. The known-proxy lists are cleared because Render's proxy addresses aren't fixed, which is safe only because the service is reachable solely through that proxy.
+- **Notification:** no email yet (sending through Resend is a later step). A new request logs `New join request from {email}` at Information. Admins check `/auth/admin/join-requests`, linked from the account page and the dues admin page.
+
+Admins (cookie or bearer, `ClubAdmin`) decide:
+
+| Method and path | Body | Response |
+| --- | --- | --- |
+| `GET /v1/admin/join-requests?status=pending` | | `200 [{"id","provider","email","name","phone","message","status","createdAt","updatedAt"}]`, oldest first. `status` is optional (`pending`, `approved`, `denied`); anything else is `400`. |
+| `POST /v1/admin/join-requests/{id}/approve` | `{"role":"player"}` or `{"role":"admin"}` | `200` with the updated request. Creates or updates the `club_invitations` row for the request's email (normalized) and records the approver's email and time, in one transaction. `409 {"error":"not_pending"}` unless the request is pending, so a stale page or a retry can't change a role; change roles with `PUT /v1/admin/invitations/{email}`. An approval never lowers an existing admin invitation: approving as player keeps `admin` (the page says so). `400` with `"field":"role"`, `404` for an unknown ID. |
+| `POST /v1/admin/join-requests/{id}/deny` | `{"reason":"..."}` (optional, up to 500 characters, never shown to the applicant) | `200` with the updated request. `409 {"error":"not_pending"}` unless the request is pending. `404` for an unknown ID. |
+
+The API-hosted page `/auth/admin/join-requests` lists pending and recently decided requests with approve (choose a role) and deny forms. Approving lets the person sign in at once; the app can poll `request-status` or simply retry sign-in.
+
+Inviting an email directly (`PUT /v1/admin/invitations/{email}`, or `--invite`) also marks that email's pending join requests approved, with `decided_by` set to the inviting admin, so they leave the pending list.
+
+### Delete my account
+
+App Store guideline 5.1.1(v) requires in-app account deletion. Members delete their own account with `DELETE /v1/me` (the app, or the website server-side, with the member's bearer token), or with **Delete my account** on the API-hosted `/auth/account` page (a form with a confirmation box that posts to `/auth/account/delete`). Both require the `ClubMember` policy; a request authenticated by the session cookie must be same-origin (see [Same-origin rule](#same-origin-rule)).
+
+| Request | Response |
+| --- | --- |
+| `DELETE /v1/me`, optional body `{"appleAuthorizationCode":"<code>"}` | `204`. `409 {"error":"last_admin"}` when the caller is an admin and no other admin would remain (admins in `Authentication:Google:AdminEmails` count). `400 {"error":"invalid_request"}` for a malformed body. `401`/`403` as for other member routes. |
+| `POST /auth/account/delete` (form, `confirm=delete`) | `303` to `/auth/account-deleted`, or back to `/auth/account?deletion=confirm` (box not ticked) or `?deletion=last-admin` |
+
+In one transaction, deletion:
+
+- revokes every mobile refresh token of the caller's subject (all devices; access tokens stop working within 30 seconds because the invitation is gone),
+- deletes the `club_invitations` row for the caller's email, every join request for the subject or email, and the `club_members` row,
+- cancels the caller's pending checkouts that have no Stripe session (`status = 'expired'`, `released_by = 'account deletion'`).
+
+**Dues are retained.** `dues_assessments`, `dues_payments` and `dues_checkouts` stay, keyed by the old subject: they are the club's financial records. A pending checkout already bound to a Stripe session also stays, so a payment the member completed is still credited by the webhook. A browser session cookie is signed out.
+
+**Configured emails.** An email in `Authentication:Google:AdminEmails` or `PlayerEmails` can't be removed by deletion. The member's sessions, member record, invitation row and join requests are still deleted and the API logs a warning, but the email can sign in again until the owner removes it from configuration (the Render dashboard for `AdminEmails__0`).
+
+**Apple.** For an `apple|` subject, the app should get a fresh authorization code from Sign in with Apple and send it as `appleAuthorizationCode`. When Apple revocation is configured (`Authentication:Apple:TeamId`, `KeyId`, `PrivateKey`, and `ClientIds:0` as the client ID; see [Apple Developer setup](#apple-developer-setup)), the API signs an ES256 `client_secret` JWT (`iss` team ID, `sub` client ID, `aud` `https://appleid.apple.com`, `kid` key ID, five minutes), exchanges the code at `https://appleid.apple.com/auth/token`, and revokes the refresh token (or the access token) at `https://appleid.apple.com/auth/revoke`. Failures are logged and never fail the deletion. Without the configuration, or without a code, the API logs that revocation was skipped.
+
+### App checkout and the `claymores://` link
+
+With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-session` with `{"amountCents":2500}` returns `{"url":"https://checkout.stripe.com/..."}`. Open that URL in the browser. Stripe sends the player back to `Stripe:AppReturnUrl` with `?checkout=returned` or `?checkout=cancelled`, for example `claymores://dues?checkout=returned`. Register the `claymores` scheme in the app (iOS `CFBundleURLTypes`, Android intent filter) and refresh dues when it opens. The balance changes only after Stripe's signed webhook arrives, never because of the return link.
+
+`Stripe:AppReturnUrl` is required when both features are on. It must be a custom scheme or HTTPS URL without a query. The amount must be from 50 to 99,999,999 cents and no more than the remaining balance (`409`). Another member's assessment is `404`. If the assessment already has a pending checkout, its session is resumed with the original amount, the same as the browser form. A request authenticated by the browser session cookie must be same-origin (`Sec-Fetch-Site: same-origin`); see [Same-origin rule](#same-origin-rule).
+
+#### Website checkout (`returnTo`)
+
+The body takes an optional `"returnTo"`: `"app"` (the default, so the app sends nothing new) or `"web"`. The website calls the same route server-side with the member's bearer token and `{"amountCents":2500,"returnTo":"web"}`; Stripe then returns to `Stripe:WebReturnUrl` with `checkout=returned` or `checkout=cancelled` appended, keeping any query the URL already has (`https://www.claymoresrfc.com/account?checkout=returned`).
+
+- Any other `returnTo` value is `400 {"error":"invalid_request","field":"returnTo"}`.
+- `"web"` without `Stripe:WebReturnUrl` configured is `400 {"error":"web_checkout_unavailable"}`.
+- `Stripe:WebReturnUrl` is checked at startup: an absolute HTTPS URL without user info or a fragment. HTTP is accepted only for a loopback host (`http://localhost:3000/account`) in Development.
+
+The return target is stored with the pending checkout (`dues_checkouts.return_to`) and is part of the Stripe idempotency key (`claymores-dues-<mode>-<target>-<checkout id>`). **A pending checkout always returns where it was first started.** If the app starts a checkout and the website resumes it, the website gets the same open session's URL, and Stripe sends the player back to the app link afterwards (and vice versa; the account-page form behaves the same). If the original create's response was lost, the retry repeats it with the original target, so Stripe replays it instead of rejecting a reused key with different parameters. After the session completes or expires, the next checkout uses the new caller's target.
+
+These routes are outside the public CORS policy. Native apps don't need CORS. If the Flutter web build ever uses them, give its exact origin a separate CORS policy for these routes instead of adding it to `Cors:PublicOrigins`.
+
+In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres, builds `src/Claymores.Api`, imports fixtures (which also migrates), and starts the HTTPS Google and dues preview at `https://localhost:7057`.
+
+## Test authentication locally
+
+From a second terminal in the project directory, create a one-hour Development token with the .NET SDK:
+
+```sh
+CLAYMORES_DEV_JWT="$(dotnet user-jwts create --name claymores-demo --audience http://localhost:5294 --valid-for 1h --output token)"
+```
+
+The SDK may add a user-secrets ID and Development settings to your checkout. Signing keys are stored in local user secrets. Restart the Development API after creating the first token so it loads these settings. Then send the token in the `Authorization` header from the second terminal:
+
+```sh
+curl -i -H "Authorization: Bearer $CLAYMORES_DEV_JWT" 'http://localhost:5294/v1/me'
+unset CLAYMORES_DEV_JWT
+```
+
+You can also select **Authorize** in Swagger, paste the access token by itself, and use **Try it out** on `GET /v1/me`.
+
+For hosted authentication, configure both environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `Authentication__Authority` | HTTPS OIDC authority from your identity provider |
+| `Authentication__Audience` | Audience registered for the Claymores API |
+
+The API validates access tokens issued for that audience. Hosted sign-in still requires selecting an identity provider and configuring clients to obtain its access tokens. The API currently serves data and validates tokens. The provider handles sign-in, registration, and token issuance.
+
+## Migrate and import fixtures into Postgres
+
+Migrations run automatically. On startup, the API applies every script in [`src/Claymores.Api/sql`](src/Claymores.Api/sql) that the database hasn't recorded yet, in name order, each in its own transaction, and records it in `schema_migrations`. A Postgres advisory lock keeps two instances from migrating at once. The scripts are idempotent, so databases set up by hand before the runner existed migrate cleanly. Set `Database__MigrateOnStartup=false` to turn this off, and run `dotnet run -- --migrate` to migrate without starting the server. To change the schema, add a new numbered script; don't edit one that has already been applied.
+
+1. Create a development database in Neon or another Postgres instance.
+2. In the terminal where you run the API, set `ConnectionStrings__Claymores` to an Npgsql connection string, or set `DATABASE_URL` to a `postgres://` URL as Render and Neon provide it. `ConnectionStrings__Claymores` wins if both are set. An Npgsql connection string has this shape:
+
+   ```text
+   Host=<host>;Port=5432;Database=<database>;Username=<user>;Password=<password>;SSL Mode=Require
+   ```
+
+   Store the real value in development secrets or your hosting platform's secret settings. To give it to the current terminal session without putting the value into shell history, use:
+
+   ```sh
+   printf 'Paste the Npgsql connection string: '
+   read -rs ConnectionStrings__Claymores
+   printf '\n'
+   export ConnectionStrings__Claymores
+   ```
+
+3. Import the published Sanity fixtures. This applies any pending migrations first. Run the same command again to check repeatability.
+
+   ```sh
+   dotnet run -- --import-fixtures
+   dotnet run -- --import-fixtures
+   ```
+
+   Both runs report how many fixtures they processed. The importer uses the Sanity document ID as the fixture primary key and updates existing rows on conflict. It preserves rows absent from a later import. The import runs in a transaction. Rerun it when Sanity changes or when the API imports additional fixture fields.
+
+4. In the SQL editor, verify the row counts and check that no Sanity ID appears more than once:
+
+   ```sql
+   SELECT count(*) AS fixtures, count(DISTINCT sanity_id) AS unique_fixtures
+   FROM fixtures;
+
+   SELECT count(*) AS teams FROM teams;
+   ```
+
+   The initial verification returned 63 fixtures after both imports. Subsequent totals can grow as fixtures are published in Sanity.
+
+5. From the same terminal, run `dotnet run --launch-profile http` and try the fixture endpoints again. The configured API reads fixtures from Postgres, so import before starting it in this mode. To switch back to Sanity-backed fixture reads, unset `ConnectionStrings__Claymores` and restart the API.
+
+## Scraper
+
+The API can scrape rugbyfl.com into Postgres. It ports the website's `app/api/scrape-rugby` and `app/api/scrape-standings` routes, which write to Sanity. Both run side by side until cutover. The Vercel crons stay as they are.
+
+**Read sources.** Two settings on the web service choose what the public endpoints serve. `render.yaml` sets both to the Postgres side.
+
+| Setting | Values | Effect |
+| --- | --- | --- |
+| `Fixtures__Source` | `sanity` (default), `scraper` | `GET /v1/fixtures[/{id}]` serves rows written by `--import-fixtures` or by the scraper. Scraper rows are built at read time in Sanity's match shape (same field names). IDs are `rfl-{date}-{homeTeamId}-{awayTeamId}` instead of Sanity `_id`s. |
+| `Standings__Source` | `sanity` (default), `postgres` | `GET /v1/standings[?season=]` and `GET /v1/standings/seasons` serve the scraped `standings` tables in Sanity's `leagueStandings` shape (`id` is `leagueStandings-{championshipId}`; rows and playoffs carry the same `_key`/`_type` values the website scraper wrote). Needs a Postgres connection. |
+
+Teams, players and practices always read Sanity. `GET /v1/teams` stays there because the `teams` table has no Sanity document ID, `logoAlt`, `description` or `updatedAt`, and it also holds raw names and scraper-created teams that have no published profile.
+
+**Season fallback.** With `Standings__Source=postgres`, a season that isn't in Postgres is read from Sanity for that request, and the API logs it. `GET /v1/standings` serves the championship in `championship_config` when it has been scraped and Sanity's current standings otherwise. That keeps 2026-2027 working while rugbyfl.com returns HTTP 500 for championship 203. `GET /v1/standings/seasons` lists every Postgres season and adds Sanity's cards for the seasons Postgres lacks (2026-2027 and the archived 2022-2025 seasons today). If Sanity is down, it lists the Postgres seasons alone. Backfill the archived seasons with `--scrape-standings --championship-id … --season-label …` to stop depending on Sanity for them.
+
+**Differences from Sanity a reader may notice:**
+
+- Standings positions are contiguous (1..n). Sanity's 2025-2026 rows end 11, 18, 19, 20 after a hand trim, so the last three teams move up to 12–14.
+- `lastUpdated` and `updatedAt` are the scrape time. A row with no pool has `pool: null`, and a playoff without a date has `date: null`.
+- Fixture names drop a trailing season year ("Orlando Otters 2026" shows as "Orlando Otters", as in Sanity), so the website's `/fixtures/[slug]` URLs (date plus team names) stay the same. `homeLogo`, `homeTeamSlug` and `homeTeamCity` (and the away fields) come from the team's profile: the team row when it has a logo, city or website from `--import-reference-data`, or else the profile team that owns the team's name as an alias (that is how "Claymores" gets the Central Florida Claymores logo). A team without a profile gets nulls rather than a slug, so the website never links to a missing `/opponents` page. `recap` is always null.
+
+### Run it
+
+| Command | What it does |
+| --- | --- |
+| `dotnet run -- --scrape-fixtures` | Club 117, season ID 28 (`Scraper:DefaultSeasonId`). Also opens each game's detail page to read the venue. |
+| `dotnet run -- --scrape-fixtures --season-id 27` | One earlier season |
+| `dotnet run -- --scrape-fixtures --all` | Clubs 117 and 51 (IR/Claymores), season IDs 10 through 28. Skips venue lookups. Venues already stored are kept. |
+| `dotnet run -- --scrape-standings [--force]` | Scrapes the championship in `championship_config`. `--force` runs even when `active` is false. |
+| `dotnet run -- --scrape-standings --championship-id 162 --season-label 2023-2024 [--division-name ...]` | Backfills one championship without stamping `championship_config` |
+| `dotnet run -- --import-reference-data` | Copies Sanity team profiles to Postgres (slug, city, website, logo URL, aliases) and copies the `leagueChampionship` singleton to `championship_config`. It never writes to Sanity. |
+| `dotnet run -- --adopt-sanity-overrides` | Copies Sanity's hand edits onto scraper rows and locks them with `manual_override`, hides matches with **Hide this match** checked, and hands rows back to the scraper when both boxes are unticked. Reads Sanity only. Runs hourly as the `claymores-sync-cms` cron job. See [Fixing scraped data in the CMS](#fixing-scraped-data-in-the-cms). |
+| `dotnet run -- --hide-fixtures <id> …` | Hides and locks scraper rows by ID, for games with no Sanity document. Prefer **Hide this match** in Studio. |
+| `dotnet run -- --compare-with-sanity` | Reports differences between scraped Postgres data and Sanity. See [Cutover](#cutover). |
+
+Each command applies pending migrations first, then prints a JSON summary. A run where every page fails exits with code 1. Every run is logged in `scrape_runs` with its kind, trigger, parameters, status, summary, and error.
+
+**HTTP trigger.** `POST /v1/internal/scrape/fixtures?seasonId=28&all=true` and `POST /v1/internal/scrape/standings?force=true&championshipId=…&seasonLabel=…&divisionName=…` take the same options. Send `Authorization: Bearer <Scraper__Secret>`. The token is compared in constant time. Without a configured secret or Postgres, the route returns `404`. It returns `401` for a wrong token, `400` for invalid options, and `502` when every fetch failed.
+
+**Schedule.** `render.yaml` defines two Render cron jobs. Both use the API's Dockerfile and `DATABASE_URL`:
+
+- `claymores-scrape-fixtures` runs `--scrape-fixtures` at `0 3 * * 1` (Mondays 03:00 UTC).
+- `claymores-scrape-standings` runs `--scrape-standings` at `0 11 * * 1` (Mondays 11:00 UTC).
+
+Running the CLI in a cron container is simpler than calling the endpoint. It shares no secret, doesn't depend on the web service being awake, and has no request timeout. The endpoint is for manual or external triggers.
+
+### Rules
+
+These carry over unchanged from the website scraper:
+
+- **Source pages:** `https://rugbyfl.com/Clubs/Club.asp?Club_ID={club}&Season_ID={season}` for fixtures and `…/Season/Championships/Championship_Print.asp?Championship_ID={id}` for standings, both fetched with the `ClaymoresScraper/1.0` user agent.
+- **Fixture markup:** walk `td.SectionTitleSec` (date, such as "Saturday, September 20, 2025"), `td.TableRowBig` (competition, from `a font`) and `td.TeamGame` (needs two links) in document order. The first team is home, and the first score is the home score. Scores are `font[color="#FF0000"] strong`. The note is the `.TableRowNoLine` text in the next row. Like Sanity, it includes the "Note:" label.
+- **Claymores detection:** `/claymore/i`. That side becomes "Claymores", so "IR/Claymores" and "Claymores (D3)" both become "Claymores". The opponent is stored raw. Only games involving Claymores are kept.
+- **Status:** fewer than two scores is `upcoming`. A note containing "forfeit" is `forfeit_us` if it matches `/claymore.{0,15}forfeit|forfeit.{0,10}by.{0,10}claymore/i`, otherwise `forfeit_them`. Anything else is `played`. A forfeit score is forced to 20–0 for the side that did not forfeit. Upcoming games store 0–0, as in Sanity.
+- **Season:** the closing year. Games in August or later count toward the next year.
+- **Match type:** `/friendl/i` on the competition is `friendly`, otherwise `league`.
+- **Standings table:** the first table whose first row mentions pos, pool, team, played, and total. Rows need at least 19 direct cells and a `Team.asp` link in cell 2. Cells used: 1 pool, 3–6 P/W/L/D, 11–13 PF/PA/difference, 17 bonus, 18 total.
+- **Fallback from the schedule** when no standings are published (header has date, home, tries, away and two "bp" columns; rows need 14 cells; "(31)" is a played score). Skip cancelled games (note matches `/game not played/i`, or starts with "cancel(l)ed" and doesn't mention a forfeit), playoff games, and unplayed games. A win is 4 points and a draw is 2. A team earns +1 for four or more tries and +1 for losing by seven or fewer. Forfeits earn no bonus points.
+- **Ranking:** total points descending, then points difference descending, then team name. Positions are numbered from 1.
+- **Excluded pools (new):** rows in the pool "Unique" (case-insensitive, trimmed) are dropped before ranking, so positions stay contiguous. rugbyfl.com lists out-of-state guest sides there (Austin Blacks, Detroit Tradesmen, Life West Gladiators, New Orleans, Syracuse Chargers in championship 191), and the website table leaves them out. The schedule fallback has no pool column, so nothing is dropped there. Sanity's 2025-2026 rows were trimmed by hand without renumbering (its last three are 18–20); the API numbers them 12–14, so `--compare-with-sanity` reports those three positions.
+- **Playoffs:** any non-cancelled schedule game whose note matches semi-final, quarter-final, state final, gulf coast, super regional, cup/grand/championship/clubs final, playoff, or 3rd/third place. Each is classified as quarter, semi, third, then final, in that order. "QF1" is not a keyword, as before.
+- **Championship config:** `active` is the off-season switch. A scrape records `last_scraped_at` and `last_scrape_status`, which is "success", "success (computed from schedule)", "HTTP n", "fetch error: …", "parsed 0 rows — page structure may have changed", or "write error: …". Backfills with an explicit championship don't stamp it. Each scrape replaces that championship's standings and playoffs.
+
+These are fixed compared with the website scraper:
+
+1. **Dedupe** uses the natural key (date, home team, away team) after name resolution, enforced by the partial unique index `fixtures_scraper_natural_key`. Two games on the same day are both kept. The website matched on date alone. The same game listed under clubs 117 and 51 is stored once. Scraped rows have the ID `rfl-{date}-{homeTeamId}-{awayTeamId}`.
+2. **Re-scrapes update** scores, status, note, competition, match type, kickoff, and venue on existing rows, unless `manual_override` is true. An unchanged row only has `last_scraped_at` touched. A kickoff or venue that a run didn't capture keeps its stored value.
+   - **Retirement (migration 013):** after a club page (club and season) is fetched and parsed, that page's scraper rows that the run didn't see (`last_scraped_at` older than the run) get `retired_at`. That covers a rescheduled game (new date, so a new key), a team re-resolved to another team after an alias fix (new key), and a removed game. Retired rows stay in the table but `GET /v1/fixtures[/{id}]` and `--compare-with-sanity` skip them. A retired row that a later run sees again is un-retired with its old ID. Rows with `manual_override` (every adopted row has it) are never retired, and neither are other clubs' or seasons' rows. A page that parses to zero games retires nothing, because that more likely means the markup changed. Each page's count is `retired` in the JSON summary and in `scrape_runs.summary`.
+   - **IDs never collide:** a new row's ID is `rfl-{date}-{home}-{away}`, or that with `-2`, `-3` appended when another row (such as an adopted row that moved) already holds it, so one conflict can't roll back a page's batch.
+3. **Kickoff and venue** are captured. Kickoff comes from the `TableRowBig` time ("1:00 PM", stored as `time`). Venue comes from the "Field:" line and street address on each game's `Game_Detail.asp` page. "Pending", "TBD", and missing fields stay null.
+4. **One name resolver** (`TeamNameResolver`) replaces the four normalizers in the website:
+   - **Normalize:** lowercase, then strip parentheticals, a leading "IR/", "F.C.", "RFC", "FC", "Rugby Football Club", "Rugby Club", "Rugby", trailing D1–D4 tokens, and trailing season years such as "Orlando Otters 2026", which appears on rugbyfl.com. Collapse punctuation.
+   - **Resolve:** Claymores detection, then exact normalized team name, then exact normalized alias (`team_aliases`), then a guarded fuzzy match. The fuzzy match requires that every token of exactly one team's name or alias appear in the input. It is rejected if the input adds a side marker, such as B, II, 2nds, reserves, women, or youth, so a B side joins its club only through an alias.
+   - **Unresolved names** create a team with `source = 'scraper'` and `needs_review = true`. Raw names written by `--import-fixtures` (`source = 'import'`) are never matched against. They are promoted instead of duplicated.
+   - **Aliases:** the seed comes from `scripts/add-team-aliases.ts` in migration 007. Add aliases with `INSERT INTO team_aliases (alias, alias_normalized, team_id)`. Use the normalized form, for example "fsu b".
+
+The standings header check also differs. The website looked for "total points", but the cell is "Total<br>Points". It matched only because the page footer happens to contain "Total Points". The API checks for "total".
+
+**Tables (migration 007).** `teams` gains `id`, `slug`, `city`, `website`, `logo_url`, `needs_review`, and `source`. `team_aliases` is new. `fixtures` gains `source`, `home_team_id`/`away_team_id`, `*_raw` display names, `status`, `match_type`, `competition`, `note`, `home_score`/`away_score`, `kickoff_time`, `venue`, `manual_override`, `source_club_id`/`source_season_id`/`source_game_id`, `first_scraped_at`/`last_scraped_at`, and `updated_at`. `payload` is rebuilt from these columns in the shape `GET /v1/fixtures` returns. New tables are `championship_config`, a singleton seeded with Sanity's schema defaults, plus `standings`, `standings_rows`, `standings_playoffs` (keyed by championship ID, with a season label), and `scrape_runs`.
+
+**Review queues:**
+
+```sql
+SELECT id, name, slug FROM teams WHERE needs_review ORDER BY created_at;   -- add an alias or merge
+SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT 20;
+```
+
+### Fixing scraped data in the CMS
+
+rugbyfl.com is sometimes wrong. Fix it in Sanity Studio (`/studio`), the same way as before:
+
+- **Wrong score, status, date, teams, kickoff or venue:** edit the match and check **Manual Override**. The scrapers leave it alone, and the hourly `claymores-sync-cms` job copies it to the API (and so the app) within the hour.
+- **A game that never happened:** check **Hide this match** instead of deleting it. It disappears from the website and the API within the hour, and stays hidden. Deleting doesn't work: the website's scraper re-creates deleted current-season games, and the API never sees a deletion.
+- **Undo:** untick both boxes. The API row goes back to the scraper, which refreshes it from rugbyfl.com on its next run.
+
+A match created by hand in Studio (an `_id` without the `scraped-` prefix) counts as a fix even without Manual Override. The job refuses to run if Sanity returns no matches at all, so an outage can't undo every fix.
+
+### Cutover
+
+Render one-off jobs don't run through a shell, so run each step as its own job (`dotnet Claymores.Api.dll <command>`), in this order:
+
+1. **Scrape.** `--import-reference-data` once (logos, slugs, aliases and the current championship from Sanity), then `--scrape-fixtures --all`, `--scrape-fixtures` (adds venues for the current season), and `--scrape-standings --force` plus any backfills (`--scrape-standings --championship-id 191 --season-label 2025-2026`).
+2. **Adopt.** `--adopt-sanity-overrides` (also hourly, see below). Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row and gives it a new ID derived from its new key (`origin_sanity_id` still links it to the document), so a later scrape that still lists the old date can insert it without a primary key conflict. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
+3. **Compare.** `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Kickoffs are compared as times ("1:00pm" equals "1:00 PM"). Locked rows that equal Sanity count as matching and are tallied on a `LOCKED` line. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference. Standings rows are compared by team, and playoff lists are compared too. Review what is left and resolve teams in `needs_review`.
+4. **Serve Postgres.** `render.yaml` sets `Fixtures__Source=scraper` and `Standings__Source=postgres` on the web service (see [Read sources](#scraper)). This changes what the Vercel preview and the app read. The production website still reads Sanity directly. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity. To roll back, set either value to `sanity`.
+5. **Point the production website at the API** (`CLAYMORES_API_BASE_URL` in the Vercel Production environment) once the preview is verified.
+6. **Disable the Vercel crons** (`app/api/scrape-rugby`, `app/api/scrape-standings`) so nothing writes to Sanity any more. Do this only after step 5, since the production website reads Sanity until then, and only once rugbyfl.com serves the current championship (203) so its standings are in Postgres; until then the API serves 2026-2027 standings from Sanity, which only the Vercel cron keeps fresh.
+
+## Player dues
+
+The dues ledger records USD amounts in integer cents. An admin assigns the amount due and records payments the club has already received. The signed-in account page shows the player’s own amount due, total paid, and remaining balance. The dues detail endpoint also shows their payment history. The ledger does not charge cards.
+
+For local testing, configure Google sign-in and a development Postgres database, then start the HTTPS API with `Dues__Enabled=true`. The dues tables are created by the automatic migrations. Dues routes appear in Swagger when that flag is enabled and Google and Postgres are configured.
+
+| Method and path | Access | Behavior |
+| --- | --- | --- |
+| `GET /v1/dues/mine` | Player or admin | Lists the signed-in member's assessments |
+| `GET /v1/dues/mine/{id}` | Player or admin | Shows payment history for an assessment belonging to the signed-in member |
+| `POST /v1/dues/{id}/checkout-session` | Player or admin | Returns a Stripe checkout URL for the app (default) or the website (`"returnTo":"web"`). See [App checkout](#app-checkout-and-the-claymores-link) and [Website checkout](#website-checkout-returnto). |
+
+Member routes accept the browser session cookie or, with mobile sign-in on, an API bearer token.
+| `GET /v1/admin/dues` | Admin | Lists club dues and balances |
+| `GET /v1/admin/dues/{id}` | Admin | Shows a specific assessment and its payment history |
+| `POST /v1/admin/dues` | Admin | Assigns an assessment to a member's Google subject |
+| `POST /v1/admin/dues/{id}/payments` | Admin | Records an already-received payment, including a partial payment |
+| `POST /v1/admin/dues/{id}/checkouts/{checkoutId}/release` | Admin | With checkout enabled: releases a pending checkout that never got a Stripe session, after checking Stripe. See [Releasing a stuck reservation](#stripe-test-checkout). |
+
+Sign in once with the invited player’s Google account. The treasurer can then sign in with an admin account, open **Manage dues** from the account page, and pick that player by name or email. The page supports assigning dues, entering payments already received, and opening a history with the recorded time in Eastern Time. Take care when recording a payment received earlier. The timestamp is when the entry was recorded.
+
+Sign in on the HTTPS API origin before using the dues endpoints in that origin's Swagger UI. For an API assignment, the member's Google subject is available from their authenticated `/auth/session` response and is passed as `playerSubject`.
+
+An example assessment body for $100.00 is:
+
+```json
+{
+  "id": "c5538aa3-989d-439b-b3e8-f21d85369f06",
+  "playerSubject": "<signed-in Google subject>",
+  "description": "Season dues",
+  "amountCents": 10000,
+  "dueDate": "2027-01-31"
+}
+```
+
+A $25.00 payment body looks like this:
+
+```json
+{
+  "id": "461861c5-ec1f-4463-adc6-e35e16453346",
+  "amountCents": 2500
+}
+```
+
+Generate a new UUID for each new assessment or payment. Reuse the original UUID and identical body when retrying an uncertain response. The ledger records the payment once and rejects a payment that exceeds the remaining balance. With the browser session cookie, admin writes must be same-origin; an admin bearer token works anywhere (see [Same-origin rule](#same-origin-rule)).
+
+### Stripe test checkout
+
+The account page lets a player choose a partial or full USD amount and opens Stripe-hosted checkout. `Stripe:Mode` defaults to `test`, which accepts only test-mode credentials. Keep actual money out of this setup until the owner completes the [go-live checklist](#going-live-with-stripe).
+
+1. Enable Google sign-in, Postgres, and dues. Use a dedicated Stripe sandbox and its test secret key.
+2. Forward `checkout.session.completed` and `checkout.session.expired` to `https://localhost:7057/v1/webhooks/stripe` with the Stripe CLI. Set the webhook event API version to `2026-11-18.endive` to match the pinned Stripe SDK.
+
+   ```sh
+   stripe listen --events checkout.session.completed,checkout.session.expired \
+     --forward-to https://localhost:7057/v1/webhooks/stripe
+   ```
+
+3. Configure `Stripe:CheckoutEnabled=true`, `Stripe:SecretKey` with the sandbox `sk_test_` key, `Stripe:WebhookSecret` with the listener's `whsec_` secret, and `Stripe:ReturnOrigin=https://localhost:7057`. Use .NET user secrets or your local secret store. Start the HTTPS profile.
+4. Assign $100.00 to an invited player, sign in as that player, enter $25.00, and complete a Stripe test card payment. After the signed webhook is delivered, reload the account page and verify $25.00 paid and $75.00 remaining. Cancel another checkout and verify that the account can resume it.
+
+The player can resume one pending checkout per assessment. The reserved amount reduces what an admin can manually credit. A signed paid event inserts one ledger entry, and a signed expiration releases the reservation. A browser return never records a payment.
+
+Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session_id, created_at FROM dues_checkouts WHERE status = 'pending';`. If a bound session stays pending, inspect the session in the Stripe test dashboard and replay the verified event. If a create attempt lost its response, retry from the account page to reuse its idempotency key. Payment credits can be matched to provider sessions through `dues_payments.checkout_id`. Refunds are not supported.
+
+**Releasing a stuck reservation.** A pending checkout with no bound Stripe session (the create's response was lost and the member didn't retry) blocks new checkouts for its assessment, and after 12 hours it can't be resumed. Once it is an hour old, the treasurer page shows **Check Stripe and release** on that assessment, and admins can call `POST /v1/admin/dues/{id}/checkouts/{checkoutId}/release` (cookie same-origin, or admin bearer). The API lists Stripe sessions created from the reservation's start through its 12-hour create cut-off and keeps those whose `client_reference_id` is the checkout ID (every session the API creates sets it):
+
+| Stripe has | Result |
+| --- | --- |
+| no session, or only expired ones | Released: the row becomes `expired` with `released_by` (admin email) and `released_at` (migration 013). `200 {"status":"released"}` |
+| an open or complete session | Bound to the row, which stays pending; resume and the webhook take over. `200 {"status":"bound","sessionId","sessionStatus"}` |
+
+`409` with `not_pending`, `bound` (already has a session), `other_mode` (created in the other Stripe mode), or `too_recent` (under an hour); `404` for an unknown checkout; `502` when Stripe can't be reached or the session doesn't match the reservation. Don't clear a pending row by hand.
+
+### Stripe mode
+
+`Stripe:Mode` is `test` (the default) or `live`. Startup fails with a clear message when the key and the mode don't match.
+
+| | `test` | `live` |
+| --- | --- | --- |
+| `Stripe:SecretKey` | `sk_test_` or `rk_test_` | `sk_live_` or `rk_live_` |
+| Also required | nothing | `ASPNETCORE_ENVIRONMENT=Production` **and** `Stripe:LiveConfirmed=true` |
+| Webhook events and sessions accepted | `livemode: false`, `cs_test_` IDs | `livemode: true`, `cs_live_` IDs |
+| Session metadata | `purpose=claymores-dues`, `mode=test` | `purpose=claymores-dues`, `mode=live` |
+| Product name on Stripe | Claymores RFC dues (test) | Claymores RFC dues |
+| `dues_payments.recorded_by` | `stripe-test` | `stripe` |
+| Idempotency key | `claymores-dues-test-<target>-<id>` | `claymores-dues-live-<target>-<id>` |
+| Account page copy | "Test checkout is enabled…", "Resume test payment" | "Pay by card…", "Resume payment" |
+
+Each pending checkout records the mode that created it (`dues_checkouts.stripe_mode`); a webhook never applies to a row from the other mode. Rows created before this setting existed (purpose `claymores-test-dues`, key `claymores-dues-test-<id>`, no stored mode or target) are treated as test rows: in test mode the webhook still completes or expires them, and an unbound one is resumed with its original key and metadata.
+
+### Going live with Stripe
+
+**Nothing charges real cards until the owner does all of the following.** The code in this repository and `render.yaml` stay in test mode.
+
+1. Activate the Stripe account (business details, bank account for payouts) in the Stripe dashboard.
+2. Reconcile pending test checkouts first: `SELECT id, stripe_session_id FROM dues_checkouts WHERE status = 'pending';` should be empty (wait for them to expire, or let the test webhook deliver). A test row still pending after the switch blocks new checkouts for that assessment with `409` until reconciled.
+3. In live mode, add a webhook endpoint `https://<api>/v1/webhooks/stripe` (for example `https://claymores-api.onrender.com/v1/webhooks/stripe`) with the events `checkout.session.completed` and `checkout.session.expired`, using the event API version noted above.
+4. In the Render dashboard (never in `render.yaml` or the repository), the owner sets `Stripe__SecretKey` to the live `sk_live_` (or restricted `rk_live_`) key and `Stripe__WebhookSecret` to the live endpoint's `whsec_` secret.
+5. Set `Stripe__Mode=live` and `Stripe__LiveConfirmed=true` in the Render dashboard, alongside `Dues__Enabled=true`, `Stripe__CheckoutEnabled=true`, and `Stripe__ReturnOrigin`. `ASPNETCORE_ENVIRONMENT=Production` is already set by the Blueprint.
+6. Deploy, then make one small real payment, and confirm the ledger shows it with `recorded_by='stripe'`. The API has no refunds: a refund made in the Stripe dashboard does not change the ledger.
+
+To go back to test mode, remove `Stripe__Mode` and `Stripe__LiveConfirmed` and restore the test key and test webhook secret.
+
+## Project map
+
+All paths are under [`src/Claymores.Api`](src/Claymores.Api).
+
+| File | Responsibility |
+| --- | --- |
+| `Program.cs` | API routes, dependency setup, JWT validation, Swagger, startup migrations, and command-line tasks |
+| `Hosting.cs` | Render settings: `PORT`, `DATABASE_URL`, and forwarded headers |
+| `DatabaseMigrator.cs` | Applies `sql/*.sql` once each and reports pending migrations |
+| `PostgresKeyRepository.cs` | Stores the sign-in key ring in Postgres |
+| `ClubInvitations.cs` | Invitation table, role resolution, and admin invitation endpoints |
+| `SanityData.cs` | Published Sanity queries for fixtures, standings, teams, players, and practices |
+| `FixtureDatabase.cs` | Npgsql fixture reads (filtered by `Fixtures:Source`) and transactional import |
+| `Scraper/TeamNameResolver.cs` | The single team-name normalizer and resolver |
+| `Scraper/RugbyFlParser.cs` | AngleSharp parsing of rugbyfl.com pages and the scoring rules. No I/O. |
+| `Scraper/ScrapeService.cs` | Fetching (`RugbyFlClient`), scrape orchestration, and command-line parsing |
+| `Scraper/ScrapeStore.cs` | Scraper writes: team resolution, fixture upserts, standings, and the run log |
+| `Scraper/ScrapeEndpoints.cs`, `Scraper/ScraperCli.cs` | The protected HTTP trigger and the command-line tasks |
+| `Scraper/SanityComparison.cs` | The `--compare-with-sanity` report |
+| `Scraper/SanityAdoption.cs` | `--adopt-sanity-overrides`: which Sanity documents are hand edits, and how they become locked scraper rows |
+| `ClubMemberDirectory.cs` | Member directory populated after Google sign-in |
+| `GoogleSignIn.cs` | Google sign-in, session cookie, and account page |
+| `MobileAuth.cs` | App sign-in: Google ID-token check, API access tokens, rotating refresh tokens |
+| `DuesAdminPage.cs` | Treasurer interface and payment history |
+| `DuesLedger.cs` | Role-gated dues endpoints and transactional payment ledger |
+| `DuesCheckout.cs` | Stripe checkout (test or live per `Stripe:Mode`), return targets, and signed webhooks |
+| `DuesCheckoutStore.cs` | Durable reservations, payment credits, and expiration |
+| `JoinRequests.cs` | Request to join: app endpoints, admin decisions, rate limit, and the `/auth/admin/join-requests` page |
+| `AccountDeletion.cs` | `DELETE /v1/me`, the account page's delete form, and Apple token revocation (`IAppleAuthClient`) |
+| `SameOriginGuard.cs` | The same-origin check for cookie-authenticated writes |
+| `sql/` | Numbered Postgres migrations |
+
+## Tests
+
+From this folder, run:
+
+```sh
+dotnet test --solution Claymores.slnx
+```
+
+Tests that need Postgres skip unless `CLAYMORES_TEST_DATABASE` is set to a connection string for a user that can create databases. Each test class creates and drops its own database. For example:
+
+```sh
+CLAYMORES_TEST_DATABASE='Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=<password>' \
+  dotnet test --solution Claymores.slnx
+```
+
+## Website-first rollout
+
+The integration branch is `codex/claymores-api-integration` in the separate `work/claymores-website-api` worktree. The Next.js API setting is server-only. With `CLAYMORES_API_BASE_URL` unset, the site reads directly from Sanity. With it set, the migrated reads use the API and surface request errors.
+
+1. Start the API with the HTTP profile and check `http://127.0.0.1:5294/health`, `/v1/fixtures`, and `/v1/standings`.
+2. In the website worktree, install the existing lockfile dependencies and start Next.js with the local API URL.
+
+   ```sh
+   npm ci
+   NEXT_PUBLIC_SANITY_PROJECT_ID=bw1seoll NEXT_PUBLIC_SANITY_DATASET=production \
+     CLAYMORES_API_BASE_URL=http://127.0.0.1:5294 npm run dev
+   ```
+
+3. Open the site at `http://localhost:3000` and compare against the existing Sanity-backed website. To test direct Sanity mode locally, stop Next.js and restart it with `CLAYMORES_API_BASE_URL` unset.
+4. For a hosted comparison, use a Vercel Preview deployment with `CLAYMORES_API_BASE_URL` set for the Preview environment to the hosted API's HTTPS base URL. Leave Vercel Production settings and traffic as they are until the preview is verified.
+
+The site keeps its existing URLs and adapts API responses to the page models.
+
+| Website route | API data in preview |
+| --- | --- |
+| `/` and `/results` | Supply fixture summaries and completed-match data from `GET /v1/fixtures` and the current league table from `GET /v1/standings` where shown. |
+| `/fixtures` | `GET /v1/fixtures` supplies match results and upcoming matches. Fixture team profiles and calendar entries come from `GET /v1/teams` and `GET /v1/practices`. |
+| `/fixtures/[slug]` | Keep the current `matchSlug` logic based on date and team names. Resolve the slug against the fixture list, then use the returned fixture ID with `GET /v1/fixtures/{id}` when a detail fetch is needed. |
+| `/team` and `/team/[slug]` | The roster and player profile endpoints are `GET /v1/players` and `GET /v1/players/{slug}`. These are separate from the fixture-team directory at `GET /v1/teams`. |
+| `/standings` | `GET /v1/standings/seasons` provides season links. Use `GET /v1/standings` for the current table, or pass the selected season label. |
+| `/standings/[season]` | The URL uses the closing year. For `/standings/2026`, use `GET /v1/standings?season=2025-2026` for the league table and playoffs, and filter the fixture list to 2026 results. |
+
+Compare the preview against the existing site before switching production. Check upcoming and completed matches, practices and team lookups, scores and forfeits, kickoff and venue, logos and opponent links, recaps, fixture slugs and metadata, standings order, archived seasons, playoffs, and missing-item behavior. Verify how data refreshes after a Sanity edit, including rerunning the importer when the API uses Postgres. Move Flutter onto the same API after the website integration is verified.
+
+## Backend work before production
+
+1. Configure the Google OAuth client, then test the player and admin flows through the website sign-in button. Plan Flutter sign-in when the website flow is verified.
+2. Club access is in Postgres (`club_invitations`). Mobile sign-in is built but off (`MobileAuth__Enabled=false`) until the iOS and Android OAuth clients exist and the app is tested against it.
+3. Choose one editing workflow for fixtures. If Sanity Studio stays the editor, add a signed, retryable sync with deletion and reconciliation coverage before serving imported fixtures to the website. If Postgres becomes the editor, add protected write endpoints and an admin workflow.
+4. Deploy the API and its database to Render (see below). Check request timeouts, logs, cache refresh, missing records, and rollback to direct Sanity reads before changing the production environment.
+
+## Flutter web access
+
+Native clients can call the API over HTTPS. If the Flutter web build is hosted on a separate origin, use a same-origin proxy or add its exact origin under `Cors:PublicOrigins`. For example, `Cors__PublicOrigins__0=http://127.0.0.1:8766` allows local public GET requests from that preview. Sign-in, identity, dues, and payment webhooks are outside this CORS policy. Native builds don't need CORS for mobile sign-in or dues. A hosted Flutter web build would need its exact origin in a separate CORS policy for those routes, which doesn't exist yet.
+
+## Deploy on Render
+
+The website stays on Vercel. The API and its Postgres database run on Render, defined by [`render.yaml`](../render.yaml) at the repository root.
+
+1. In Render, select **New > Blueprint** and connect the `Claymore-Website` repository. Render reads `render.yaml` and proposes the `claymores-api` web service and the `claymores-db` database, both in the Virginia region.
+2. Enter the values marked `sync: false` when prompted: the Google OAuth client ID and secret, and one bootstrap admin email. Leave the Google values blank to start with public data only.
+3. Apply the Blueprint. Render builds [`Dockerfile`](Dockerfile), starts the API, and waits for `/health/ready`. The first start creates every table.
+4. Add the production Google redirect URI, `https://<service>.onrender.com/signin-google` (or your custom domain), to the Google OAuth client.
+5. Optionally import the Sanity fixtures from the service's **Shell** tab: `dotnet Claymores.Api.dll --import-fixtures`. Until you do, fixture endpoints read from Postgres and return nothing. To serve scraped fixtures instead, set `Fixtures__Source=scraper` (see [Scraper](#scraper)). The Blueprint's two cron jobs scrape rugbyfl.com weekly in shadow mode.
+
+Notes:
+
+- **What triggers a deploy:** changes under `api/` (except Markdown and tests) or to `render.yaml`. Website-only commits don't redeploy the API.
+- **Plans:** the Blueprint uses the `starter` web plan and the `basic-256mb` database. Render's free web plan sleeps when idle, which delays the first request and can miss Stripe webhooks. Its free database expires after 30 days.
+- **Neon instead of Render Postgres:** delete the `databases` block and the `fromDatabase` entry, and set `DATABASE_URL` to the Neon URL as a secret.
+- **HTTPS:** Render terminates TLS. Because `RENDER=true` is set on Render, the API trusts `X-Forwarded-Proto`, so the Google redirect uses `https` and the session cookie stays Secure. Set `ForwardedHeaders__Enabled=true` on any other host behind a TLS proxy, and only there. HSTS is sent outside Development.
+- **Restarts:** the sign-in key ring is stored in the `data_protection_keys` table, so members stay signed in across deploys and restarts.
+- **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. `Stripe__Mode` defaults to `test`, which only accepts Stripe test keys; see [Going live with Stripe](#going-live-with-stripe). The Blueprint presets `Stripe__WebReturnUrl=https://www.claymoresrfc.com/account` for website checkout; it has no effect while checkout is off.
+- **Mobile sign-in:** Render generates `Authentication__Tokens__SigningKey`. Enter the iOS client ID for `Authentication__Google__MobileClientIds__0`. `Authentication__Apple__ClientIds__0` is preset to the bundle ID for Sign in with Apple. Then set `MobileAuth__Enabled=true` when the app is ready. With checkout on as well, also set `Stripe__AppReturnUrl=claymores://dues`.
+- **Running the container elsewhere:** from this folder, run `docker build -t claymores-api .` and then `docker run -p 8080:8080 -e DATABASE_URL=... claymores-api`.

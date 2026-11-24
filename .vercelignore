@@ -1,0 +1,5 @@
+# Leading slashes: match only the repo-root folders. A bare "api/" also matched
+# the website's own app/api/ routes (sign-in, contact form, crons) and dropped them.
+/api/
+/mobile/
+/render.yaml

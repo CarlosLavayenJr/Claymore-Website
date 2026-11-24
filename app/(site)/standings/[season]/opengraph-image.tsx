@@ -1,5 +1,5 @@
-import { client } from '@/sanity/lib/client'
-import { matchesQuery, type SanityMatch } from '@/sanity/lib/queries'
+import { getMatches } from '@/lib/claymores-api'
+import { type SanityMatch } from '@/sanity/lib/queries'
 import { brandedImageResponse, OG_CONTENT_TYPE, OG_SIZE } from '@/lib/og'
 import { isClaymores, matchOutcome } from '@/lib/seo'
 
@@ -10,7 +10,7 @@ export const contentType = OG_CONTENT_TYPE
 export default async function Image({ params }: { params: Promise<{ season: string }> }) {
     const { season: seasonParam } = await params
     const season = Number(seasonParam)
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
+    const matches: SanityMatch[] = await getMatches()
     const seasonMatches = matches.filter((m) => m.season === season && m.status === 'played')
 
     let w = 0

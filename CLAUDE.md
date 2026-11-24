@@ -71,7 +71,7 @@ See `STYLING.md` for full design system including typography, buttons, cards, an
 - Sanity is used for content editors (players, news, matches, teams) — not hardcoded data
 - Match data is scraped nightly from rugbyfl.com via `/api/scrape-rugby` (Vercel cron) and upserted into Sanity
 - Match docs have a `manualOverride` boolean — when checked in Studio, the scraper skips that doc entirely (use it when the official source is wrong, e.g. cancelled matches still listed as upcoming)
-- No monorepo — Sanity Studio is embedded at `/studio`
+- Monorepo: website at the root, ASP.NET Core API in `api/`, Flutter app in `mobile/`. Sanity Studio is embedded at `/studio`. Vercel builds only the website (see `ignoreCommand` in `vercel.json` and `.vercelignore`)
 - `(site)` route group keeps Studio outside the Navbar/Footer layout
 - Contact form uses Resend API (`/api/contact`) — emails go to claymoresrfc@gmail.com
 - Sitemap and robots.txt are live

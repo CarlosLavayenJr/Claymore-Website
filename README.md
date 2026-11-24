@@ -1,70 +1,92 @@
-# Getting Started with Create React App
+# Claymores
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This repository holds the Central Florida Claymores website, API, and mobile app.
 
-## Available Scripts
+| Folder | What it is | Deploys to |
+| --- | --- | --- |
+| `/` (root) | Next.js website and Sanity Studio | Vercel |
+| [`api/`](api/README.md) | ASP.NET Core 10 API for the website and app | Render, through `render.yaml` |
+| [`mobile/`](mobile/README.md) | Flutter app | Not released yet |
 
-In the project directory, you can run:
+Vercel builds the website only when files outside `api/` and `mobile/` change, through the `ignoreCommand` in `vercel.json`. Both folders are also listed in `.vercelignore`, so they aren't uploaded with the site.
 
-### `npm start`
+## Website
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Next.js 16 (App Router) with an embedded Sanity Studio at `/studio`. See [CLAUDE.md](CLAUDE.md) for the pages and SEO goals and [STYLING.md](STYLING.md) for the design system.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```sh
+npm ci
+npm run dev
+```
 
-### `npm test`
+Open [http://localhost:3000](http://localhost:3000). The site needs `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET`; `vercel env pull` fetches the rest.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run lint` | Lint (`next lint` was removed in Next 16, so this script currently fails) |
+| `npm run test:graphics` | Match-graphic tests |
+| `npm run test:auth` | Member sign-in, token refresh and API client tests |
 
-### `npm run build`
+### Reading data from the API
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Public sports data (fixtures, standings, teams, players and practices) reads Sanity unless both of these server-only variables are set:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+| Variable | Value |
+| --- | --- |
+| `CLAYMORES_API_BASE_URL` | Claymores API origin. Member sign-in needs it too; on its own it does **not** change where sports data comes from. |
+| `CLAYMORES_DATA_SOURCE` | `api` reads sports data from the API. `sanity`, unset, or anything else reads Sanity (the default). |
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+With `CLAYMORES_DATA_SOURCE=api`, each API read has an 8-second timeout. A network error, timeout, 5xx or unreadable response logs a `[claymores-api] … Falling back to Sanity.` warning and that read comes from Sanity instead, so pages and the build (`generateStaticParams`, sitemap) keep working while the API is down. The practice schedule falls back to the built-in defaults if both fail.
 
-### `npm run eject`
+Production reads Sanity. The Preview deployment of `codex/claymores-api-integration` reads the API: it needs `CLAYMORES_DATA_SOURCE=api` (not a secret) added next to its existing `CLAYMORES_API_BASE_URL`, or it reads Sanity after this change.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Member sign-in (`/sign-in`, `/sign-up`, `/account`, `/account/admin`)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+The site stays public. Sign-in exists only for member features (dues and payments). Only `/account` and `/account/admin` are protected (`proxy.ts`). All member pages are `noindex`, are not in the sitemap, and `/account` is disallowed in `robots.txt`.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+**Feature gate.** Sign-in turns on only when all four of these are set. With any missing, the navbar hides **Sign in** and the pages show "Sign-in is coming soon", so production keeps working without them.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+| Variable | Value |
+| --- | --- |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google **Web application** OAuth client. Use the API's `Authentication:Google:ClientId` client, or add this client ID to the API's `Authentication:Google:MobileClientIds`, or the API rejects the id_token's audience. |
+| `AUTH_SECRET` | `openssl rand -base64 32`. Encrypts the session and pending-request cookies. |
+| `CLAYMORES_API_BASE_URL` | Claymores API origin. Turning on sign-in does not move sports data to the API; that takes `CLAYMORES_DATA_SOURCE=api` (see above). |
+| `CLAYMORES_WEB_CHECKOUT_ENABLED` | Optional kill switch, `true` shows **Pay now**. Turn it on once the API has `Stripe:WebReturnUrl` set (see **Web dues checkout** below). |
 
-## Learn More
+Authorized redirect URIs to register on the Google client: `https://www.claymoresrfc.com/api/auth/callback/google`, plus a stable preview host such as `https://<project>-git-<branch>-<team>.vercel.app/api/auth/callback/google` (each preview hostname must be listed exactly; Google doesn't accept wildcards), and `http://localhost:3000/api/auth/callback/google` for local work.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+**Flow.**
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+1. `/sign-in` → **Continue with Google** (Auth.js v5, Google provider) → Google → `/api/auth/callback/google`.
+2. In the Auth.js `signIn` callback the server posts Google's `id_token` to `POST /v1/auth/mobile/google`.
+   - `200`: the API access token, refresh token and user go into the Auth.js session JWT: an encrypted, httpOnly cookie. The session object returned to the browser never contains tokens, and no client `SessionProvider` is used. A token-free `claymores_member=1` cookie lets the navbar say **Account**.
+   - `403 not_invited`: the id_token is stored for 10 minutes in an encrypted httpOnly cookie scoped to `/sign-up`, and the person lands on `/sign-up`. The form posts `request-access` with that id_token; the page shows `request-status` (pending, approved, denied). When the cookie expires, they confirm with Google again.
+   - `401`: back to `/sign-in?error=invalid`. API down: `?error=unavailable`.
+3. Every `/account*` request goes through `proxy.ts`. When the access token expires within two minutes, the proxy calls `POST /v1/auth/mobile/refresh` once per refresh token (single-flight, and the rotated result is remembered for two minutes so a parallel request carrying the old cookie reuses it instead of replaying the old token and revoking the family). The new session is written to the response cookie and into the request so the page rendered in the same request already uses it. A `401`/`403` from refresh signs the member out.
+4. Pages and server actions call the API server-side with the bearer token (`/v1/me`, `/v1/dues/mine`, checkout, and admin join requests and invitations).
+5. **Sign out** posts `POST /v1/auth/mobile/logout` and clears the cookies.
+6. **Delete my account** (bottom of `/account`, confirmed by typing `DELETE`) calls `DELETE /v1/me`. On `204` the API has ended access, revoked sessions and removed the member and join-request records (dues and payments are kept); the site clears its cookies and redirects to `/?accountDeleted=1`, which shows a notice. `409 last_admin` tells the only admin to promote someone first; any other failure deletes nothing and says so.
 
-### Code Splitting
+`callbackUrl` on `/sign-in` is accepted only as a same-origin path (`lib/claymores/callback-url.ts`): no scheme or host, no `//`, no backslashes, no control characters.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+While a checkout is open for a dues item (`pendingCheckoutCents > 0`), the amount field is replaced by **Resume payment** for that amount, because the API reuses the open session. A checkout started in the app returns to the app.
 
-### Analyzing the Bundle Size
+The single-flight guard is per server instance. Two requests on two different instances in the same instant can still race; the member is then asked to sign in again.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+**Web dues checkout.** **Pay now** posts `POST /v1/dues/{id}/checkout-session` with `{"amountCents", "returnTo": "web"}` and redirects to the Stripe-hosted URL the API returns (only `https://` URLs are followed). Stripe then sends the member to the API's `Stripe:WebReturnUrl`, which must be `https://www.claymoresrfc.com/account`; the API appends `?checkout=returned` or `?checkout=cancelled` and `/account` shows the matching banner (a signed-out member goes through sign-in and lands back on the same URL). Set `Stripe:WebReturnUrl` on the API first, then `CLAYMORES_WEB_CHECKOUT_ENABLED=true` on the website. If the flag is on but the API isn't configured, the API answers `400 web_checkout_unavailable` and the member sees "Online payment isn't available yet" instead of a generic error. Other errors: `400 invalid_request` (amount), `404` (not their dues), `409` (over the balance or the session is no longer open), `502` (Stripe). The error mapping lives in `lib/claymores/checkout.ts`.
 
-### Making a Progressive Web App
+**Local testing with the mock API.**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+```sh
+MOCK_API_PORT=5399 node scripts/mock-claymores-api.mjs
+CLAYMORES_DEV_SIGN_IN=1 AUTH_GOOGLE_ID=dev AUTH_GOOGLE_SECRET=dev AUTH_SECRET="$(openssl rand -base64 32)" \
+  CLAYMORES_API_BASE_URL=http://127.0.0.1:5399 CLAYMORES_WEB_CHECKOUT_ENABLED=true npm run dev
+```
 
-### Advanced Configuration
+`CLAYMORES_DEV_SIGN_IN=1` adds a development-only email form on `/sign-in` (never in a production build). The mock's checkout returns a fake Stripe URL; set `MOCK_WEB_CHECKOUT=off` to see the `web_checkout_unavailable` message or `MOCK_STRIPE_DOWN=1` for the `502` message, and open `/account?checkout=returned` to see the return banner. Use `player@example.com`, `admin@example.com`, or any other email to try request-to-join. Set `MOCK_ACCESS_TTL_SECONDS=150` to see a token refresh after 30 seconds.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### Scheduled jobs
 
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+`vercel.json` runs `/api/scrape-rugby` and `/api/scrape-standings` weekly. They write match and standings data into Sanity and need `CRON_SECRET`.

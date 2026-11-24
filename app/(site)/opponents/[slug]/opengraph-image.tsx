@@ -1,7 +1,5 @@
-import { client } from '@/sanity/lib/client'
+import { getMatches, getTeamForSlug } from '@/lib/claymores-api'
 import {
-    matchesQuery,
-    teamBySlugQuery,
     type SanityMatch,
     type SanityTeam,
 } from '@/sanity/lib/queries'
@@ -14,8 +12,8 @@ export const contentType = OG_CONTENT_TYPE
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params
-    const team: SanityTeam | null = await client.fetch(teamBySlugQuery, { slug })
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
+    const team: SanityTeam | null = await getTeamForSlug(slug)
+    const matches: SanityMatch[] = await getMatches()
 
     const opponentName = team?.name ?? 'Opponent'
     const h2h = matches.filter(

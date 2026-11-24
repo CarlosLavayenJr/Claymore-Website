@@ -1,10 +1,11 @@
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { type NextRequest, NextResponse } from 'next/server'
+import { sportsCacheTags, usesClaymoresApi } from '@/lib/claymores-api'
 
 type PathSpec = [path: string, type?: 'page' | 'layout']
 
-// Every route that reads matches via `matchesQuery`. Keep this in sync with
-// the `client.fetch(matchesQuery)` call sites in app/ — a doc type that
+// Every route that reads matches through getMatches. Keep this in sync with
+// its call sites in app/ — a doc type that
 // revalidates an incomplete list silently serves stale content until the
 // page's own `export const revalidate` window expires (an hour on most pages).
 const MATCH_PATHS: PathSpec[] = [
@@ -48,6 +49,18 @@ const PATHS_BY_TYPE: Record<string, PathSpec[]> = {
     leagueChampionship: STANDINGS_PATHS,
 }
 
+const API_CACHE_TAGS_BY_TYPE: Record<string, string[]> = {
+    match: [sportsCacheTags.fixtures],
+    team: [sportsCacheTags.teams, sportsCacheTags.fixtures],
+    practice: [sportsCacheTags.practices],
+    practiceSchedule: [sportsCacheTags.practices],
+    festival: [sportsCacheTags.practices],
+    event: [sportsCacheTags.practices],
+    player: [sportsCacheTags.players],
+    leagueStandings: [sportsCacheTags.standings],
+    leagueChampionship: [sportsCacheTags.standings],
+}
+
 function revalidate(specs: PathSpec[]): string[] {
     for (const [path, type] of specs) {
         revalidatePath(path, type)
@@ -68,6 +81,14 @@ export async function POST(req: NextRequest) {
     // Unknown or missing type (e.g. a webhook projection that drops `_type`)
     // falls back to purging everything — stale pages are worse than a cold cache.
     const revalidated = revalidate((type && PATHS_BY_TYPE[type]) || EVERYTHING)
+    if (usesClaymoresApi) {
+        const tags = type && Object.hasOwn(API_CACHE_TAGS_BY_TYPE, type)
+            ? API_CACHE_TAGS_BY_TYPE[type]
+            : type && Object.hasOwn(PATHS_BY_TYPE, type)
+                ? []
+                : Object.values(sportsCacheTags)
+        for (const tag of tags) revalidateTag(tag, { expire: 0 })
+    }
 
     // Shows up in the Vercel function logs, so "did the webhook actually fire?"
     // is answerable without guessing.

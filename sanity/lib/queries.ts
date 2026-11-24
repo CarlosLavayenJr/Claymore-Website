@@ -86,7 +86,7 @@ export interface SanityMatch {
 }
 
 export const matchesQuery = groq`
-  *[_type == "match"] | order(date asc) {
+  *[_type == "match" && hidden != true] | order(date asc) {
     _id,
     _updatedAt,
     date,
@@ -109,7 +109,7 @@ export const matchesQuery = groq`
 `
 
 export const matchBySlugQuery = groq`
-  *[_type == "match" && _id == $id][0] {
+  *[_type == "match" && _id == $id && hidden != true][0] {
     _id,
     _updatedAt,
     date,

@@ -1,8 +1,7 @@
+import { getStandingsIndex } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { client } from '@/sanity/lib/client'
 import {
-    standingsIndexQuery,
     type SanityStandingsIndexEntry,
 } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
@@ -28,7 +27,7 @@ export const metadata: Metadata = {
 }
 
 export default async function StandingsIndexPage() {
-    const seasons: SanityStandingsIndexEntry[] = await client.fetch(standingsIndexQuery)
+    const seasons: SanityStandingsIndexEntry[] = await getStandingsIndex()
     const current = seasons[0] ?? null
     const past = seasons.slice(1)
 

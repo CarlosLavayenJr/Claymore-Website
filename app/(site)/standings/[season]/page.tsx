@@ -1,8 +1,8 @@
+import { getMatches, getTeams } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { client } from '@/sanity/lib/client'
-import { matchesQuery, teamsQuery, type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
+import { type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import LeagueTable from '@/components/league-table'
@@ -24,7 +24,7 @@ interface Params {
 }
 
 export async function generateStaticParams() {
-    const matches: SanityMatch[] = await client.fetch(matchesQuery)
+    const matches: SanityMatch[] = await getMatches()
     const seasons = Array.from(new Set(matches.map((m) => m.season)))
     return seasons.map((s) => ({ season: String(s) }))
 }
@@ -53,8 +53,8 @@ export default async function SeasonPage({ params }: Params) {
     if (!Number.isFinite(seasonNum)) notFound()
 
     const [allMatches, teams]: [SanityMatch[], SanityTeam[]] = await Promise.all([
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getTeams(),
     ])
     const matches = allMatches
         .filter((m) => m.season === seasonNum)

@@ -1,7 +1,8 @@
+import { getPlayerForSlug, getPlayers } from '@/lib/claymores-api'
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { client } from "@/sanity/lib/client"
-import { playerBySlugQuery, playerPhotosQuery, playersQuery } from "@/sanity/lib/queries"
+import { playerPhotosQuery } from "@/sanity/lib/queries"
 import type { SanityPlayer, SanityPlayerPhoto } from "@/sanity/lib/queries"
 import JsonLd from "@/components/json-ld"
 import { athleteSchema, breadcrumbSchema } from "@/lib/seo"
@@ -17,7 +18,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { slug } = await params
-    const player: SanityPlayer | null = await client.fetch(playerBySlugQuery, { slug })
+    const player: SanityPlayer | null = await getPlayerForSlug(slug)
     if (!player) return {}
     const description = player.description
         || `${player.name} plays ${player.position} for the Central Florida Claymores RFC — Orlando's USA Rugby D3 club competing in the Florida Rugby Union.`
@@ -40,8 +41,8 @@ export default async function PlayerPage({ params }: Props) {
     const { slug } = await params
 
     const [player, allPlayers]: [SanityPlayer | null, SanityPlayer[]] = await Promise.all([
-        client.fetch(playerBySlugQuery, { slug }),
-        client.fetch(playersQuery),
+        getPlayerForSlug(slug),
+        getPlayers(),
     ])
 
     if (!player) notFound()
