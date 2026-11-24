@@ -224,11 +224,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
                             </p>
                         )}
                         <div className="mt-5 space-y-4">
-                            {!dues.ok ? (
+                            {!dues.ok && dues.status === 404 ? (
+                                // Dues are switched off in the API: not an error, just not here yet.
+                                <Notice tone="info" title="Dues are coming soon">
+                                    Online dues aren’t set up for the club yet. Pay the club treasurer at practice for now.
+                                </Notice>
+                            ) : !dues.ok ? (
                                 <Notice tone="error" title="Dues couldn't load">
-                                    {dues.status === 404
-                                        ? 'Dues aren’t switched on for the club yet.'
-                                        : 'The club server didn’t respond. Refresh in a minute.'}
+                                    The club server didn’t respond. Refresh in a minute.
                                 </Notice>
                             ) : dues.data.length === 0 ? (
                                 <p className="text-[#555555]">

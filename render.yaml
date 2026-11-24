@@ -63,10 +63,26 @@ services:
       # The .p8 key contents (PEM). Secret: set in the Render dashboard only.
       - key: Authentication__Apple__PrivateKey
         sync: false
-      # Where Stripe returns website checkouts (returnTo "web"). Checkout itself stays off
-      # (Stripe__CheckoutEnabled unset) and Stripe__Mode defaults to test; see api/README.md.
+      # Dues and Stripe Checkout, in TEST mode (Stripe__Mode defaults to test; going live
+      # follows the checklist in api/README.md). The sk_test_ key and the webhook's whsec_
+      # secret are set in the Render dashboard only.
+      - key: Dues__Enabled
+        value: "true"
+      - key: Stripe__CheckoutEnabled
+        value: "true"
+      - key: Stripe__SecretKey
+        sync: false
+      - key: Stripe__WebhookSecret
+        sync: false
+      - key: Stripe__ReturnOrigin
+        value: https://claymores-api-4zm4.onrender.com
+      # Where Stripe sends the app back (deep link, see mobile/lib/app/deep_links.dart).
+      - key: Stripe__AppReturnUrl
+        value: claymores://dues
+      # Where Stripe returns website checkouts (returnTo "web"). Points at the dev preview while
+      # dues are tested there; set back to https://www.claymoresrfc.com/account at release.
       - key: Stripe__WebReturnUrl
-        value: https://www.claymoresrfc.com/account
+        value: https://claymore-website-git-dev-carlos-lavayens-projects.vercel.app/account
 
   # rugbyfl.com scraper: writes Postgres only. The web service serves these rows
   # (Fixtures__Source=scraper, Standings__Source=postgres above).
