@@ -83,7 +83,8 @@ public sealed class InvitationTests(PostgresDatabase database) : IClassFixture<P
 
         await invitations.UpsertAsync("new.player@example.com", "admin", null, ct);
         Assert.Equal("admin", await ClubRoles.ResolveAsync(player, configuration, invitations, ct));
-        Assert.Single(await invitations.ListAsync(ct));
+        // Other tests in this class share the database, so look only at this invitation.
+        Assert.Single((await invitations.ListAsync(ct)).Where(invitation => invitation.Email == "new.player@example.com"));
 
         Assert.True(await invitations.RemoveAsync("NEW.PLAYER@example.com", ct));
         Assert.Null(await ClubRoles.ResolveAsync(player, configuration, invitations, ct));

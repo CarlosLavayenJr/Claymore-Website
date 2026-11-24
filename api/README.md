@@ -52,6 +52,7 @@ Swagger is enabled by default in Development. To expose it in another environmen
 | `GET /v1/practices` | Public | `200` and an array of published practice and event records. |
 | `GET /v1/practices/schedule` | Public | `200` and the practice schedule, or `404` when no schedule is published. |
 | `GET /v1/me` | Bearer token | `200` and `{"subject","name","email","role"}` from the token, or `401` for a missing or invalid token. `role` is set for tokens from [mobile sign-in](#mobile-sign-in). |
+| `POST /v1/internal/scrape/{fixtures\|standings}` | `Scraper:Secret` bearer | Runs the rugbyfl.com scraper. See [Scraper](#scraper). `404` unless the secret and Postgres are configured. Not in Swagger. |
 
 Fixture filters take a numeric year from 1900 through 2200. Standings filters take a season label in `YYYY-YYYY` format. Invalid filters return `400`. A successful fixture list with no matches returns `[]`. Health reports process liveness. To verify the data path, request fixtures or standings as well.
 
@@ -220,6 +221,80 @@ Migrations run automatically. On startup, the API applies every script in [`src/
 
 5. From the same terminal, run `dotnet run --launch-profile http` and try the fixture endpoints again. The configured API reads fixtures from Postgres, so import before starting it in this mode. To switch back to Sanity-backed fixture reads, unset `ConnectionStrings__Claymores` and restart the API.
 
+## Scraper
+
+The API can scrape rugbyfl.com into Postgres. It ports the website's `app/api/scrape-rugby` and `app/api/scrape-standings` routes, which write to Sanity. Both run side by side until cutover. The Vercel crons stay as they are.
+
+**Shadow mode.** Scraped fixtures are stored with `source = 'scraper'`. `GET /v1/fixtures` serves only `source = 'sanity'` rows, which `--import-fixtures` writes, until you set `Fixtures__Source=scraper`. Standings endpoints still read Sanity. Scraped standings are stored in Postgres, and no endpoint serves them yet.
+
+### Run it
+
+| Command | What it does |
+| --- | --- |
+| `dotnet run -- --scrape-fixtures` | Club 117, season ID 28 (`Scraper:DefaultSeasonId`). Also opens each game's detail page to read the venue. |
+| `dotnet run -- --scrape-fixtures --season-id 27` | One earlier season |
+| `dotnet run -- --scrape-fixtures --all` | Clubs 117 and 51 (IR/Claymores), season IDs 10 through 28. Skips venue lookups. Venues already stored are kept. |
+| `dotnet run -- --scrape-standings [--force]` | Scrapes the championship in `championship_config`. `--force` runs even when `active` is false. |
+| `dotnet run -- --scrape-standings --championship-id 162 --season-label 2023-2024 [--division-name ...]` | Backfills one championship without stamping `championship_config` |
+| `dotnet run -- --import-reference-data` | Copies Sanity team profiles to Postgres (slug, city, website, logo URL, aliases) and copies the `leagueChampionship` singleton to `championship_config`. It never writes to Sanity. |
+| `dotnet run -- --compare-with-sanity` | Reports differences between scraped Postgres data and Sanity. See [Cutover](#cutover). |
+
+Each command applies pending migrations first, then prints a JSON summary. A run where every page fails exits with code 1. Every run is logged in `scrape_runs` with its kind, trigger, parameters, status, summary, and error.
+
+**HTTP trigger.** `POST /v1/internal/scrape/fixtures?seasonId=28&all=true` and `POST /v1/internal/scrape/standings?force=true&championshipId=…&seasonLabel=…&divisionName=…` take the same options. Send `Authorization: Bearer <Scraper__Secret>`. The token is compared in constant time. Without a configured secret or Postgres, the route returns `404`. It returns `401` for a wrong token, `400` for invalid options, and `502` when every fetch failed.
+
+**Schedule.** `render.yaml` defines two Render cron jobs. Both use the API's Dockerfile and `DATABASE_URL`:
+
+- `claymores-scrape-fixtures` runs `--scrape-fixtures` at `0 3 * * 1` (Mondays 03:00 UTC).
+- `claymores-scrape-standings` runs `--scrape-standings` at `0 11 * * 1` (Mondays 11:00 UTC).
+
+Running the CLI in a cron container is simpler than calling the endpoint. It shares no secret, doesn't depend on the web service being awake, and has no request timeout. The endpoint is for manual or external triggers.
+
+### Rules
+
+These carry over unchanged from the website scraper:
+
+- **Source pages:** `https://rugbyfl.com/Clubs/Club.asp?Club_ID={club}&Season_ID={season}` for fixtures and `…/Season/Championships/Championship_Print.asp?Championship_ID={id}` for standings, both fetched with the `ClaymoresScraper/1.0` user agent.
+- **Fixture markup:** walk `td.SectionTitleSec` (date, such as "Saturday, September 20, 2025"), `td.TableRowBig` (competition, from `a font`) and `td.TeamGame` (needs two links) in document order. The first team is home, and the first score is the home score. Scores are `font[color="#FF0000"] strong`. The note is the `.TableRowNoLine` text in the next row. Like Sanity, it includes the "Note:" label.
+- **Claymores detection:** `/claymore/i`. That side becomes "Claymores", so "IR/Claymores" and "Claymores (D3)" both become "Claymores". The opponent is stored raw. Only games involving Claymores are kept.
+- **Status:** fewer than two scores is `upcoming`. A note containing "forfeit" is `forfeit_us` if it matches `/claymore.{0,15}forfeit|forfeit.{0,10}by.{0,10}claymore/i`, otherwise `forfeit_them`. Anything else is `played`. A forfeit score is forced to 20–0 for the side that did not forfeit. Upcoming games store 0–0, as in Sanity.
+- **Season:** the closing year. Games in August or later count toward the next year.
+- **Match type:** `/friendl/i` on the competition is `friendly`, otherwise `league`.
+- **Standings table:** the first table whose first row mentions pos, pool, team, played, and total. Rows need at least 19 direct cells and a `Team.asp` link in cell 2. Cells used: 1 pool, 3–6 P/W/L/D, 11–13 PF/PA/difference, 17 bonus, 18 total.
+- **Fallback from the schedule** when no standings are published (header has date, home, tries, away and two "bp" columns; rows need 14 cells; "(31)" is a played score). Skip cancelled games (note matches `/game not played/i`, or starts with "cancel(l)ed" and doesn't mention a forfeit), playoff games, and unplayed games. A win is 4 points and a draw is 2. A team earns +1 for four or more tries and +1 for losing by seven or fewer. Forfeits earn no bonus points.
+- **Ranking:** total points descending, then points difference descending, then team name. Positions are numbered from 1.
+- **Playoffs:** any non-cancelled schedule game whose note matches semi-final, quarter-final, state final, gulf coast, super regional, cup/grand/championship/clubs final, playoff, or 3rd/third place. Each is classified as quarter, semi, third, then final, in that order. "QF1" is not a keyword, as before.
+- **Championship config:** `active` is the off-season switch. A scrape records `last_scraped_at` and `last_scrape_status`, which is "success", "success (computed from schedule)", "HTTP n", "fetch error: …", "parsed 0 rows — page structure may have changed", or "write error: …". Backfills with an explicit championship don't stamp it. Each scrape replaces that championship's standings and playoffs.
+
+These are fixed compared with the website scraper:
+
+1. **Dedupe** uses the natural key (date, home team, away team) after name resolution, enforced by the partial unique index `fixtures_scraper_natural_key`. Two games on the same day are both kept. The website matched on date alone. The same game listed under clubs 117 and 51 is stored once. Scraped rows have the ID `rfl-{date}-{homeTeamId}-{awayTeamId}`.
+2. **Re-scrapes update** scores, status, note, competition, match type, kickoff, and venue on existing rows, unless `manual_override` is true. An unchanged row only has `last_scraped_at` touched. A kickoff or venue that a run didn't capture keeps its stored value.
+3. **Kickoff and venue** are captured. Kickoff comes from the `TableRowBig` time ("1:00 PM", stored as `time`). Venue comes from the "Field:" line and street address on each game's `Game_Detail.asp` page. "Pending", "TBD", and missing fields stay null.
+4. **One name resolver** (`TeamNameResolver`) replaces the four normalizers in the website:
+   - **Normalize:** lowercase, then strip parentheticals, a leading "IR/", "F.C.", "RFC", "FC", "Rugby Football Club", "Rugby Club", "Rugby", trailing D1–D4 tokens, and trailing season years such as "Orlando Otters 2026", which appears on rugbyfl.com. Collapse punctuation.
+   - **Resolve:** Claymores detection, then exact normalized team name, then exact normalized alias (`team_aliases`), then a guarded fuzzy match. The fuzzy match requires that every token of exactly one team's name or alias appear in the input. It is rejected if the input adds a side marker, such as B, II, 2nds, reserves, women, or youth, so a B side joins its club only through an alias.
+   - **Unresolved names** create a team with `source = 'scraper'` and `needs_review = true`. Raw names written by `--import-fixtures` (`source = 'import'`) are never matched against. They are promoted instead of duplicated.
+   - **Aliases:** the seed comes from `scripts/add-team-aliases.ts` in migration 007. Add aliases with `INSERT INTO team_aliases (alias, alias_normalized, team_id)`. Use the normalized form, for example "fsu b".
+
+The standings header check also differs. The website looked for "total points", but the cell is "Total<br>Points". It matched only because the page footer happens to contain "Total Points". The API checks for "total".
+
+**Tables (migration 007).** `teams` gains `id`, `slug`, `city`, `website`, `logo_url`, `needs_review`, and `source`. `team_aliases` is new. `fixtures` gains `source`, `home_team_id`/`away_team_id`, `*_raw` display names, `status`, `match_type`, `competition`, `note`, `home_score`/`away_score`, `kickoff_time`, `venue`, `manual_override`, `source_club_id`/`source_season_id`/`source_game_id`, `first_scraped_at`/`last_scraped_at`, and `updated_at`. `payload` is rebuilt from these columns in the shape `GET /v1/fixtures` returns. New tables are `championship_config`, a singleton seeded with Sanity's schema defaults, plus `standings`, `standings_rows`, `standings_playoffs` (keyed by championship ID, with a season label), and `scrape_runs`.
+
+**Review queues:**
+
+```sql
+SELECT id, name, slug FROM teams WHERE needs_review ORDER BY created_at;   -- add an alias or merge
+SELECT * FROM scrape_runs ORDER BY started_at DESC LIMIT 20;
+```
+
+### Cutover
+
+1. Run `--import-reference-data` once so logos, slugs, aliases, and the current championship come from Sanity. Then run `--scrape-fixtures --all` and `--scrape-fixtures` (to add venues), plus `--scrape-standings` and the standings backfills you need.
+2. Run `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Standings rows are compared by team, and playoff lists are compared too. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference.
+3. Review each difference. Sanity edits made by hand show up as differences, such as a status changed to `cancelled` or a renamed competition. Set `manual_override = true` on those rows after copying the values, or the next scrape replaces them. Resolve teams in `needs_review`.
+4. Set `Fixtures__Source=scraper` on the web service to serve scraped fixtures, then turn off the Vercel crons. Standings endpoints need a Postgres read path before they can switch.
+
 ## Player dues
 
 The dues ledger records USD amounts in integer cents. An admin assigns the amount due and records payments the club has already received. The signed-in account page shows the player’s own amount due, total paid, and remaining balance. The dues detail endpoint also shows their payment history. The ledger does not charge cards.
@@ -296,7 +371,13 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `PostgresKeyRepository.cs` | Stores the sign-in key ring in Postgres |
 | `ClubInvitations.cs` | Invitation table, role resolution, and admin invitation endpoints |
 | `SanityData.cs` | Published Sanity queries for fixtures, standings, teams, players, and practices |
-| `FixtureDatabase.cs` | Npgsql fixture reads and transactional import |
+| `FixtureDatabase.cs` | Npgsql fixture reads (filtered by `Fixtures:Source`) and transactional import |
+| `Scraper/TeamNameResolver.cs` | The single team-name normalizer and resolver |
+| `Scraper/RugbyFlParser.cs` | AngleSharp parsing of rugbyfl.com pages and the scoring rules. No I/O. |
+| `Scraper/ScrapeService.cs` | Fetching (`RugbyFlClient`), scrape orchestration, and command-line parsing |
+| `Scraper/ScrapeStore.cs` | Scraper writes: team resolution, fixture upserts, standings, and the run log |
+| `Scraper/ScrapeEndpoints.cs`, `Scraper/ScraperCli.cs` | The protected HTTP trigger and the command-line tasks |
+| `Scraper/SanityComparison.cs` | The `--compare-with-sanity` report |
 | `ClubMemberDirectory.cs` | Member directory populated after Google sign-in |
 | `GoogleSignIn.cs` | Google sign-in, session cookie, and account page |
 | `MobileAuth.cs` | App sign-in: Google ID-token check, API access tokens, rotating refresh tokens |
@@ -369,7 +450,7 @@ The website stays on Vercel. The API and its Postgres database run on Render, de
 2. Enter the values marked `sync: false` when prompted: the Google OAuth client ID and secret, and one bootstrap admin email. Leave the Google values blank to start with public data only.
 3. Apply the Blueprint. Render builds [`Dockerfile`](Dockerfile), starts the API, and waits for `/health/ready`. The first start creates every table.
 4. Add the production Google redirect URI, `https://<service>.onrender.com/signin-google` (or your custom domain), to the Google OAuth client.
-5. Optionally import the Sanity fixtures from the service's **Shell** tab: `dotnet Claymores.Api.dll --import-fixtures`. Until you do, fixture endpoints read from Postgres and return nothing, so skip this step only if fixtures will come from the new scraper.
+5. Optionally import the Sanity fixtures from the service's **Shell** tab: `dotnet Claymores.Api.dll --import-fixtures`. Until you do, fixture endpoints read from Postgres and return nothing. To serve scraped fixtures instead, set `Fixtures__Source=scraper` (see [Scraper](#scraper)). The Blueprint's two cron jobs scrape rugbyfl.com weekly in shadow mode.
 
 Notes:
 

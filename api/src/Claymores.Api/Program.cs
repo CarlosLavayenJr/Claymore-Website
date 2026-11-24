@@ -87,7 +87,14 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
     builder.Services.AddSingleton<DatabaseMigrator>();
-    builder.Services.AddSingleton<FixtureDatabase>();
+    var fixtureSource = builder.Configuration["Fixtures:Source"] ?? FixtureDatabase.SanitySource;
+    if (fixtureSource is not (FixtureDatabase.SanitySource or FixtureDatabase.ScraperSource))
+        throw new InvalidOperationException("Fixtures:Source must be 'sanity' or 'scraper'.");
+    builder.Services.AddSingleton(services =>
+        new FixtureDatabase(services.GetRequiredService<NpgsqlDataSource>(), fixtureSource));
+    builder.Services.AddSingleton<ScrapeStore>();
+    builder.Services.AddHttpClient<IRugbyFlSource, RugbyFlClient>(RugbyFlClient.Configure);
+    builder.Services.AddTransient<ScrapeService>();
     builder.Services.AddOptions<KeyManagementOptions>()
         .Configure<NpgsqlDataSource>((options, dataSource) => options.XmlRepository = new PostgresKeyRepository(dataSource));
     if (googleEnabled)
@@ -115,7 +122,10 @@ if (checkoutEnabled)
 
 var app = builder.Build();
 var migrator = app.Services.GetService<DatabaseMigrator>();
-if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _])
+var scraperCommand = ScraperCommand.IsScraperCommand(args)
+    ? ScraperCommand.Parse(args, app.Configuration.GetValue("Scraper:DefaultSeasonId", FixtureScrapeRequest.DefaultSeasonId))
+    : null;
+if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] || scraperCommand is not null)
 {
     if (migrator is null)
         throw new InvalidOperationException("Set ConnectionStrings:Claymores or DATABASE_URL first.");
@@ -139,6 +149,8 @@ if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _])
         await invitations.UpsertAsync(email, role, "command line", CancellationToken.None);
         Console.WriteLine($"Invited {email} as {role}.");
     }
+    else if (scraperCommand is not null)
+        Environment.ExitCode = await ScraperCli.RunAsync(scraperCommand, app.Services, CancellationToken.None);
     await app.DisposeAsync();
     return;
 }
@@ -179,6 +191,7 @@ if (duesEnabled)
 }
 if (checkoutEnabled)
     DuesCheckout.Map(app, appCheckout: mobileAuthEnabled);
+ScrapeEndpoints.Map(app);
 
 app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))
     .WithTags("Health")

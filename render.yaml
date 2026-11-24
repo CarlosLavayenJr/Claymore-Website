@@ -43,6 +43,56 @@ services:
       - key: Authentication__Google__MobileClientIds__0
         sync: false
 
+  # rugbyfl.com scraper, shadow mode: writes Postgres only; public endpoints keep serving
+  # Sanity-imported fixtures until Fixtures__Source=scraper is set on the web service.
+  # Same image as the API, run as a one-off command. Schedules are UTC and match vercel.json.
+  - type: cron
+    name: claymores-scrape-fixtures
+    runtime: docker
+    region: virginia
+    plan: starter
+    schedule: "0 3 * * 1"
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    dockerCommand: dotnet Claymores.Api.dll --scrape-fixtures
+    buildFilter:
+      paths:
+        - api/**
+        - render.yaml
+      ignoredPaths:
+        - api/**/*.md
+        - api/tests/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: claymores-db
+          property: connectionString
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+  - type: cron
+    name: claymores-scrape-standings
+    runtime: docker
+    region: virginia
+    plan: starter
+    schedule: "0 11 * * 1"
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    dockerCommand: dotnet Claymores.Api.dll --scrape-standings
+    buildFilter:
+      paths:
+        - api/**
+        - render.yaml
+      ignoredPaths:
+        - api/**/*.md
+        - api/tests/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: claymores-db
+          property: connectionString
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+
 databases:
   - name: claymores-db
     databaseName: claymores
