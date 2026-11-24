@@ -73,6 +73,28 @@ export const player = defineType({
             ],
         }),
         defineField({
+            name: 'graphicName',
+            title: 'Name on graphics',
+            type: 'string',
+            description: 'Optional short display name. Falls back to Name; does not change the website player name.',
+            validation: (rule) => rule.max(32),
+        }),
+        defineField({
+            name: 'cutouts',
+            title: 'Body-shot cutouts for graphics',
+            type: 'array',
+            of: [{ type: 'image', options: { accept: 'image/png,image/webp' } }],
+            description: 'Transparent PNG or WebP shots with the whole player visible, including boots. Pick which one to use per graphic in Match Graphics; the first is the default. Photos picked there are added here automatically. The website photo is kept separately.',
+        }),
+        defineField({
+            name: 'eligiblePositions',
+            title: 'Eligible position numbers',
+            type: 'array',
+            of: [{ type: 'number', validation: (rule) => rule.integer().min(1).max(15) }],
+            validation: (rule) => rule.unique(),
+            description: 'Optional 1–15 position numbers. The graphics preview warns when a player is selected outside these positions.',
+        }),
+        defineField({
             name: 'description',
             title: 'Bio',
             type: 'text',

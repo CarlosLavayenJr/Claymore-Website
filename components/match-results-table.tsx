@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, ChevronDown, BarChart3 } from 'lucide-react'
 import { Info } from 'lucide-react'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
-import { matchSlug } from '@/lib/seo'
+import { isClubEvent, matchSlug } from '@/lib/seo'
 import { divisionCodeFromName } from '@/lib/divisions'
 import MatchTypeBadge from '@/components/match-type-badge'
 
@@ -124,7 +124,7 @@ export default function MatchResultsTable({ matches, teams, divisionsBySeason = 
     const opponents = useMemo(() => {
         const set = new Set<string>()
         matches.forEach((m) => {
-            if (m.status === 'cancelled') return
+            if (m.status === 'cancelled' || isClubEvent(m)) return
             const opp = isClaymores(m.homeTeam) ? normalizeTeamName(m.awayTeam) : normalizeTeamName(m.homeTeam)
             set.add(opp)
         })

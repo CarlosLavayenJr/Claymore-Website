@@ -1,0 +1,10 @@
+{
+  "matches": *[_type == "match"] | order(date asc, _id asc) {
+    _id,date,season,homeTeam,awayTeam,homeScore,awayScore,status,venue,kickoffTime,note,matchType,
+    "homeLogo": homeTeamRef->image.asset->url,
+    "awayLogo": awayTeamRef->image.asset->url
+  },
+  "practice": *[_type == "practiceSchedule" && _id == "practiceSchedule"][0] {
+    weekday,time,venueName,venueAddress,seasonalNote
+  }
+}

@@ -1,7 +1,8 @@
 {
+  "ignoreCommand": "[ \"$VERCEL_GIT_PREVIOUS_SHA\" = \"$VERCEL_GIT_COMMIT_SHA\" ] && exit 1; git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- . ':(exclude)api' ':(exclude)mobile' ':(exclude)render.yaml'",
   "crons": [
     {
-      "path": "/api/scrape-rugby?seasonId=27",
+      "path": "/api/scrape-rugby?seasonId=28",
       "schedule": "0 3 * * 1"
     },
     {

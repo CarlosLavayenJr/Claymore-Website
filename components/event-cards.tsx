@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 import type { PracticeInstance } from '@/lib/practices'
-import { matchSlug } from '@/lib/seo'
+import { festivalSlug } from '@/lib/festivals'
+import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
 import MatchTypeBadge from '@/components/match-type-badge'
 
 // ── Team / match helpers ────────────────────────────────────────────────────
@@ -110,7 +111,38 @@ export function AddressLink({ address }: { address: string }) {
     )
 }
 
+/** A club event the source lists as Claymores vs Claymores: one crest and the event name. */
+function ClubEventCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
+    const name = clubEventName(m)
+    const logo = m.homeTeamLogo ?? findTeamLogo(m.homeTeam, teams)
+    const result = getResult(m)
+    return (
+        <Link
+            href={`/fixtures/${matchSlug(m)}`}
+            className="flex items-center gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white hover:bg-[#F9F9F9] hover:border-[#77c3ef]/40 transition-colors cursor-pointer"
+            aria-label={`View event details: ${name}`}
+        >
+            <div className="flex flex-col items-center w-12 shrink-0">
+                {logo ? (
+                    <img src={logo} alt="Central Florida Claymores" className="w-8 h-8 object-contain" />
+                ) : (
+                    <div className="w-8 h-8 rounded-full bg-[#EAEAEA]" />
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Club event</p>
+                <p className="text-sm font-semibold text-[#111111] truncate">{name}</p>
+                {m.kickoffTime && <p className="text-xs text-[#555555]">{m.kickoffTime}</p>}
+            </div>
+            {result === 'cancelled' && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${RESULT_PILL.cancelled}`}>Cancelled</span>
+            )}
+        </Link>
+    )
+}
+
 export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
+    if (isClubEvent(m)) return <ClubEventCard m={m} teams={teams} />
     const result = getResult(m)
     const weHome = isClaymores(m.homeTeam)
     const opponent = weHome ? m.awayTeam : m.homeTeam
@@ -169,8 +201,10 @@ export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] })
 
 export function PracticeCard({ instance }: { instance: PracticeInstance }) {
     const { practice } = instance
-    return (
-        <div className="flex items-start gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white">
+    const href = practice.eventType === 'festival' || practice.eventType === 'event'
+        ? `/fixtures/${festivalSlug(practice)}` : null
+    const content = (
+        <div className={`flex items-start gap-3 py-2 px-3 rounded-lg border border-[#EAEAEA] bg-white ${href ? 'hover:bg-[#F9F9F9] hover:border-[#77c3ef]/40 transition-colors cursor-pointer' : ''}`}>
             {practice.iconUrl ? (
                 <img
                     src={practice.iconUrl}
@@ -181,16 +215,29 @@ export function PracticeCard({ instance }: { instance: PracticeInstance }) {
                 <div className="w-10 h-10 rounded-full bg-[#EAEAEA] shrink-0" />
             )}
             <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Practice</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">{practice.eventType === 'festival' ? 'Rugby festival' : practice.eventType === 'event' ? 'Club event' : 'Practice'}</p>
                 <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.title}</p>
                 {practice.time && <p className="text-xs text-[#555555] mt-1">{practice.time}</p>}
-                {practice.address && <AddressLink address={practice.address} />}
+                {practice.venue && <p className="text-xs font-semibold text-[#111111] mt-1">{practice.venue}</p>}
+                {practice.address && (href ? <p className="text-xs text-[#77c3ef]">{practice.address}</p> : <AddressLink address={practice.address} />)}
                 {practice.description && (
                     <p className="text-xs text-[#555555] mt-1 whitespace-pre-line">
                         {practice.description}
                     </p>
                 )}
+                {practice.eventType === 'festival' && (
+                    <div className="mt-3 space-y-2 text-xs text-[#555555]">
+                        {!!practice.participants?.length && <p><span className="font-semibold text-[#111111]">Sides:</span> {practice.participants.join(', ')}</p>}
+                        {practice.socialVenue && <p className="font-semibold text-[#111111]">Post tournament social · {practice.socialVenue}</p>}
+                        {practice.socialAddress && <p className="text-xs text-[#77c3ef]">{practice.socialAddress}</p>}
+                    </div>
+                )}
             </div>
         </div>
     )
+    return href ? (
+        <Link href={href} className="block rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#77c3ef]" aria-label={`View event details: ${practice.title}`}>
+            {content}
+        </Link>
+    ) : content
 }

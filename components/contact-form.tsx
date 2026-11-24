@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, ChangeEvent, FormEvent } from 'react'
+import { useRef, useState, ChangeEvent, FormEvent } from 'react'
+import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
 
 interface FormData {
     name: string
     email: string
     subject: string
     message: string
+    company: string // honeypot — must stay empty
 }
 
 export default function ContactForm() {
@@ -15,10 +17,15 @@ export default function ContactForm() {
         email: '',
         subject: '',
         message: '',
+        company: '',
     })
     const [submitted, setSubmitted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [token, setToken] = useState<string | null>(null)
+    const turnstileRef = useRef<TurnstileInstance | null>(null)
+
+    const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
     const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
@@ -27,18 +34,26 @@ export default function ContactForm() {
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        setLoading(true)
         setError(null)
+
+        if (siteKey && !token) {
+            setError('Please complete the verification challenge.')
+            return
+        }
+
+        setLoading(true)
         const res = await fetch('/api/contact', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData),
+            body: JSON.stringify({ ...formData, turnstileToken: token }),
         })
         setLoading(false)
         if (res.ok) {
             setSubmitted(true)
         } else {
             setError('Something went wrong. Please try again or email us directly.')
+            setToken(null)
+            turnstileRef.current?.reset()
         }
     }
 
@@ -109,6 +124,35 @@ export default function ContactForm() {
                     required
                 />
             </div>
+
+            {/* Honeypot — hidden from humans, bots tend to fill every field */}
+            <div
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}
+            >
+                <label htmlFor="company">Company (leave blank)</label>
+                <input
+                    type="text"
+                    id="company"
+                    name="company"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={formData.company}
+                    onChange={handleChange}
+                />
+            </div>
+
+            {siteKey && (
+                <Turnstile
+                    ref={turnstileRef}
+                    siteKey={siteKey}
+                    onSuccess={(t) => setToken(t)}
+                    onExpire={() => setToken(null)}
+                    onError={() => setToken(null)}
+                    options={{ theme: 'light' }}
+                />
+            )}
+
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
                 type="submit"

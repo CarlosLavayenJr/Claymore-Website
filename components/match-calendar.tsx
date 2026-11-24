@@ -38,7 +38,7 @@ function MobileList({
         const today = new Date()
         const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         const horizon = new Date(today)
-        horizon.setDate(horizon.getDate() + 60)
+        horizon.setDate(horizon.getDate() + 365)
         const horizonIso = `${horizon.getFullYear()}-${String(horizon.getMonth() + 1).padStart(2, '0')}-${String(horizon.getDate()).padStart(2, '0')}`
         const upcomingPractices = expandPractices(practices, todayIso, horizonIso)
 
@@ -72,6 +72,9 @@ function MobileList({
 
     return (
         <div className="divide-y divide-[#EAEAEA]">
+            {sections.length === 0 && (
+                <p className="py-8 text-center text-sm text-[#555555]">No upcoming games or events scheduled.</p>
+            )}
             {sections.map(([date, bucket]) => (
                 <div key={date} className="py-4">
                     <p className="text-xs uppercase tracking-widest text-[#555555] font-semibold mb-2">
@@ -248,7 +251,7 @@ export default function MatchCalendar({
                                 <PopoverTrigger asChild>
                                     <button className="text-left w-full">{cell}</button>
                                 </PopoverTrigger>
-                                <PopoverContent side="top" align="center" className="w-72 p-3">
+                                <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                     <p className="text-xs uppercase tracking-widest text-[#555555] font-semibold mb-2">
                                         {new Date(isoDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                                     </p>

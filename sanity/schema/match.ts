@@ -10,7 +10,15 @@ export const match = defineType({
             title: 'Manual Override (lock from scraper)',
             type: 'boolean',
             description:
-                'When checked, the rugbyfl.com scraper will skip this match entirely. Use this when the official source is wrong (e.g. a cancelled match still shows as upcoming) and you want to preserve your edits.',
+                'Check this after fixing a match that rugbyfl.com got wrong (score, status, date, teams). The scrapers then leave it alone, and your version is copied to the Claymores app and API within the hour.',
+            initialValue: false,
+        }),
+        defineField({
+            name: 'hidden',
+            title: 'Hide this match',
+            type: 'boolean',
+            description:
+                "Check this for a match that never happened (rugbyfl.com lists it but it shouldn't exist). It disappears from the website, the app and the API within the hour, and the scrapers won't bring it back. Use this instead of deleting. Uncheck to show it again.",
             initialValue: false,
         }),
         defineField({
@@ -132,10 +140,11 @@ export const match = defineType({
             away: 'awayTeam',
             awayScore: 'awayScore',
             status: 'status',
+            hidden: 'hidden',
         },
-        prepare({ date, home, homeScore, away, awayScore, status }) {
+        prepare({ date, home, homeScore, away, awayScore, status, hidden }) {
             return {
-                title: `${home} vs ${away}`,
+                title: `${hidden ? '[Hidden] ' : ''}${home} vs ${away}`,
                 subtitle: `${date} — ${status === 'played' ? `${homeScore}–${awayScore}` : status}`,
             }
         },

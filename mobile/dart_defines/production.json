@@ -1,0 +1,8 @@
+{
+  "CLAYMORES_API_BASE_URL": "https://claymores-api-4zm4.onrender.com",
+  "ENABLE_SIGN_IN": "true",
+  "ENABLE_APPLE_SIGN_IN": "true",
+  "ENABLE_DUES": "false",
+  "GOOGLE_SERVER_CLIENT_ID": "1070515951514-45g3t5rftj9cv97lg4e9qk9jjf9b69oo.apps.googleusercontent.com",
+  "GOOGLE_IOS_CLIENT_ID": "1070515951514-ukk1opg2c2ajdln89mb424n8b9cuir2k.apps.googleusercontent.com"
+}

@@ -1,6 +1,8 @@
+import { getMatches, getTeams, getPractices } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import RugbyHero from '@/components/Hero'
+import { AccountDeletedNotice } from '@/components/members/account-deleted-notice'
 import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
@@ -9,11 +11,7 @@ import UpcomingEvents from '@/components/upcoming-events'
 import LeagueTable from '@/components/league-table'
 import { ogImage } from '@/lib/og'
 import { getPracticeSchedule } from '@/lib/practice-schedule'
-import { client } from '@/sanity/lib/client'
 import {
-    matchesQuery,
-    practicesQuery,
-    teamsQuery,
     type SanityMatch,
     type SanityPractice,
     type SanityTeam,
@@ -48,29 +46,30 @@ export default async function Home() {
         SanityTeam[],
     ] = await Promise.all([
         getPracticeSchedule(),
-        client.fetch(matchesQuery),
-        client.fetch(practicesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getPractices(),
+        getTeams(),
     ])
 
     return (
         <main className="min-h-screen">
             <JsonLd data={organizationSchema} />
+            <AccountDeletedNotice />
             <RugbyHero />
 
             {/* Location + CTA section — critical for local SEO H1 */}
             <section className="bg-white py-16">
-                <div className="px-4 sm:px-6 lg:px-32">
-                    <div className="flex flex-col lg:flex-row gap-8 lg:items-start lg:justify-between">
+                <div className="px-4 sm:px-6 xl:px-12 min-[1700px]:px-32">
+                    <div className="flex flex-col xl:flex-row gap-8 xl:items-start xl:justify-between">
                         {/* League standings (compact) — desktop only */}
-                        <div className="hidden lg:block w-96 shrink-0">
+                        <div className="hidden xl:block w-80 min-[1700px]:w-96 shrink-0">
                             <LeagueTable variant="compact" />
                         </div>
 
                         {/* Centered hero text + CTAs (matches the original section layout) */}
-                        <div className="flex-1 flex justify-center">
+                        <div className="flex-1 min-w-0 flex justify-center">
                             <div className="max-w-4xl text-center">
-                                <h1 className="text-4xl md:text-5xl font-claymore mb-6">
+                                <h1 className="text-4xl md:text-5xl xl:text-4xl min-[1500px]:text-5xl font-claymore mb-6">
                                     Orlando&apos;s Rugby Club — Central Florida Claymores RFC
                                 </h1>
                                 <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
@@ -104,7 +103,7 @@ export default async function Home() {
                         </div>
 
                         {/* Upcoming events widget — desktop only */}
-                        <div className="hidden lg:block w-96 shrink-0">
+                        <div className="hidden xl:block w-80 min-[1700px]:w-96 shrink-0">
                             <UpcomingEvents matches={matches} practices={practices} teams={teams} />
                         </div>
                     </div>

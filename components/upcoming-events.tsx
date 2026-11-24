@@ -7,7 +7,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { SanityMatch, SanityPractice, SanityTeam } from '@/sanity/lib/queries'
 import { expandPractices, type PracticeInstance } from '@/lib/practices'
+import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { MatchCard, PracticeCard, isClaymores } from '@/components/event-cards'
+import { clubEventName, isClubEvent } from '@/lib/seo'
 
 interface UpcomingEventsProps {
     matches: SanityMatch[]
@@ -37,6 +39,7 @@ export default function UpcomingEvents({
     teams = [],
     className = '',
 }: UpcomingEventsProps) {
+    const [filter, setFilter] = useScheduleFilter()
     const today = new Date()
     const [year, setYear] = useState(today.getFullYear())
     const [month, setMonth] = useState(today.getMonth())
@@ -60,7 +63,7 @@ export default function UpcomingEvents({
         // Include played + upcoming + cancelled — matches the fixtures calendar.
         // Filtering happens via month range; status is reflected in the popup card.
         const inMonth = matches.filter((m) => m.date >= firstIso && m.date <= lastIso)
-        const instances = expandPractices(practices, firstIso, lastIso)
+        const instances = expandPractices(filter === 'games' ? practices.filter(p => p.eventType === 'festival') : practices, firstIso, lastIso)
 
         const byDate = new Map<string, DayBucket>()
         const ensure = (date: string): DayBucket => {
@@ -76,7 +79,8 @@ export default function UpcomingEvents({
         const evts: CalEvent[] = [
             ...inMonth.map<CalEvent>((m) => {
                 const opp = isClaymores(m.homeTeam) ? m.awayTeam : m.homeTeam
-                return { kind: 'match', date: m.date, key: `m-${m._id}`, label: `vs ${opp}`, time: m.kickoffTime, match: m }
+                const label = isClubEvent(m) ? clubEventName(m) : `vs ${opp}`
+                return { kind: 'match', date: m.date, key: `m-${m._id}`, label, time: m.kickoffTime, match: m }
             }),
             ...instances.map<CalEvent>((p) => ({
                 kind: 'practice',
@@ -89,7 +93,7 @@ export default function UpcomingEvents({
         ].sort((a, b) => a.date.localeCompare(b.date))
 
         return { byDate, monthEvents: evts }
-    }, [matches, practices, year, month])
+    }, [matches, practices, year, month, filter])
 
     const eventsByDate = useMemo(() => {
         const map = new Map<string, CalEvent[]>()
@@ -159,6 +163,10 @@ export default function UpcomingEvents({
                         <CalendarDays className="w-4 h-4 relative z-10" />
                     </button>
                 </div>
+            </div>
+
+            <div className="px-4 border-b border-[#EAEAEA] shrink-0">
+                <ScheduleFilter value={filter} onChange={setFilter} />
             </div>
 
             {/* Body */}
@@ -285,7 +293,7 @@ function GridView({
                                     {cellContent}
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                            <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                 <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
                                     {new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
                                         weekday: 'long',
@@ -359,7 +367,7 @@ function AgendaView({ events, teams }: { events: CalEvent[]; teams: SanityTeam[]
                                     </div>
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent side="top" align="center" className="w-72 p-3">
+                            <PopoverContent side="top" align="center" className="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
                                 <p className="text-xs uppercase tracking-widest text-[#555] font-semibold mb-2">
                                     {fullDate}
                                 </p>

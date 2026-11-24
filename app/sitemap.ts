@@ -1,17 +1,17 @@
+import { getMatches, getPlayers, getTeams } from '@/lib/claymores-api'
 import type { MetadataRoute } from 'next'
 import { client } from '@/sanity/lib/client'
 import {
     coachesQuery,
-    matchesQuery,
-    playersQuery,
     postsQuery,
-    teamsQuery,
     type SanityCoach,
     type SanityMatch,
     type SanityPlayer,
     type SanityPost,
     type SanityTeam,
 } from '@/sanity/lib/queries'
+import { festivalsQuery, festivalSlug } from '@/lib/festivals'
+import type { SanityPractice } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
 import { CITIES } from '@/lib/cities'
 import { features } from '@/lib/features'
@@ -26,14 +26,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         SanityTeam[],
         SanityCoach[],
     ] = await Promise.all([
-        client.fetch(playersQuery),
+        getPlayers(),
         client.fetch(postsQuery),
-        client.fetch(matchesQuery),
-        client.fetch(teamsQuery),
+        getMatches(),
+        getTeams(),
         features.coaches
             ? client.fetch(coachesQuery).catch(() => [] as SanityCoach[])
             : Promise.resolve([] as SanityCoach[]),
     ])
+
+    const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
+    const festivalEntries: MetadataRoute.Sitemap = festivals.map(event => ({
+        url: `${baseUrl}/fixtures/${festivalSlug(event)}`,
+        lastModified: new Date(event._updatedAt ?? event.startDate),
+        changeFrequency: 'weekly',
+        priority: 0.8,
+    }))
 
     const playerEntries: MetadataRoute.Sitemap = players.map((p) => ({
         url: `${baseUrl}/team/${p.slug}`,
@@ -105,10 +113,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         { url: `${baseUrl}/location`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
         { url: `${baseUrl}/blog`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.75 },
         { url: `${baseUrl}/faq`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
+        { url: `${baseUrl}/privacy`, lastModified: new Date(), changeFrequency: 'yearly', priority: 0.2 },
         { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
         ...cityEntries,
         ...seasonEntries,
         ...matchEntries,
+        ...festivalEntries,
         ...opponentEntries,
         ...coachEntries,
         ...postEntries,

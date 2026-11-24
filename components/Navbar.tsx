@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import Image from "next/image"
 import { Menu, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,21 @@ const ExternalNavLink = ({ href, children }: NavLinkProps) => (
     </a>
 )
 
+// The member session cookie is httpOnly. A separate, token-free hint cookie
+// tells the navbar to say "Account" instead of "Sign in" without making
+// every public page dynamic. Sign-in and sign-out set or clear it on the
+// server and then redirect, so it is re-read on every client navigation.
+const MEMBER_HINT_COOKIE = 'claymores_member'
+const readMemberHint = () => document.cookie.split('; ').some(c => c === `${MEMBER_HINT_COOKIE}=1`)
+const useSignedInHint = () => {
+    const pathname = usePathname()
+    const [signedIn, setSignedIn] = useState(false)
+    useEffect(() => {
+        setSignedIn(readMemberHint())
+    }, [pathname])
+    return signedIn
+}
+
 const SHOP_URL = 'https://tytanrugby.com/collections/claymores-rfc'
 
 const fixturesChildren = [
@@ -46,7 +62,9 @@ const navLinks = [
     { href: '/blog', label: 'News' },
 ]
 
-export const Navbar = () => {
+export const Navbar = ({ memberAuth = false }: { memberAuth?: boolean }) => {
+    const signedIn = useSignedInHint()
+    const member = signedIn ? { href: '/account', label: 'Account' } : { href: '/sign-in', label: 'Sign in' }
     const [isOpen, setIsOpen] = useState(false)
     const [fixturesOpen, setFixturesOpen] = useState(false)
     const [mobileFixturesOpen, setMobileFixturesOpen] = useState(false)
@@ -124,6 +142,8 @@ export const Navbar = () => {
                             ))}
 
                             <ExternalNavLink href={SHOP_URL}>Shop</ExternalNavLink>
+
+                            {memberAuth && <NavLink href={member.href}>{member.label}</NavLink>}
 
                             <Link href="/contact" className="relative group px-3 py-2 text-white font-claymore text-lg">
                                 <span className="relative z-10">Contact</span>
@@ -207,6 +227,15 @@ export const Navbar = () => {
                         </Link>
                     ))}
 
+                    {memberAuth && (
+                        <Link
+                            href={member.href}
+                            onClick={closeMenu}
+                            className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
+                        >
+                            {member.label}
+                        </Link>
+                    )}
                     <a
                         href={SHOP_URL}
                         target="_blank"

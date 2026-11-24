@@ -56,6 +56,7 @@ const Footer = async () => {
                                 { href: '/join', label: 'Join' },
                                 { href: '/faq', label: 'FAQ' },
                                 { href: '/contact', label: 'Contact' },
+                                { href: '/privacy', label: 'Privacy' },
                             ].map(({ href, label }) => (
                                 <li key={href}>
                                     <Link href={href} className="hover:text-white transition-colors">

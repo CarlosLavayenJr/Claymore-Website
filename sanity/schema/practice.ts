@@ -88,6 +88,15 @@ export const practice = defineType({
             description: 'Days of the week this practice repeats. Only used when "Recurring" is on.',
             hidden: ({ parent }) => !parent?.recurring,
         }),
+        defineField({
+            name: 'skipDates',
+            title: 'Cancelled dates',
+            type: 'array',
+            of: [{ type: 'date' }],
+            description:
+                'Dates this practice does NOT happen (holidays, field closures). Those dates are left off the calendar and upcoming lists; every other week is unaffected.',
+            hidden: ({ parent }) => !parent?.recurring,
+        }),
     ],
     preview: {
         select: {
