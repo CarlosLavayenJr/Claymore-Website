@@ -182,3 +182,96 @@ test('assigning to everyone: summary text and the skip checkbox', async () => {
     const unchecked = parseAssignDuesForm(form(base))
     assert.equal(unchecked.values.skipExisting, false)
 })
+
+test('parses the automatic-dues form', async () => {
+    const { parseAutomaticDuesForm } = await import('./admin-dues')
+    const on = parseAutomaticDuesForm(form({ enabled: 'on', description: ' Season dues ', amount: '150', dueDate: '2027-01-15', savedAmountCents: '0' }))
+    assert.deepEqual(on.ok && on.value, { enabled: true, description: 'Season dues', amountCents: 15000, dueDate: '2027-01-15' })
+
+    const noDate = parseAutomaticDuesForm(form({ enabled: 'on', description: 'Kit', amount: '$40.50', dueDate: '' }))
+    assert.deepEqual(noDate.ok && noDate.value, { enabled: true, description: 'Kit', amountCents: 4050, dueDate: null })
+
+    // While on, the amount and description are required and validated like the assign form.
+    const onCases: Record<string, string>[] = [
+        { enabled: 'on', description: 'Dues', amount: '' },
+        { enabled: 'on', description: 'Dues', amount: '0' },
+        { enabled: 'on', description: 'Dues', amount: '10.001' },
+        { enabled: 'on', description: '', amount: '10' },
+        { enabled: 'on', description: 'x'.repeat(121), amount: '10' },
+        { enabled: 'on', description: 'Dues', amount: '10', dueDate: '2026-02-30' },
+    ]
+    for (const c of onCases) {
+        const r = parseAutomaticDuesForm(form({ savedAmountCents: '15000', ...c }))
+        assert.equal(r.ok, false, JSON.stringify(c))
+        assert.equal(r.values.amount, c.amount)
+        assert.equal(r.values.enabled, true)
+    }
+
+    // Switching off with the amount blank keeps the last saved amount (and description), so it never fails.
+    const off = parseAutomaticDuesForm(form({ description: '', amount: '', dueDate: '', savedAmountCents: '15000', savedDescription: 'Season dues' }))
+    assert.deepEqual(off.ok && off.value, { enabled: false, description: 'Season dues', amountCents: 15000, dueDate: null })
+    const offTyped = parseAutomaticDuesForm(form({ description: 'Kit', amount: '20', savedAmountCents: '15000' }))
+    assert.deepEqual(offTyped.ok && offTyped.value, { enabled: false, description: 'Kit', amountCents: 2000, dueDate: null })
+    const offNoSavedDescription = parseAutomaticDuesForm(form({ amount: '', savedAmountCents: '500' }))
+    assert.equal(offNoSavedDescription.ok && offNoSavedDescription.value?.description, 'Season dues')
+
+    // Never set up (saved 0) and left off with no amount: nothing to send.
+    for (const saved of ['0', '', 'abc', '-5', '1.5']) {
+        const nothing = parseAutomaticDuesForm(form({ description: 'Season dues', amount: '', savedAmountCents: saved }))
+        assert.equal(nothing.ok, true, saved)
+        assert.equal(nothing.ok && nothing.value, null, saved)
+    }
+    // A typed amount that's invalid still fails while off: it's what the admin entered.
+    assert.equal(parseAutomaticDuesForm(form({ description: 'Dues', amount: 'abc', savedAmountCents: '15000' })).ok, false)
+})
+
+test('automatic dues: normalizing the API setting, summary text, and which dues can be removed', async () => {
+    const { normalizeAutomaticDues, automaticDuesSummary, canRemoveDues } = await import('./admin-dues')
+    assert.deepEqual(normalizeAutomaticDues({ enabled: false, description: 'Season dues', amountCents: 0, dueDate: null }),
+        { enabled: false, description: 'Season dues', amountCents: 0, dueDate: null })
+    assert.deepEqual(normalizeAutomaticDues({ enabled: true, description: ' Kit ', amountCents: 4050, dueDate: '2027-01-15' }),
+        { enabled: true, description: 'Kit', amountCents: 4050, dueDate: '2027-01-15' })
+    assert.deepEqual(normalizeAutomaticDues(null), { enabled: false, description: 'Season dues', amountCents: 0, dueDate: null })
+    assert.deepEqual(normalizeAutomaticDues({ enabled: 'yes' as never, description: '', amountCents: 1.5, dueDate: '2027-02-30' }),
+        { enabled: false, description: 'Season dues', amountCents: 0, dueDate: null })
+
+    assert.equal(automaticDuesSummary({ enabled: true, description: 'Season dues', amountCents: 15000 }),
+        'Automatic dues are on: every player who signs in gets $150.00 “Season dues”.')
+    assert.equal(automaticDuesSummary({ enabled: false, description: 'Season dues', amountCents: 15000 }),
+        'Automatic dues are off. Nobody new gets dues automatically.')
+
+    assert.equal(canRemoveDues({ paidCents: 0, pendingCheckoutCents: 0 }), true)
+    assert.equal(canRemoveDues({ paidCents: 100, pendingCheckoutCents: 0 }), false)
+    assert.equal(canRemoveDues({ paidCents: 0, pendingCheckoutCents: 5000 }), false)
+})
+
+test('automatic dues and remove: client routes and write outcomes', async () => {
+    const calls: { url: string; method?: string; body?: unknown }[] = []
+    const fetch: FetchLike = async (url, init) => {
+        calls.push({ url, method: init?.method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+        return init?.method === 'DELETE' ? new Response(null, { status: 204 }) : new Response('{}', { status: 200 })
+    }
+    const api = new ClaymoresApiClient({ baseUrl: 'https://api.example.com', fetch }).withAccessToken('t')
+    await api.getAutomaticDues()
+    await api.saveAutomaticDues({ enabled: true, description: 'Season dues', amountCents: 15000, dueDate: null })
+    const removed = await api.removeDues('a/1')
+    assert.deepEqual(removed, { ok: true, status: 204, data: null })
+    assert.deepEqual(calls, [
+        { url: 'https://api.example.com/v1/admin/dues/automatic', method: 'GET', body: undefined },
+        { url: 'https://api.example.com/v1/admin/dues/automatic', method: 'PUT', body: { enabled: true, description: 'Season dues', amountCents: 15000, dueDate: null } },
+        { url: 'https://api.example.com/v1/admin/dues/a%2F1', method: 'DELETE', body: undefined },
+    ])
+
+    const blocked = duesWriteOutcome(fail(409, 'This item has payments or a card checkout in progress, so it can’t be removed.'), 'remove')
+    assert.equal(blocked.kind === 'error' && blocked.message, 'This item has payments or a card checkout in progress, so it can’t be removed.')
+    const blockedNoText = duesWriteOutcome(fail(409), 'remove')
+    assert.equal(blockedNoText.kind === 'error' && blockedNoText.message, 'This item has payments or a card checkout in progress, so it can’t be removed.')
+    const gone = duesWriteOutcome(fail(404), 'remove')
+    assert.equal(gone.kind === 'error' && gone.message, 'That dues item wasn’t found. It may already have been removed. Refresh the page.')
+    const off = duesWriteOutcome(fail(404), 'automatic')
+    assert.equal(off.kind === 'error' && off.message, 'Dues are switched off on the club server.')
+    const invalid = duesWriteOutcome(fail(400, 'Description must be 1-120 characters.'), 'automatic')
+    assert.equal(invalid.kind === 'error' && invalid.message, 'Description must be 1-120 characters.')
+    const down = duesWriteOutcome(fail(503), 'remove')
+    assert.equal(down.kind === 'error' && down.message, 'The club server didn’t respond. Try again in a minute.')
+})

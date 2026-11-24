@@ -1,10 +1,26 @@
 'use client'
 
-import { useActionState, useId, useRef } from 'react'
+import { useActionState, useEffect, useId, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { assignDues, recordDuesPayment, type AssignDuesState, type RecordPaymentState } from './actions'
+import {
+    assignDues,
+    recordDuesPayment,
+    removeDues,
+    saveAutomaticDues,
+    type AssignDuesState,
+    type AutomaticDuesState,
+    type RecordPaymentState,
+    type RemoveDuesState,
+} from './actions'
 import { ctaClass, inputClass, labelClass, Notice } from '@/components/members/member-ui'
-import { ALL_MEMBERS, DEFAULT_DUES_DESCRIPTION, DUES_LIMITS, MANUAL_PAYMENT_METHODS } from '@/lib/claymores/admin-dues'
+import {
+    ALL_MEMBERS,
+    centsToDollarsInput,
+    DEFAULT_DUES_DESCRIPTION,
+    DUES_LIMITS,
+    MANUAL_PAYMENT_METHODS,
+} from '@/lib/claymores/admin-dues'
+import type { AutomaticDues } from '@/lib/claymores/api-client'
 
 const selectClass = `${inputClass} pr-8`
 
@@ -22,11 +38,12 @@ function SubmitButton({ label, busy, disabled }: { label: string; busy: string; 
     )
 }
 
-function DollarInput({ id, defaultValue, describedBy, inputRef }: {
+function DollarInput({ id, defaultValue, describedBy, inputRef, required = true }: {
     id: string
     defaultValue?: string
     describedBy?: string
     inputRef?: React.Ref<HTMLInputElement>
+    required?: boolean
 }) {
     return (
         <div className="relative mt-1">
@@ -37,7 +54,7 @@ function DollarInput({ id, defaultValue, describedBy, inputRef }: {
                 name="amount"
                 inputMode="decimal"
                 autoComplete="off"
-                required
+                required={required}
                 maxLength={20}
                 defaultValue={defaultValue}
                 aria-describedby={describedBy}
@@ -198,6 +215,144 @@ export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, 
             </div>
             <SubmitButton label="Record payment" busy="Recording…" />
             <Outcome state={state} />
+        </form>
+    )
+}
+
+/**
+ * "Automatic dues for new players": the setting the API applies to every player who signs in
+ * or opens their dues. The hidden saved* fields let the admin switch it off with the amount
+ * blank without the save failing (see parseAutomaticDuesForm).
+ */
+export function AutomaticDuesForm({ saved }: { saved: AutomaticDues }) {
+    const [state, action] = useActionState<AutomaticDuesState, FormData>(saveAutomaticDues, { status: 'idle', message: null })
+    const id = useId()
+    const values = state.status === 'error' ? state.values : undefined
+    const savedAmount = saved.amountCents > 0 ? centsToDollarsInput(saved.amountCents) : ''
+
+    return (
+        <form action={action} className="space-y-4 rounded-lg bg-[#fafafa] p-4" aria-describedby={`${id}-help`}>
+            <input type="hidden" name="savedAmountCents" value={saved.amountCents} />
+            <input type="hidden" name="savedDescription" value={saved.description} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-[#111111]">
+                    <input
+                        type="checkbox"
+                        name="enabled"
+                        defaultChecked={values?.enabled ?? saved.enabled}
+                        className="h-4 w-4 accent-[#77c3ef]"
+                    />
+                    Assign automatically
+                </label>
+                <span
+                    className={
+                        saved.enabled
+                            ? 'rounded-full bg-[#77c3ef]/15 px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
+                            : 'rounded-full bg-[#EAEAEA] px-3 py-1 text-xs font-semibold text-[#555555]'
+                    }
+                >
+                    {saved.enabled ? 'On' : 'Off'}
+                </span>
+            </div>
+            <p id={`${id}-help`} className="text-sm text-[#555555]">
+                Every player who signs in gets these dues unless you remove them. Admins aren’t included. Existing players
+                get them the next time they sign in or open their dues; use “Everyone who has signed in” to assign them now.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                    <label htmlFor={`${id}-description`} className={labelClass}>Description</label>
+                    <input
+                        id={`${id}-description`}
+                        name="description"
+                        maxLength={DUES_LIMITS.description}
+                        defaultValue={values?.description ?? (saved.description || DEFAULT_DUES_DESCRIPTION)}
+                        className={`${inputClass} mt-1`}
+                    />
+                </div>
+                <div>
+                    <label htmlFor={`${id}-amount`} className={labelClass}>Amount (USD)</label>
+                    <DollarInput id={`${id}-amount`} required={false} defaultValue={values?.amount ?? savedAmount} />
+                </div>
+                <div>
+                    <label htmlFor={`${id}-due`} className={labelClass}>
+                        Due date <span className="font-normal text-[#555555]">(optional)</span>
+                    </label>
+                    <input
+                        id={`${id}-due`}
+                        name="dueDate"
+                        type="date"
+                        defaultValue={values?.dueDate ?? saved.dueDate ?? ''}
+                        className={`${inputClass} mt-1`}
+                    />
+                </div>
+            </div>
+            <SubmitButton label="Save" busy="Saving…" />
+            <Outcome state={state} />
+        </form>
+    )
+}
+
+const dangerClass =
+    'inline-flex items-center justify-center rounded-md border border-[#fd80b5] px-4 py-2 text-sm font-semibold text-[#b02a64] transition-colors hover:bg-[#fd80b5] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] disabled:cursor-not-allowed disabled:opacity-60'
+const quietClass =
+    'inline-flex items-center justify-center rounded-md border border-[#EAEAEA] px-4 py-2 text-sm font-semibold text-[#555555] transition-colors hover:border-[#111111] hover:text-[#111111] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] disabled:opacity-60'
+
+function ConfirmRemoveButton() {
+    const { pending } = useFormStatus()
+    return (
+        <button type="submit" className={dangerClass} disabled={pending} aria-disabled={pending}>
+            {pending ? 'Removing…' : 'Yes, remove'}
+        </button>
+    )
+}
+
+/**
+ * Two-step "Remove" for a dues item with nothing paid and no checkout in progress.
+ * Success redirects with a page-level notice (the row is gone); errors show inline.
+ */
+export function RemoveDuesButton({ assessmentId, context }: { assessmentId: string; context: string }) {
+    const [state, action] = useActionState<RemoveDuesState, FormData>(removeDues, { status: 'idle', message: null })
+    const [confirming, setConfirming] = useState(false)
+    const confirmRef = useRef<HTMLDivElement>(null)
+    const removeRef = useRef<HTMLButtonElement>(null)
+    const id = useId()
+
+    useEffect(() => {
+        if (confirming) confirmRef.current?.querySelector<HTMLButtonElement>('button[type="submit"]')?.focus()
+    }, [confirming])
+
+    return (
+        <form action={action} className="space-y-3" aria-label={`Remove dues for ${context}`}>
+            <input type="hidden" name="assessmentId" value={assessmentId} />
+            {confirming ? (
+                <div ref={confirmRef} role="group" aria-labelledby={`${id}-confirm`} className="space-y-3 rounded-lg border border-[#fd80b5] bg-[#fd80b5]/5 p-4">
+                    <p id={`${id}-confirm`} className="text-sm text-[#111111]">
+                        <span className="font-semibold">Remove these dues?</span>{' '}
+                        <span className="text-[#555555]">Removed dues won’t be assigned again automatically.</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        <ConfirmRemoveButton />
+                        <button
+                            type="button"
+                            className={quietClass}
+                            onClick={() => {
+                                setConfirming(false)
+                                requestAnimationFrame(() => removeRef.current?.focus())
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                    <button ref={removeRef} type="button" className={dangerClass} onClick={() => setConfirming(true)}>
+                        Remove
+                    </button>
+                    <span className="text-xs text-[#555555]">Nothing has been paid on this item, so it can be removed.</span>
+                </div>
+            )}
+            {state.status === 'error' && state.message && <Notice tone="error" title={state.message} />}
         </form>
     )
 }

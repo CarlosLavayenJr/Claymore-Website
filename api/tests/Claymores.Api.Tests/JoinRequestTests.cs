@@ -591,7 +591,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     {
         database.SkipIfUnavailable();
         await using (var data = database.CreateDataSource())
-        await using (var clean = data.CreateCommand("DELETE FROM dues_payments; DELETE FROM dues_checkouts; DELETE FROM dues_assessments; DELETE FROM club_members;"))
+        await using (var clean = data.CreateCommand("DELETE FROM dues_payments; DELETE FROM dues_checkouts; DELETE FROM dues_assessments; DELETE FROM club_members; DELETE FROM dues_auto_assign;"))
             await clean.ExecuteNonQueryAsync(Ct);
         var admin = await AdminTokenAsync("bulkadmin@example.com");
         await InviteAsync("bulkplayer@example.com", "player");
@@ -628,6 +628,100 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         var forced = await AssignAll(new { batchId = Guid.NewGuid(), description = "Season dues", amountCents = 10000, skipExisting = false });
         Assert.Equal(2, forced.GetProperty("created").GetInt32());
         Assert.Equal(4, await Count());
+    }
+
+    [Fact]
+    public async Task Players_get_automatic_dues_once_and_removed_ones_stay_removed()
+    {
+        database.SkipIfUnavailable();
+        async Task Sql(string sql)
+        {
+            await using var data = database.CreateDataSource();
+            await using var command = data.CreateCommand(sql);
+            await command.ExecuteNonQueryAsync(Ct);
+        }
+        async Task<long> Count(string subject)
+        {
+            await using var data = database.CreateDataSource();
+            await using var command = data.CreateCommand(
+                "SELECT count(*) FROM dues_assessments WHERE player_subject = @s AND removed_at IS NULL");
+            command.Parameters.AddWithValue("s", subject);
+            return (long)(await command.ExecuteScalarAsync(Ct))!;
+        }
+        async Task<string> SignIn(string subject, string email)
+        {
+            var response = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+                new { idToken = FakeGoogleValidator.Token(subject, email) }, Ct);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
+            return json.RootElement.GetProperty("accessToken").GetString()!;
+        }
+        await Sql("DELETE FROM dues_payments; DELETE FROM dues_checkouts; DELETE FROM dues_assessments; DELETE FROM dues_auto_assign;");
+        var admin = await AdminTokenAsync("autoadmin@example.com");
+
+        // Off by default: nothing is assigned.
+        var off = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/dues/automatic", admin), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"enabled\":false", off);
+        await InviteAsync("auto1@example.com", "player");
+        await SignIn("sub-auto1", "auto1@example.com");
+        Assert.Equal(0, await Count("sub-auto1"));
+
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/admin/dues/automatic", admin,
+            new { enabled = true, description = " Season dues ", amountCents = 12000, dueDate = "2027-02-01" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/admin/dues/automatic", admin,
+            new { enabled = true, description = "", amountCents = 12000 }), Ct)).StatusCode);
+
+        // A new player signing in gets them once, however often they sign in or open their dues.
+        await InviteAsync("auto2@example.com", "player");
+        var player = await SignIn("sub-auto2", "auto2@example.com");
+        await SignIn("sub-auto2", "auto2@example.com");
+        Assert.Equal(1, await Count("sub-auto2"));
+        var mine = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/dues/mine", player), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"amountCents\":12000", mine);
+        Assert.Equal(1, await Count("sub-auto2"));
+        // An existing player gets them when they open their dues, without signing in again.
+        var existing = await SignIn("sub-auto1", "auto1@example.com"); // signs in: assigned now
+        Assert.Equal(1, await Count("sub-auto1"));
+        // Admins are not included.
+        Assert.Equal(0, await Count("sub-autoadmin@example.com"));
+        await SignIn("sub-autoadmin@example.com", "autoadmin@example.com");
+        Assert.Equal(0, await Count("sub-autoadmin@example.com"));
+
+        // An admin removes them: gone from the list, and never re-added by sign-in or "everyone".
+        await using (var data = database.CreateDataSource())
+        await using (var q = data.CreateCommand("SELECT id FROM dues_assessments WHERE player_subject = 'sub-auto2'"))
+        {
+            var id = (Guid)(await q.ExecuteScalarAsync(Ct))!;
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/dues/{id}", admin), Ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound,
+                (await Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/dues/{id}", admin), Ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/dues/{id}", player), Ct)).StatusCode);
+        }
+        await SignIn("sub-auto2", "auto2@example.com");
+        await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/dues/mine", player), Ct);
+        Assert.Equal(0, await Count("sub-auto2"));
+        Assert.DoesNotContain("12000", await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/dues/mine", player), Ct))
+            .Content.ReadAsStringAsync(Ct));
+        var everyone = await (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues/all-members", admin,
+            new { batchId = Guid.NewGuid(), description = "Season dues", amountCents = 12000 }), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Equal(0, await Count("sub-auto2"));
+        Assert.Contains("\"skipped\":", everyone);
+        Assert.Equal(1, await Count("sub-auto1")); // already had them: skipped, not doubled
+
+        // Dues with a payment can't be removed.
+        await using (var data = database.CreateDataSource())
+        await using (var q = data.CreateCommand("SELECT id FROM dues_assessments WHERE player_subject = 'sub-auto1' AND removed_at IS NULL"))
+        {
+            var id = (Guid)(await q.ExecuteScalarAsync(Ct))!;
+            Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{id}/payments", admin,
+                new { id = Guid.NewGuid(), amountCents = 1000, method = "cash" }), Ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/dues/{id}", admin), Ct)).StatusCode);
+        }
+        _ = existing;
+        await Sql("DELETE FROM dues_auto_assign;"); // leave automatic dues off for the other tests
     }
 
     [Fact]

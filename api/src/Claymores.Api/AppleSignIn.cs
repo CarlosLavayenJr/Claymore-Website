@@ -44,6 +44,8 @@ internal static class AppleSignIn
                 // Apple only sends the name on the first authorization: keep the stored one otherwise.
                 var name = await directory.ObserveSignInAsync(member, ct, keepExistingName: true);
                 member = member with { Name = name };
+                if (context.RequestServices.GetService<AutomaticDues>() is { } automatic)
+                    await automatic.EnsureAsync(member.Subject, role, ct);
                 var refresh = await sessions.StartAsync(member, ct);
                 return Results.Ok(tokens.Issue(member, role, refresh));
             })

@@ -64,6 +64,25 @@ export type NewDuesForAllMembers = {
 
 export type AssignAllResult = { created: number; skipped: number; members: number }
 
+/**
+ * Dues every player gets when they sign in or open their dues (GET/PUT /v1/admin/dues/automatic).
+ * Never set: `{ enabled: false, description: "Season dues", amountCents: 0, dueDate: null }`.
+ */
+export type AutomaticDues = {
+    enabled: boolean
+    description: string
+    amountCents: number
+    dueDate: string | null
+}
+
+/** PUT body: description 1-120 characters, amountCents > 0, dueDate YYYY-MM-DD or null. */
+export type AutomaticDuesInput = {
+    enabled: boolean
+    description: string
+    amountCents: number
+    dueDate: string | null
+}
+
 export type NewDuesAssessment = {
     /** Client-generated idempotency key; reuse it (with the identical body) on retry. */
     id: string
@@ -276,6 +295,25 @@ export class ClaymoresApiClient {
 
     assignDuesToAllMembers(input: NewDuesForAllMembers) {
         return this.request<AssignAllResult>('POST', '/v1/admin/dues/all-members', input)
+    }
+
+    /** The automatic dues setting. 404 when dues are switched off in the API. */
+    getAutomaticDues() {
+        return this.request<AutomaticDues>('GET', '/v1/admin/dues/automatic')
+    }
+
+    /** Saves the automatic dues setting; 200 with the saved setting, 400 `{ error }` when invalid. */
+    saveAutomaticDues(input: AutomaticDuesInput) {
+        return this.request<AutomaticDues>('PUT', '/v1/admin/dues/automatic', input)
+    }
+
+    /**
+     * Removes a dues item with no payments and no card checkout in progress. 204 on success,
+     * 404 when it's gone, 409 `{ error }` when it has payments or a checkout. Removed dues are
+     * never assigned again automatically.
+     */
+    removeDues(id: string) {
+        return this.request<null>('DELETE', `/v1/admin/dues/${encodeURIComponent(id)}`)
     }
 
     /** Records a cash/Venmo/Zelle/check/other payment. Idempotent on `input.id`. */

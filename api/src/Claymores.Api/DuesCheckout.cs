@@ -157,8 +157,10 @@ internal sealed class DuesCheckout(
         }
         catch (StripeException error)
         {
-            logger.LogWarning("Stripe {Mode} checkout request failed with status {Status} for attempt {Attempt}.",
-                settings.ModeName, error.HttpStatusCode, attempt.Id);
+            // Stripe's error code, parameter and message say what to fix (no secrets in them).
+            logger.LogWarning("Stripe {Mode} checkout request failed with status {Status} for attempt {Attempt}: " +
+                "{Code} {Param} {Message}", settings.ModeName, error.HttpStatusCode, attempt.Id,
+                error.StripeError?.Code, error.StripeError?.Param, error.StripeError?.Message ?? error.Message);
             return CheckoutOutcome.Failed(502, settings.Mode == StripeMode.Live
                 ? "Checkout is temporarily unavailable. Try again to resume the same payment."
                 : "Test checkout is temporarily unavailable. Try again to resume the same payment.");
