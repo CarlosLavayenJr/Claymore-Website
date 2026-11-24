@@ -2,15 +2,23 @@ using System.Text.Json;
 using Npgsql;
 using NpgsqlTypes;
 
-public sealed class FixtureDatabase(NpgsqlDataSource dataSource)
+/// <param name="readSource">
+/// Which rows the public endpoints serve: 'sanity' (imported with --import-fixtures, the default)
+/// or 'scraper' (written by the rugbyfl.com scraper). Set Fixtures:Source=scraper at cutover.
+/// </param>
+public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSource = FixtureDatabase.SanitySource)
 {
+    public const string SanitySource = "sanity";
+    public const string ScraperSource = "scraper";
+
     public async Task<JsonElement[]> ListAsync(int? season, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
             SELECT payload FROM fixtures
-            WHERE @season IS NULL OR season = @season
+            WHERE source = @source AND (@season IS NULL OR season = @season)
             ORDER BY fixture_date, sanity_id
             """);
+        command.Parameters.AddWithValue("source", readSource);
         command.Parameters.Add("season", NpgsqlDbType.Integer).Value = (object?)season ?? DBNull.Value;
         await using var reader = await command.ExecuteReaderAsync(ct);
         var fixtures = new List<JsonElement>();
@@ -22,8 +30,9 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource)
     public async Task<JsonElement> FindAsync(string id, CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand(
-            "SELECT payload FROM fixtures WHERE sanity_id = @id");
+            "SELECT payload FROM fixtures WHERE sanity_id = @id AND source = @source");
         command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("source", readSource);
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? reader.GetFieldValue<JsonElement>(0) : default;
     }

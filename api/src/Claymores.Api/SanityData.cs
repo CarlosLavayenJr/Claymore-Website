@@ -59,6 +59,13 @@ public sealed class SanityData(HttpClient client)
             }
             """, null, ct);
 
+    public Task<JsonElement> ChampionshipAsync(CancellationToken ct) =>
+        QueryAsync("""
+            *[_type == "leagueChampionship" && _id == "leagueChampionship"][0] {
+              active, championshipId, seasonLabel, divisionName, lastScrapedAt, lastScrapeStatus
+            }
+            """, null, ct);
+
     public Task<JsonElement> TeamsAsync(CancellationToken ct) =>
         QueryAsync("""
             *[_type == "team"] | order(name asc, _id asc) {
