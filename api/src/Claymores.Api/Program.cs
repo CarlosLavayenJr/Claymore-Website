@@ -125,9 +125,11 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 if (checkoutEnabled)
 {
     if (!duesEnabled)
-        throw new InvalidOperationException("Enable dues before enabling Stripe test checkout.");
+        throw new InvalidOperationException("Enable dues before enabling Stripe checkout.");
 
-    var checkoutSettings = CheckoutSettings.Read(builder.Configuration);
+    // Fails fast on a key that doesn't match Stripe:Mode, live mode outside Production or without
+    // Stripe:LiveConfirmed=true, and invalid return URLs.
+    var checkoutSettings = CheckoutSettings.Read(builder.Configuration, builder.Environment.EnvironmentName);
     if (mobileAuthEnabled && checkoutSettings.AppReturnUrl is null)
         throw new InvalidOperationException("Set Stripe:AppReturnUrl (for example claymores://dues) for app checkout.");
     builder.Services.AddSingleton(checkoutSettings);

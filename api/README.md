@@ -204,6 +204,16 @@ With checkout and mobile sign-in both enabled, `POST /v1/dues/{id}/checkout-sess
 
 `Stripe:AppReturnUrl` is required when both features are on. It must be a custom scheme or HTTPS URL without a query. The amount must be from 50 to 99,999,999 cents and no more than the remaining balance (`409`). Another member's assessment is `404`. If the assessment already has a pending checkout, its session is resumed with the original amount, the same as the browser form. A request authenticated by the browser session cookie must be same-origin (`Sec-Fetch-Site: same-origin`); see [Same-origin rule](#same-origin-rule).
 
+#### Website checkout (`returnTo`)
+
+The body takes an optional `"returnTo"`: `"app"` (the default, so the app sends nothing new) or `"web"`. The website calls the same route server-side with the member's bearer token and `{"amountCents":2500,"returnTo":"web"}`; Stripe then returns to `Stripe:WebReturnUrl` with `checkout=returned` or `checkout=cancelled` appended, keeping any query the URL already has (`https://www.claymoresrfc.com/account?checkout=returned`).
+
+- Any other `returnTo` value is `400 {"error":"invalid_request","field":"returnTo"}`.
+- `"web"` without `Stripe:WebReturnUrl` configured is `400 {"error":"web_checkout_unavailable"}`.
+- `Stripe:WebReturnUrl` is checked at startup: an absolute HTTPS URL without user info or a fragment. HTTP is accepted only for a loopback host (`http://localhost:3000/account`) in Development.
+
+The return target is stored with the pending checkout (`dues_checkouts.return_to`) and is part of the Stripe idempotency key (`claymores-dues-<mode>-<target>-<checkout id>`). **A pending checkout always returns where it was first started.** If the app starts a checkout and the website resumes it, the website gets the same open session's URL, and Stripe sends the player back to the app link afterwards (and vice versa; the account-page form behaves the same). If the original create's response was lost, the retry repeats it with the original target, so Stripe replays it instead of rejecting a reused key with different parameters. After the session completes or expires, the next checkout uses the new caller's target.
+
 These routes are outside the public CORS policy. Native apps don't need CORS. If the Flutter web build ever uses them, give its exact origin a separate CORS policy for these routes instead of adding it to `Cors:PublicOrigins`.
 
 In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres, builds `src/Claymores.Api`, imports fixtures (which also migrates), and starts the HTTPS Google and dues preview at `https://localhost:7057`.
@@ -381,7 +391,7 @@ For local testing, configure Google sign-in and a development Postgres database,
 | --- | --- | --- |
 | `GET /v1/dues/mine` | Player or admin | Lists the signed-in member's assessments |
 | `GET /v1/dues/mine/{id}` | Player or admin | Shows payment history for an assessment belonging to the signed-in member |
-| `POST /v1/dues/{id}/checkout-session` | Player or admin | Returns a Stripe test checkout URL for the app. See [App checkout](#app-checkout-and-the-claymores-link). |
+| `POST /v1/dues/{id}/checkout-session` | Player or admin | Returns a Stripe checkout URL for the app (default) or the website (`"returnTo":"web"`). See [App checkout](#app-checkout-and-the-claymores-link) and [Website checkout](#website-checkout-returnto). |
 
 Member routes accept the browser session cookie or, with mobile sign-in on, an API bearer token.
 | `GET /v1/admin/dues` | Admin | Lists club dues and balances |
@@ -418,7 +428,7 @@ Generate a new UUID for each new assessment or payment. Reuse the original UUID 
 
 ### Stripe test checkout
 
-The account page lets a player choose a partial or full USD amount and opens Stripe-hosted checkout. This integration accepts only test-mode credentials. Keep actual money out of this setup.
+The account page lets a player choose a partial or full USD amount and opens Stripe-hosted checkout. `Stripe:Mode` defaults to `test`, which accepts only test-mode credentials. Keep actual money out of this setup until the owner completes the [go-live checklist](#going-live-with-stripe).
 
 1. Enable Google sign-in, Postgres, and dues. Use a dedicated Stripe sandbox and its test secret key.
 2. Forward `checkout.session.completed` and `checkout.session.expired` to `https://localhost:7057/v1/webhooks/stripe` with the Stripe CLI. Set the webhook event API version to `2026-11-18.endive` to match the pinned Stripe SDK.
@@ -433,7 +443,37 @@ The account page lets a player choose a partial or full USD amount and opens Str
 
 The player can resume one pending checkout per assessment. The reserved amount reduces what an admin can manually credit. A signed paid event inserts one ledger entry, and a signed expiration releases the reservation. A browser return never records a payment.
 
-Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session_id, created_at FROM dues_checkouts WHERE status = 'pending';`. If a bound session stays pending, inspect the session in the Stripe test dashboard and replay the verified event. If a create attempt lost its response, retry from the account page to reuse its idempotency key. After 12 hours with no bound session, reconcile the attempt ID against Stripe before releasing the reservation. Do not clear a pending row solely because it is old. Payment credits can be matched to provider sessions through `dues_payments.checkout_id`. Refunds and live payment configuration are pending.
+Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session_id, created_at FROM dues_checkouts WHERE status = 'pending';`. If a bound session stays pending, inspect the session in the Stripe test dashboard and replay the verified event. If a create attempt lost its response, retry from the account page to reuse its idempotency key. After 12 hours with no bound session, reconcile the attempt ID against Stripe before releasing the reservation. Do not clear a pending row solely because it is old. Payment credits can be matched to provider sessions through `dues_payments.checkout_id`. Refunds are not supported.
+
+### Stripe mode
+
+`Stripe:Mode` is `test` (the default) or `live`. Startup fails with a clear message when the key and the mode don't match.
+
+| | `test` | `live` |
+| --- | --- | --- |
+| `Stripe:SecretKey` | `sk_test_` or `rk_test_` | `sk_live_` or `rk_live_` |
+| Also required | nothing | `ASPNETCORE_ENVIRONMENT=Production` **and** `Stripe:LiveConfirmed=true` |
+| Webhook events and sessions accepted | `livemode: false`, `cs_test_` IDs | `livemode: true`, `cs_live_` IDs |
+| Session metadata | `purpose=claymores-dues`, `mode=test` | `purpose=claymores-dues`, `mode=live` |
+| Product name on Stripe | Claymores RFC dues (test) | Claymores RFC dues |
+| `dues_payments.recorded_by` | `stripe-test` | `stripe` |
+| Idempotency key | `claymores-dues-test-<target>-<id>` | `claymores-dues-live-<target>-<id>` |
+| Account page copy | "Test checkout is enabled…", "Resume test payment" | "Pay by card…", "Resume payment" |
+
+Each pending checkout records the mode that created it (`dues_checkouts.stripe_mode`); a webhook never applies to a row from the other mode. Rows created before this setting existed (purpose `claymores-test-dues`, key `claymores-dues-test-<id>`, no stored mode or target) are treated as test rows: in test mode the webhook still completes or expires them, and an unbound one is resumed with its original key and metadata.
+
+### Going live with Stripe
+
+**Nothing charges real cards until the owner does all of the following.** The code in this repository and `render.yaml` stay in test mode.
+
+1. Activate the Stripe account (business details, bank account for payouts) in the Stripe dashboard.
+2. Reconcile pending test checkouts first: `SELECT id, stripe_session_id FROM dues_checkouts WHERE status = 'pending';` should be empty (wait for them to expire, or let the test webhook deliver). A test row still pending after the switch blocks new checkouts for that assessment with `409` until reconciled.
+3. In live mode, add a webhook endpoint `https://<api>/v1/webhooks/stripe` (for example `https://claymores-api.onrender.com/v1/webhooks/stripe`) with the events `checkout.session.completed` and `checkout.session.expired`, using the event API version noted above.
+4. In the Render dashboard (never in `render.yaml` or the repository), the owner sets `Stripe__SecretKey` to the live `sk_live_` (or restricted `rk_live_`) key and `Stripe__WebhookSecret` to the live endpoint's `whsec_` secret.
+5. Set `Stripe__Mode=live` and `Stripe__LiveConfirmed=true` in the Render dashboard, alongside `Dues__Enabled=true`, `Stripe__CheckoutEnabled=true`, and `Stripe__ReturnOrigin`. `ASPNETCORE_ENVIRONMENT=Production` is already set by the Blueprint.
+6. Deploy, then make one small real payment, and confirm the ledger shows it with `recorded_by='stripe'`. The API has no refunds: a refund made in the Stripe dashboard does not change the ledger.
+
+To go back to test mode, remove `Stripe__Mode` and `Stripe__LiveConfirmed` and restore the test key and test webhook secret.
 
 ## Project map
 
@@ -460,7 +500,7 @@ All paths are under [`src/Claymores.Api`](src/Claymores.Api).
 | `MobileAuth.cs` | App sign-in: Google ID-token check, API access tokens, rotating refresh tokens |
 | `DuesAdminPage.cs` | Treasurer interface and payment history |
 | `DuesLedger.cs` | Role-gated dues endpoints and transactional payment ledger |
-| `DuesCheckout.cs` | Test checkout and signed Stripe webhooks |
+| `DuesCheckout.cs` | Stripe checkout (test or live per `Stripe:Mode`), return targets, and signed webhooks |
 | `DuesCheckoutStore.cs` | Durable reservations, payment credits, and expiration |
 | `JoinRequests.cs` | Request to join: app endpoints, admin decisions, rate limit, and the `/auth/admin/join-requests` page |
 | `SameOriginGuard.cs` | The same-origin check for cookie-authenticated writes |
@@ -538,6 +578,6 @@ Notes:
 - **Neon instead of Render Postgres:** delete the `databases` block and the `fromDatabase` entry, and set `DATABASE_URL` to the Neon URL as a secret.
 - **HTTPS:** Render terminates TLS. Because `RENDER=true` is set on Render, the API trusts `X-Forwarded-Proto`, so the Google redirect uses `https` and the session cookie stays Secure. Set `ForwardedHeaders__Enabled=true` on any other host behind a TLS proxy, and only there. HSTS is sent outside Development.
 - **Restarts:** the sign-in key ring is stored in the `data_protection_keys` table, so members stay signed in across deploys and restarts.
-- **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. Checkout only accepts Stripe test keys.
+- **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. `Stripe__Mode` defaults to `test`, which only accepts Stripe test keys; see [Going live with Stripe](#going-live-with-stripe). The Blueprint presets `Stripe__WebReturnUrl=https://www.claymoresrfc.com/account` for website checkout; it has no effect while checkout is off.
 - **Mobile sign-in:** Render generates `Authentication__Tokens__SigningKey`. Enter the iOS client ID for `Authentication__Google__MobileClientIds__0`. `Authentication__Apple__ClientIds__0` is preset to the bundle ID for Sign in with Apple. Then set `MobileAuth__Enabled=true` when the app is ready. With checkout on as well, also set `Stripe__AppReturnUrl=claymores://dues`.
 - **Running the container elsewhere:** from this folder, run `docker build -t claymores-api .` and then `docker run -p 8080:8080 -e DATABASE_URL=... claymores-api`.

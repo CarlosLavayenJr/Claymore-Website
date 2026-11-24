@@ -45,36 +45,61 @@ internal sealed class FakeAppleValidator : IAppleIdentityTokenValidator
     }
 }
 
-/// <summary>Stands in for Stripe's Checkout Sessions API at the HTTP layer.</summary>
+/// <summary>
+/// Stands in for Stripe's Checkout Sessions API at the HTTP layer, including idempotency keys:
+/// a repeated key with the same parameters replays the first session, and with different
+/// parameters fails the way Stripe does.
+/// </summary>
 internal sealed class FakeStripe : HttpMessageHandler
 {
     private readonly ConcurrentDictionary<string, string> _sessions = new();
+    private readonly ConcurrentDictionary<string, (string Body, string Json)> _idempotent = new();
     public ConcurrentQueue<Dictionary<string, string>> Creates { get; } = new();
+    public ConcurrentQueue<string> IdempotencyKeys { get; } = new();
+
+    /// <summary>Process creates but answer 500, as if the response were lost.</summary>
+    public bool DropResponses { get; set; }
+
+    public int SessionCount => _sessions.Count;
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var path = request.RequestUri!.AbsolutePath;
         if (request.Method == HttpMethod.Post && path == "/v1/checkout/sessions")
         {
-            var form = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(ct))
-                .ToDictionary(pair => pair.Key, pair => pair.Value.ToString());
+            var body = await request.Content!.ReadAsStringAsync(ct);
+            var key = request.Headers.TryGetValues("Idempotency-Key", out var keys) ? keys.Single() : Guid.NewGuid().ToString();
+            IdempotencyKeys.Enqueue(key);
+            if (_idempotent.TryGetValue(key, out var earlier))
+            {
+                if (earlier.Body != body)
+                    return Error(HttpStatusCode.BadRequest, "idempotency_error",
+                        "Keys for idempotent requests can only be used with the same parameters they were first used with.");
+                return DropResponses ? Error(HttpStatusCode.InternalServerError, "api_error", "Lost") : Json(earlier.Json);
+            }
+
+            var form = QueryHelpers.ParseQuery(body).ToDictionary(pair => pair.Key, pair => pair.Value.ToString());
             Creates.Enqueue(form);
-            var id = "cs_test_" + Guid.NewGuid().ToString("N");
+            var live = request.Headers.Authorization?.Parameter?.StartsWith("sk_live_", StringComparison.Ordinal) == true;
+            var id = (live ? "cs_live_" : "cs_test_") + Guid.NewGuid().ToString("N");
             var json = JsonSerializer.Serialize(new Dictionary<string, object?>
             {
                 ["id"] = id,
                 ["object"] = "checkout.session",
-                ["livemode"] = false,
+                ["livemode"] = live,
                 ["mode"] = "payment",
                 ["currency"] = "usd",
                 ["amount_total"] = long.Parse(form["line_items[0][price_data][unit_amount]"]),
-                ["metadata"] = new Dictionary<string, string> { ["purpose"] = form["metadata[purpose]"] },
+                ["metadata"] = form.Where(pair => pair.Key.StartsWith("metadata[", StringComparison.Ordinal))
+                    .ToDictionary(pair => pair.Key["metadata[".Length..^1], pair => pair.Value),
                 ["client_reference_id"] = form["client_reference_id"],
                 ["status"] = "open",
+                ["success_url"] = form["success_url"],
                 ["url"] = $"https://checkout.stripe.com/c/pay/{id}",
             });
             _sessions[id] = json;
-            return Json(json);
+            _idempotent[key] = (body, json);
+            return DropResponses ? Error(HttpStatusCode.InternalServerError, "api_error", "Lost") : Json(json);
         }
         if (request.Method == HttpMethod.Get && path.StartsWith("/v1/checkout/sessions/", StringComparison.Ordinal) &&
             _sessions.TryGetValue(path["/v1/checkout/sessions/".Length..], out var stored))
@@ -88,6 +113,13 @@ internal sealed class FakeStripe : HttpMessageHandler
 
     private static HttpResponseMessage Json(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+    private static HttpResponseMessage Error(HttpStatusCode status, string type, string message) =>
+        new(status)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new { error = new { type, message } }),
+                Encoding.UTF8, "application/json")
+        };
 }
 
 public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<PostgresDatabase>, IAsyncLifetime
@@ -419,6 +451,22 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
         var dueList = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/dues/mine", tokens.AccessToken), Ct);
         var assessment = Assert.Single((await dueList.Content.ReadFromJsonAsync<List<JsonElement>>(Ct))!);
         Assert.Equal(2500, assessment.GetProperty("pendingCheckoutCents").GetInt64());
+    }
+
+    [Fact]
+    public async Task Checkout_session_for_the_website_needs_a_configured_return_url()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("nowebpay@example.com");
+        var tokens = await SignInAsync("sub-nowebpay", "nowebpay@example.com");
+        var dues = await AssignDuesAsync("sub-nowebpay", 10000);
+
+        // This class configures no Stripe:WebReturnUrl.
+        var response = await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/dues/{dues}/checkout-session",
+            tokens.AccessToken, new { amountCents = 2500, returnTo = "web" }), Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("""{"error":"web_checkout_unavailable"}""", await response.Content.ReadAsStringAsync(Ct));
+        Assert.Empty(_stripe.Creates);
     }
 
     [Fact]
