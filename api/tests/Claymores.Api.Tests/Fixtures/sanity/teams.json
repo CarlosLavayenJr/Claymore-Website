@@ -1,0 +1,274 @@
+[
+ {
+  "aliases": [
+   "Brevard",
+   " Brevard Old Red Eye RFC"
+  ],
+  "city": "Brevard",
+  "description": null,
+  "id": "d5e8f65f-5eae-46ce-9451-83af8adf37a2",
+  "logoAlt": "Brevard Red Eyes",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/3e130bbc06669208c09dcb5b1429dc9ccf0d4844-559x632.jpg",
+  "name": "Brevard Red Eyes",
+  "slug": "brevard-red-eyes",
+  "updatedAt": "2026-05-12T15:05:13Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Claymores",
+   "IR/Claymores"
+  ],
+  "city": "Orlando",
+  "description": null,
+  "id": "1477e898-bc14-49e1-8ee1-b26a087ead57",
+  "logoAlt": "Central Florida Claymores",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/99bd3855af22a5c234bf0ac13dac921503f8eb96-594x1086.png",
+  "name": "Central Florida Claymores",
+  "slug": "central-florida-claymores",
+  "updatedAt": "2026-04-25T05:16:31Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Daytona",
+   "Daytona Beach Coconuts RFC"
+  ],
+  "city": "Daytona",
+  "description": null,
+  "id": "59cc29f6-7a7e-4cd5-899b-8b9b633da720",
+  "logoAlt": "Daytona Coconuts",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/ffef543cd4e7c48277fd36ad05dd63efac9627a2-500x500.webp",
+  "name": "Daytona Coconuts",
+  "slug": "daytona-coconuts",
+  "updatedAt": "2026-05-12T15:46:37Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Ft. Lauderdale",
+   "Fort Lauderdale",
+   "Ft. Lauderdale Knights RFC (D3)"
+  ],
+  "city": "Fort Lauderdale",
+  "description": null,
+  "id": "ce9891a4-22bf-4144-933b-acdb6946a4c8",
+  "logoAlt": "Fort Lauderdale RFC",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/e346c52a1310c42c940215bfc0ca2a695754e27f-500x525.webp",
+  "name": "Fort Lauderdale RFC",
+  "slug": "fort-lauderdale-rfc",
+  "updatedAt": "2026-05-12T15:04:46Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Gainesville"
+  ],
+  "city": "Gainesville",
+  "description": null,
+  "id": "acfa3c27-141c-41e2-b43e-ae3b11259c25",
+  "logoAlt": "Gainesville Hogs",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/f5863cfe88f107939b2952c2e179f8421adbe713-194x130.heif",
+  "name": "Gainesville Hogs",
+  "slug": "gainesville-hogs",
+  "updatedAt": "2026-04-25T05:16:15Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "HHIRFC"
+  ],
+  "city": null,
+  "description": null,
+  "id": "152f3999-b98c-4202-84b8-03c27724f763",
+  "logoAlt": "Hilton Head Island Rugby Football Club",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/86f8e0998ced83fd2c67728662cb0253d6863176-600x608.webp",
+  "name": "Hilton Head Island Rugby Football Club",
+  "slug": "hilton-head-island-rugby-football-club",
+  "updatedAt": "2026-04-25T05:19:18Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Jacksonville",
+   "Jacksonville D3",
+   "Jacksonville D4"
+  ],
+  "city": "Jacksonville",
+  "description": null,
+  "id": "7b646be7-9c3f-4c59-bcda-8c35eb3f3afa",
+  "logoAlt": "Jacksonville Rugby",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/9c3b6d8ef41e532b8b3b071d009e506f5d0fa0a3-130x130.gif",
+  "name": "Jacksonville Rugby",
+  "slug": "jacksonville-rugby",
+  "updatedAt": "2026-04-25T05:16:44Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Lakeland"
+  ],
+  "city": "Lakeland",
+  "description": null,
+  "id": "6721bfc9-892a-40a0-bb2f-7e323b408eee",
+  "logoAlt": "Lakeland Lancers RFC",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/10320850b0eff54abbb870e19a0e358c72076bf9-130x130.gif",
+  "name": "Lakeland Lancers",
+  "slug": "lakeland-lancers",
+  "updatedAt": "2026-04-25T05:04:09Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   " Hammerheads D4",
+   "SWFL Hammerheads RFC",
+   "SWFL Hammerheads RFC 2027"
+  ],
+  "city": "Naples",
+  "description": null,
+  "id": "5b90fc6a-c024-48c9-bd52-5d6079b4c89b",
+  "logoAlt": "Naples Hammerheads RFC",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/e399cd2b1103c496f6227805ee90366ac3dbda36-500x513.webp",
+  "name": "Naples Hammerheads",
+  "slug": "naples-hammerheads",
+  "updatedAt": "2026-10-21T15:11:18Z",
+  "website": "https://www.hammerheadrugby.com/"
+ },
+ {
+  "aliases": [
+   "Okapi"
+  ],
+  "city": "Okapi",
+  "description": null,
+  "id": "3fbc9a58-98f9-4546-9adc-5b0d60b68d25",
+  "logoAlt": "Okapi Wanderers",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/e12ba0b68f58ff3379b8a9d183ae628c131e64e7-130x130.gif",
+  "name": "Okapi Wanderers",
+  "slug": "okapi-wanderers",
+  "updatedAt": "2026-04-25T05:17:00Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Orlando D4",
+   "Orlando D3"
+  ],
+  "city": "Orlando",
+  "description": null,
+  "id": "cffdff52-cfb4-449b-8520-255fd6021c1a",
+  "logoAlt": "Orlando Griffins",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/999f6b6c21f9cc7669ff196c184505cad512463a-864x1152.png",
+  "name": "Orlando Griffins",
+  "slug": "orlando-griffins",
+  "updatedAt": "2026-04-25T05:15:56Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Orlando Otters",
+   "Orlando Otters 2026"
+  ],
+  "city": "Orlando",
+  "description": null,
+  "id": "1f90b247-2666-43bc-8544-d835cc7dac77",
+  "logoAlt": "Orlando Otters",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/7c9cf71cccd5fc498b6448eb27afcfc9387fc6c3-130x130.gif",
+  "name": "Orlando Otters",
+  "slug": "orlando-otters",
+  "updatedAt": "2026-04-25T05:04:29Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "\t Palm Beach Panthers RFC"
+  ],
+  "city": "Palm Beach",
+  "description": null,
+  "id": "6aa4dfb6-1154-4956-a015-e2e08728928b",
+  "logoAlt": "Palm Beach Panthers RFC",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/18abbd18a5cd3e4d0e65ea12aff7ac1e1de74fce-130x130.gif",
+  "name": "Palm Beach Panthers",
+  "slug": "palm-beach-panthers",
+  "updatedAt": "2026-05-12T17:07:46Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Sarasota",
+   "Sarasota Surge RFC"
+  ],
+  "city": "Sarasota",
+  "description": null,
+  "id": "d3e32444-7318-43f0-a869-603e06f04eb8",
+  "logoAlt": "Sarasota Rugby Club",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/d05d46a4533eca0f0caaa49f548e5c30a2a205ee-1024x1024.png",
+  "name": "Sarasota Rugby Club",
+  "slug": "sarasota-rugby-club",
+  "updatedAt": "2026-05-12T15:05:29Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Pelicans",
+   "Pelicans D3",
+   "Bay Area Pelican RFC (D3)",
+   " Pelicans D4",
+   "Bay Area Pelican RFC D3"
+  ],
+  "city": "St. Pete",
+  "description": null,
+  "id": "390bb4dd-bcdf-4697-8e26-ef2a2375ffa5",
+  "logoAlt": "St Pete",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/eecb948b877dd096d8a4e64f0bffc94bcd1ceea1-500x609.webp",
+  "name": "St Pete Pelicans",
+  "slug": "st-pete-pelicans",
+  "updatedAt": "2026-05-18T19:31:52Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Tallahassee",
+   "FSU B",
+   "FSU"
+  ],
+  "city": "Tallahassee",
+  "description": "FSU",
+  "id": "f5b6c903-9077-449a-aa9f-65b30a5d6503",
+  "logoAlt": "Tallahassee Rugby",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/b03ae064532066cafffe8bae42fa65d14825f553-1500x1500.png",
+  "name": "Tallahassee Rugby",
+  "slug": "tallahassee-rugby",
+  "updatedAt": "2026-04-25T05:15:15Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Tampa",
+   "Tampa Bay",
+   "Tampa D4"
+  ],
+  "city": "Tampa Bay",
+  "description": null,
+  "id": "339f5728-7ce5-47fc-af3a-1035fd517f43",
+  "logoAlt": "Tampa Bay Krewe",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/c1b49363878f88f99abf112d2d5c1428257e5fc5-244x207.png",
+  "name": "Tampa Bay Krewe",
+  "slug": "tampa-bay-krewe",
+  "updatedAt": "2026-05-12T15:54:04Z",
+  "website": null
+ },
+ {
+  "aliases": [
+   "Treasure Coast"
+  ],
+  "city": "Vero Beach",
+  "description": null,
+  "id": "33148464-c0f1-4c74-9651-88a55bdc7b39",
+  "logoAlt": "Treasure Coast Armada",
+  "logoUrl": "https://cdn.sanity.io/images/bw1seoll/production/9387deb2c2f2a6b7693af5be93ac2a6b2add9445-130x130.png",
+  "name": "Treasure Coast Armada",
+  "slug": "treasure-coast-armada",
+  "updatedAt": "2026-04-25T05:06:06Z",
+  "website": null
+ }
+]

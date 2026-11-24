@@ -24,33 +24,11 @@ public sealed record StoredFixture(
 /// <summary>Postgres reads and writes for the rugbyfl.com scraper (tables from sql/007_scraped_data.sql).</summary>
 public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
 {
-    // Refreshes the API payload of scraper rows from their typed columns, so the payload
-    // matches what GET /v1/fixtures returns for Sanity rows (same field names).
-    private const string RefreshPayloadSql = """
-        UPDATE fixtures f SET payload = jsonb_build_object(
-            'id', f.sanity_id,
-            'updatedAt', f.updated_at,
-            'date', to_char(f.fixture_date, 'YYYY-MM-DD'),
-            'season', f.season,
-            'homeTeam', f.home_team_raw,
-            'awayTeam', f.away_team_raw,
-            'homeScore', f.home_score,
-            'awayScore', f.away_score,
-            'status', f.status,
-            'venue', f.venue,
-            'kickoffTime', to_char(f.kickoff_time, 'FMHH12:MI AM'),
-            'note', f.note,
-            'matchType', f.match_type,
-            'competition', f.competition,
-            'recap', NULL,
-            'homeLogo', h.logo_url,
-            'awayLogo', a.logo_url,
-            'homeTeamSlug', h.slug,
-            'awayTeamSlug', a.slug,
-            'homeTeamCity', h.city,
-            'awayTeamCity', a.city)
-        FROM teams h, teams a
-        WHERE h.id = f.home_team_id AND a.id = f.away_team_id AND f.source = 'scraper'
+    // Refreshes the stored payload of scraper rows. The public endpoints build it at read time
+    // (FixtureDatabase.ScraperPayloadQuery); the stored copy is for SQL inspection and matches it.
+    private const string RefreshPayloadSql =
+        "UPDATE fixtures f SET payload = p.payload FROM (" + FixtureDatabase.ScraperPayloadQuery + """
+        ) p WHERE p.id = f.sanity_id AND f.source = 'scraper'
         """;
 
     public async Task<TeamNameResolver> LoadResolverAsync(CancellationToken ct)

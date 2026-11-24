@@ -26,6 +26,12 @@ services:
         value: Production
       - key: Cors__PublicOrigins__0
         value: https://www.claymoresrfc.com
+      # Serve scraped Postgres data (see api/README.md, Cutover). Standings seasons not yet in
+      # Postgres fall back to Sanity per request. Teams, players and practices still read Sanity.
+      - key: Fixtures__Source
+        value: scraper
+      - key: Standings__Source
+        value: postgres
       # Google sign-in. Leave both blank to run with public data only.
       - key: Authentication__Google__ClientId
         sync: false
@@ -46,8 +52,8 @@ services:
       - key: Authentication__Apple__ClientIds__0
         value: com.claymoresrfc.claymores
 
-  # rugbyfl.com scraper, shadow mode: writes Postgres only; public endpoints keep serving
-  # Sanity-imported fixtures until Fixtures__Source=scraper is set on the web service.
+  # rugbyfl.com scraper: writes Postgres only. The web service serves these rows
+  # (Fixtures__Source=scraper, Standings__Source=postgres above).
   # Same image as the API, run as a one-off command. Schedules are UTC and match vercel.json.
   - type: cron
     name: claymores-scrape-fixtures
