@@ -216,11 +216,12 @@ public sealed class ScrapeService(IRugbyFlSource source, ScrapeStore store, ILog
 }
 
 /// <summary>Parses the scraper's command-line switches.</summary>
-public sealed record ScraperCommand(string Name, FixtureScrapeRequest? Fixtures, StandingsScrapeRequest? Standings)
+public sealed record ScraperCommand(string Name, FixtureScrapeRequest? Fixtures, StandingsScrapeRequest? Standings,
+    IReadOnlyList<string>? FixtureIds = null)
 {
     public static readonly string[] Names =
         ["--scrape-fixtures", "--scrape-standings", "--compare-with-sanity", "--import-reference-data",
-            "--adopt-sanity-overrides"];
+            "--adopt-sanity-overrides", "--hide-fixtures"];
 
     public static bool IsScraperCommand(string[] args) => args.Length > 0 && Names.Contains(args[0]);
 
@@ -248,6 +249,13 @@ public sealed record ScraperCommand(string Name, FixtureScrapeRequest? Fixtures,
 
         switch (args[0])
         {
+            case "--hide-fixtures":
+                var ids = args.Skip(1).ToArray();
+                if (ids.Length == 0)
+                    throw new ArgumentException("--hide-fixtures needs one or more fixture IDs, e.g. rfl-2018-10-13-34-2.");
+                if (ids.FirstOrDefault(id => !System.Text.RegularExpressions.Regex.IsMatch(id, @"\A[a-z0-9-]{1,100}\z")) is { } bad)
+                    throw new ArgumentException($"{bad} is not a fixture ID.");
+                return new(args[0], null, null, ids.Distinct(StringComparer.Ordinal).ToArray());
             case "--scrape-fixtures":
                 int? seasonId = null;
                 if (Value("--season-id") is { } text)

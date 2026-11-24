@@ -370,6 +370,16 @@ public sealed class RugbyFlParserTests
 public sealed class ScraperCommandTests
 {
     [Fact]
+    public void Parses_hide_fixtures()
+    {
+        Assert.Equal(["rfl-2018-10-13-34-2", "rfl-2019-11-16-42-2"],
+            ScraperCommand.Parse(["--hide-fixtures", "rfl-2018-10-13-34-2", "rfl-2019-11-16-42-2", "rfl-2018-10-13-34-2"]).FixtureIds);
+        Assert.Throws<ArgumentException>(() => ScraperCommand.Parse(["--hide-fixtures"]));
+        Assert.Throws<ArgumentException>(() => ScraperCommand.Parse(["--hide-fixtures", "x'; drop"]));
+        Assert.Throws<ArgumentException>(() => ScraperCommand.Parse(["--hide-fixtures", "--all"]));
+    }
+
+    [Fact]
     public void Parses_fixture_options()
     {
         var single = ScraperCommand.Parse(["--scrape-fixtures"]).Fixtures!;

@@ -188,6 +188,28 @@ public sealed class ScraperPostgresTests(PostgresDatabase database) : IClassFixt
     }
 
     [Fact]
+    public async Task Hidden_fixtures_stay_hidden_when_rescraped()
+    {
+        database.SkipIfUnavailable();
+        var ct = TestContext.Current.CancellationToken;
+        _site.ClubPages[(117, 30)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, March 6, 2027", "Claymores", "Daytona (D3)"),
+            new ClubPageBuilder.Game("Saturday, March 13, 2027", "Claymores", "Lakeland"));
+        await ScrapeAsync(30);
+        var id = await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2027-03-13'");
+
+        var hidden = await new ScrapeStore(_dataSource!).HideFixturesAsync([id, "rfl-missing"], ct);
+        Assert.Equal([$"{id} 2027-03-13 Claymores vs Lakeland"], hidden);
+
+        await ScrapeAsync(30);
+        Assert.Equal("true true", await Scalar<string>(
+            "SELECT (retired_at IS NOT NULL) || ' ' || manual_override FROM fixtures WHERE fixture_date = '2027-03-13'"));
+        var listed = await new FixtureDatabase(_dataSource!, FixtureDatabase.ScraperSource).ListAsync(null, ct);
+        Assert.DoesNotContain(listed, fixture => fixture.GetProperty("id").GetString() == id);
+        Assert.Contains(listed, fixture => fixture.GetProperty("date").GetString() == "2027-03-06");
+    }
+
+    [Fact]
     public async Task Keeps_two_games_on_the_same_day()
     {
         database.SkipIfUnavailable();

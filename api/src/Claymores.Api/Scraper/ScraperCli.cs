@@ -55,6 +55,17 @@ public static class ScraperCli
                     Console.WriteLine("  SKIPPED " + reason);
                 return 0;
             }
+            case "--hide-fixtures":
+            {
+                // For games rugbyfl.com lists that never happened (deleted by hand in Sanity).
+                var hidden = await store.HideFixturesAsync(command.FixtureIds!, ct);
+                Console.WriteLine($"Hid and locked {hidden.Count} of {command.FixtureIds!.Count} fixtures.");
+                foreach (var line in hidden)
+                    Console.WriteLine("  " + line);
+                foreach (var missing in command.FixtureIds!.Where(id => !hidden.Any(line => line.StartsWith(id + " ", StringComparison.Ordinal))))
+                    Console.WriteLine("  NOT FOUND " + missing);
+                return 0;
+            }
             case "--compare-with-sanity":
             {
                 var sanity = services.GetRequiredService<SanityData>();

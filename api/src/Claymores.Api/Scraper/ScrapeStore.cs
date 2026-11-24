@@ -295,6 +295,28 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
         }
     }
 
+    /// <summary>
+    /// Hides scraper fixtures that never happened: retires them and sets manual_override, so later
+    /// scrapes neither update nor un-retire them. This is the API's equivalent of deleting the
+    /// match doc in Sanity Studio. To bring one back, clear both columns.
+    /// </summary>
+    /// <returns>"id date home vs away" for each row found.</returns>
+    public async Task<List<string>> HideFixturesAsync(IReadOnlyList<string> ids, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("""
+            UPDATE fixtures SET retired_at = COALESCE(retired_at, now()), manual_override = true, updated_at = now()
+            WHERE source = 'scraper' AND sanity_id = ANY(@ids)
+            RETURNING sanity_id, fixture_date, home_team_raw, away_team_raw
+            """);
+        command.Parameters.AddWithValue("ids", ids.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        var lines = new List<string>();
+        while (await reader.ReadAsync(ct))
+            lines.Add($"{reader.GetString(0)} {reader.GetFieldValue<DateOnly>(1):yyyy-MM-dd} {reader.GetString(2)} vs {reader.GetString(3)}");
+        lines.Sort(StringComparer.Ordinal);
+        return lines;
+    }
+
     /// <summary>Scraper rows that are not retired, for the Sanity comparison.</summary>
     public async Task<StoredFixture[]> ScrapedFixturesAsync(CancellationToken ct)
     {
