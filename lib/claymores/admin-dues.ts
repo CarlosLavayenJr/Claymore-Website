@@ -94,7 +94,17 @@ type FormLike = Pick<FormData, 'get'>
 const text = (form: FormLike, key: string) => String(form.get(key) ?? '').trim()
 
 /** What the admin typed, echoed back so a failed submit keeps its values (and a retry sends the identical body). */
-export type AssignDuesValues = { playerSubject: string; description: string; amount: string; dueDate: string }
+export type AssignDuesValues = { playerSubject: string; description: string; amount: string; dueDate: string; skipExisting: boolean }
+
+/** The player picker's value for "everyone who has signed in". */
+export const ALL_MEMBERS = '__all__'
+
+/** "Assigned to 12 members" / "skipped 2 who already had it" summary for an all-members assignment. */
+export function allMembersSummary(r: { created: number; skipped: number }, amount: string, description: string): string {
+    const who = (n: number) => `${n} member${n === 1 ? '' : 's'}`
+    const head = r.created === 0 ? `Nobody new to assign “${description}” to` : `Assigned ${amount} “${description}” to ${who(r.created)}`
+    return r.skipped > 0 ? `${head}; skipped ${who(r.skipped)} who already had it.` : `${head}.`
+}
 export type RecordPaymentValues = { amount: string; method: string; note: string }
 
 export type Parsed<T, V> =
@@ -107,10 +117,12 @@ export function parseAssignDuesForm(form: FormLike): Parsed<NewDuesAssessment, A
         description: text(form, 'description').slice(0, 500),
         amount: text(form, 'amount').slice(0, 20),
         dueDate: text(form, 'dueDate').slice(0, 20),
+        // Unchecked checkboxes are absent from form data; the form sends "on" when checked.
+        skipExisting: text(form, 'skipExisting') !== '',
     }
     const id = text(form, 'id')
     if (!isUuid(id)) return { ok: false, message: 'The form expired. Refresh the page and try again.', values }
-    if (!values.playerSubject) return { ok: false, message: 'Choose a player.', values }
+    if (!values.playerSubject) return { ok: false, message: 'Choose a player, or everyone.', values }
     if (!values.description) return { ok: false, message: 'Enter a description, like “Season dues”.', values }
     if (values.description.length > DUES_LIMITS.description) {
         return { ok: false, message: `Keep the description to ${DUES_LIMITS.description} characters or fewer.`, values }

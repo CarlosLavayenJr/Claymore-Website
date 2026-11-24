@@ -9,6 +9,16 @@ internal sealed record DuesAssessment(
 internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt, string? Method = null, string? Note = null);
 internal sealed record DuesDetail(DuesAssessment Assessment, IReadOnlyList<DuesPayment> Payments);
 internal sealed record CreateAssessment(Guid Id, string? PlayerSubject, string? Description, int AmountCents, DateOnly? DueDate);
+
+/// <summary>
+/// Assign the same dues to every member who has signed in. <paramref name="BatchId"/> makes it
+/// retry-safe: each member's assessment ID is derived from it, so resending the same request
+/// creates nothing new. With <paramref name="SkipExisting"/> (the default), members who already
+/// have dues with the same description are left out, so a second click doesn't bill twice.
+/// </summary>
+internal sealed record AssignToAll(Guid BatchId, string? Description, int AmountCents, DateOnly? DueDate, bool SkipExisting = true);
+
+internal sealed record AssignToAllResult(int Created, int Skipped, int Members);
 /// <param name="Method">How the club received it: cash, venmo, zelle, check or other (default other).</param>
 /// <param name="Note">Optional, up to 500 characters, shown to admins only.</param>
 internal sealed record RecordDuesPayment(Guid Id, int AmountCents, string? Method = null, string? Note = null)
@@ -97,6 +107,74 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         cmd.Parameters.Add("due_date", NpgsqlTypes.NpgsqlDbType.Date).Value =
             (object?)assessment.DueDate ?? DBNull.Value;
         return await cmd.ExecuteNonQueryAsync(ct) == 1;
+    }
+
+    /// <summary>The assessment ID for one member in a batch: a stable UUID from the batch and the member.</summary>
+    internal static Guid BatchAssessmentId(Guid batchId, string subject)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"claymores-dues-batch:{batchId:D}:{subject}"));
+        var bytes = hash.AsSpan(0, 16).ToArray();
+        bytes[7] = (byte)((bytes[7] & 0x0F) | 0x50); // version 5-style marker (little-endian Guid layout)
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80); // RFC 4122 variant
+        return new Guid(bytes);
+    }
+
+    /// <returns>Null when a member's derived ID is already used with different details (a changed retry).</returns>
+    public async Task<AssignToAllResult?> AssignToAllAsync(AssignToAll request, IReadOnlyList<string> subjects, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        int created = 0, skipped = 0;
+        foreach (var subject in subjects)
+        {
+            var id = BatchAssessmentId(request.BatchId, subject);
+            await using (var existing = new NpgsqlCommand("""
+                SELECT player_subject = @subject AND description = @description AND amount_cents = @amount
+                       AND due_date IS NOT DISTINCT FROM @due_date
+                FROM dues_assessments WHERE id = @id
+                """, connection, transaction))
+            {
+                Bind(existing.Parameters, id, subject);
+                if (await existing.ExecuteScalarAsync(ct) is bool same)
+                {
+                    if (!same) return null;
+                    created++; // a retry of this batch: already there
+                    continue;
+                }
+            }
+            if (request.SkipExisting)
+            {
+                await using var has = new NpgsqlCommand("""
+                    SELECT EXISTS (SELECT 1 FROM dues_assessments
+                                   WHERE player_subject = @subject AND lower(btrim(description)) = lower(@description))
+                    """, connection, transaction);
+                Bind(has.Parameters, id, subject);
+                if ((bool)(await has.ExecuteScalarAsync(ct))!)
+                {
+                    skipped++;
+                    continue;
+                }
+            }
+            await using var insert = new NpgsqlCommand("""
+                INSERT INTO dues_assessments (id, player_subject, description, amount_cents, due_date)
+                VALUES (@id, @subject, @description, @amount, @due_date)
+                """, connection, transaction);
+            Bind(insert.Parameters, id, subject);
+            await insert.ExecuteNonQueryAsync(ct);
+            created++;
+        }
+        await transaction.CommitAsync(ct);
+        return new(created, skipped, subjects.Count);
+
+        void Bind(NpgsqlParameterCollection p, Guid id, string subject)
+        {
+            p.AddWithValue("id", id);
+            p.AddWithValue("subject", subject);
+            p.AddWithValue("description", request.Description!);
+            p.AddWithValue("amount", request.AmountCents);
+            p.Add("due_date", NpgsqlTypes.NpgsqlDbType.Date).Value = (object?)request.DueDate ?? DBNull.Value;
+        }
     }
 
     public async Task<PaymentResult> RecordAsync(Guid assessmentId, RecordDuesPayment payment, string admin, CancellationToken ct)
@@ -200,6 +278,22 @@ internal static class DuesEndpoints
                 : Results.Conflict(new { error = "Assessment ID is already in use." });
         }).AddEndpointFilter(SameOrigin)
             .WithSummary("Assign dues to a member").Produces(201).Produces(400).Produces(401).Produces(403).Produces(409);
+        admin.MapPost("/all-members", async (AssignToAll request, DuesLedger ledger, ClubMemberDirectory members, CancellationToken ct) =>
+        {
+            var description = request.Description?.Trim();
+            if (request.BatchId == Guid.Empty || request.AmountCents <= 0 ||
+                description is null || description.Length is < 1 or > 120)
+                return Results.BadRequest(new { error = "Provide a batch ID, description, and positive amount in cents." });
+
+            var subjects = (await members.ListAsync(ct)).Select(m => m.Subject).Distinct(StringComparer.Ordinal).ToArray();
+            if (subjects.Length == 0)
+                return Results.Conflict(new { error = "No members have signed in yet." });
+            return await ledger.AssignToAllAsync(request with { Description = description }, subjects, ct) is { } result
+                ? Results.Ok(new { created = result.Created, skipped = result.Skipped, members = result.Members })
+                : Results.Conflict(new { error = "This batch ID was already used with different details." });
+        }).AddEndpointFilter(SameOrigin)
+            .WithSummary("Assign the same dues to every member who has signed in")
+            .Produces(200).Produces(400).Produces(401).Produces(403).Produces(409);
         admin.MapPost("/{id:guid}/payments", async (Guid id, RecordDuesPayment request, ClaimsPrincipal user, DuesLedger ledger, CancellationToken ct) =>
         {
             if (request.Id == Guid.Empty || request.AmountCents <= 0)

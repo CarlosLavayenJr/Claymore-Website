@@ -164,3 +164,21 @@ test('admin dues client calls hit the contract routes with the given bodies', as
         { url: 'https://api.example.com/v1/admin/dues/a-1/payments', method: 'POST', body: { id: ID, amountCents: 2500, method: 'cash', note: 'at practice' } },
     ])
 })
+
+test('assigning to everyone: summary text and the skip checkbox', async () => {
+    const { allMembersSummary, parseAssignDuesForm, ALL_MEMBERS } = await import('./admin-dues')
+    assert.equal(allMembersSummary({ created: 12, skipped: 0 }, '$100.00', 'Season dues'), 'Assigned $100.00 “Season dues” to 12 members.')
+    assert.equal(allMembersSummary({ created: 1, skipped: 2 }, '$100.00', 'Season dues'),
+        'Assigned $100.00 “Season dues” to 1 member; skipped 2 members who already had it.')
+    assert.equal(allMembersSummary({ created: 0, skipped: 3 }, '$100.00', 'Season dues'),
+        'Nobody new to assign “Season dues” to; skipped 3 members who already had it.')
+
+    const form = (entries: Record<string, string>) => ({ get: (k: string) => entries[k] ?? null })
+    const base = { id: '11111111-1111-4111-8111-111111111111', playerSubject: ALL_MEMBERS, description: 'Season dues', amount: '100' }
+    const checked = parseAssignDuesForm(form({ ...base, skipExisting: 'on' }))
+    assert.ok(checked.ok)
+    assert.equal(checked.values.skipExisting, true)
+    assert.equal(checked.ok && checked.value.playerSubject, ALL_MEMBERS)
+    const unchecked = parseAssignDuesForm(form(base))
+    assert.equal(unchecked.values.skipExisting, false)
+})

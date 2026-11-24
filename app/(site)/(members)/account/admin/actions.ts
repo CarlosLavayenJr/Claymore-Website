@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import {
+    ALL_MEMBERS,
+    allMembersSummary,
     duesWriteOutcome,
     isUuid,
     paymentMethodLabel,
@@ -12,7 +14,7 @@ import {
     type AssignDuesValues,
     type RecordPaymentValues,
 } from '@/lib/claymores/admin-dues'
-import { formatCents, type ApiResult, type Role } from '@/lib/claymores/api-client'
+import { formatCents, type ApiResult, type AssignAllResult, type Role } from '@/lib/claymores/api-client'
 import { memberApi } from '@/lib/claymores/member'
 
 const ADMIN = '/account/admin'
@@ -100,7 +102,12 @@ export async function assignDues(_previous: AssignDuesState, formData: FormData)
     const parsed = parseAssignDuesForm(formData)
     if (!parsed.ok) return { status: 'error', message: parsed.message, nextId: keepId(formData), values: parsed.values }
 
-    const outcome = duesWriteOutcome(await (await admin()).createDues(parsed.value), 'assign')
+    const toAll = parsed.value.playerSubject === ALL_MEMBERS
+    const { id, playerSubject: _player, ...dues } = parsed.value
+    const result = toAll
+        ? await (await admin()).assignDuesToAllMembers({ batchId: id, ...dues, skipExisting: parsed.values.skipExisting })
+        : await (await admin()).createDues(parsed.value)
+    const outcome = duesWriteOutcome(result, 'assign')
     if (outcome.kind === 'sign-in') redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
     if (outcome.kind === 'error') {
         return {
@@ -113,7 +120,9 @@ export async function assignDues(_previous: AssignDuesState, formData: FormData)
     revalidatePath(ADMIN)
     return {
         status: 'success',
-        message: `Assigned ${formatCents(parsed.value.amountCents)} “${parsed.value.description}”.`,
+        message: toAll && result.ok
+            ? allMembersSummary(result.data as AssignAllResult, formatCents(parsed.value.amountCents), parsed.value.description)
+            : `Assigned ${formatCents(parsed.value.amountCents)} “${parsed.value.description}”.`,
         nextId: randomUUID(),
     }
 }
