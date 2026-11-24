@@ -83,11 +83,25 @@ if (mobileAuthEnabled)
     MobileAuth.Configure(authentication, builder.Configuration);
 }
 
+var standingsSource = builder.Configuration["Standings:Source"] is { Length: > 0 } configuredStandings
+    ? configuredStandings : StandingsDatabase.SanitySource;
+if (standingsSource is not (StandingsDatabase.SanitySource or StandingsDatabase.PostgresSource))
+    throw new InvalidOperationException("Standings:Source must be 'sanity' or 'postgres'.");
+if (standingsSource == StandingsDatabase.PostgresSource && string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("Standings:Source=postgres requires a Postgres connection.");
+builder.Services.AddTransient(services => new StandingsReader(
+    services.GetRequiredService<SanityData>(),
+    services.GetRequiredService<ILogger<StandingsReader>>(),
+    services.GetService<StandingsDatabase>()));
+
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
+    if (standingsSource == StandingsDatabase.PostgresSource)
+        builder.Services.AddSingleton<StandingsDatabase>();
     builder.Services.AddSingleton<DatabaseMigrator>();
-    var fixtureSource = builder.Configuration["Fixtures:Source"] ?? FixtureDatabase.SanitySource;
+    var fixtureSource = builder.Configuration["Fixtures:Source"] is { Length: > 0 } configuredFixtures
+        ? configuredFixtures : FixtureDatabase.SanitySource;
     if (fixtureSource is not (FixtureDatabase.SanitySource or FixtureDatabase.ScraperSource))
         throw new InvalidOperationException("Fixtures:Source must be 'sanity' or 'scraper'.");
     builder.Services.AddSingleton(services =>
@@ -257,12 +271,12 @@ api.MapGet("/fixtures/{id}", async (string id, SanityData sanity, CancellationTo
     .ProducesProblem(StatusCodes.Status502BadGateway)
     .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
-api.MapGet("/standings", async (string? season, SanityData sanity, CancellationToken ct) =>
+api.MapGet("/standings", async (string? season, StandingsReader standingsReader, CancellationToken ct) =>
 {
     if (season is not null && !Regex.IsMatch(season, @"\A[0-9]{4}-[0-9]{4}\z"))
         return Results.BadRequest(new { error = "season must use YYYY-YYYY." });
 
-    var standings = await sanity.StandingsAsync(season, ct);
+    var standings = await standingsReader.StandingsAsync(season, ct);
     return standings.ValueKind == JsonValueKind.Null ? Results.NotFound() : Results.Ok(standings);
 })
     .WithTags("Standings")
@@ -274,8 +288,8 @@ api.MapGet("/standings", async (string? season, SanityData sanity, CancellationT
     .ProducesProblem(StatusCodes.Status502BadGateway)
     .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
-api.MapGet("/standings/seasons", async (SanityData sanity, CancellationToken ct) =>
-    Results.Ok(await sanity.StandingsSeasonsAsync(ct)))
+api.MapGet("/standings/seasons", async (StandingsReader standingsReader, CancellationToken ct) =>
+    Results.Ok(await standingsReader.SeasonsAsync(ct)))
     .WithTags("Standings")
     .WithSummary("List standings seasons")
     .WithDescription("Returns the season cards used by the website standings index, newest first.")

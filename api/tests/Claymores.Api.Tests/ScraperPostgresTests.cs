@@ -151,7 +151,9 @@ public sealed class ScraperPostgresTests(PostgresDatabase database) : IClassFixt
             Assert.Equal("12:30 PM", root.GetProperty("kickoffTime").GetString());
             Assert.Equal("2026-02-07", root.GetProperty("date").GetString());
             Assert.Equal(2026, root.GetProperty("season").GetInt32());
-            Assert.Equal("jacksonville-rugby", root.GetProperty("homeTeamSlug").GetString());
+            // The seeded team has no profile (logo, city, website) in this database, so no slug either;
+            // CutoverTests covers teams imported from Sanity.
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("homeTeamSlug").ValueKind);
         }
 
         // Shadow mode: the public fixture reads still serve only Sanity-imported rows.

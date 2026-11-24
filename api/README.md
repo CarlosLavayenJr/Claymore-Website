@@ -250,7 +250,22 @@ Migrations run automatically. On startup, the API applies every script in [`src/
 
 The API can scrape rugbyfl.com into Postgres. It ports the website's `app/api/scrape-rugby` and `app/api/scrape-standings` routes, which write to Sanity. Both run side by side until cutover. The Vercel crons stay as they are.
 
-**Shadow mode.** Scraped fixtures are stored with `source = 'scraper'`. `GET /v1/fixtures` serves only `source = 'sanity'` rows, which `--import-fixtures` writes, until you set `Fixtures__Source=scraper`. Standings endpoints still read Sanity. Scraped standings are stored in Postgres, and no endpoint serves them yet.
+**Read sources.** Two settings on the web service choose what the public endpoints serve. `render.yaml` sets both to the Postgres side.
+
+| Setting | Values | Effect |
+| --- | --- | --- |
+| `Fixtures__Source` | `sanity` (default), `scraper` | `GET /v1/fixtures[/{id}]` serves rows written by `--import-fixtures` or by the scraper. Scraper rows are built at read time in Sanity's match shape (same field names). IDs are `rfl-{date}-{homeTeamId}-{awayTeamId}` instead of Sanity `_id`s. |
+| `Standings__Source` | `sanity` (default), `postgres` | `GET /v1/standings[?season=]` and `GET /v1/standings/seasons` serve the scraped `standings` tables in Sanity's `leagueStandings` shape (`id` is `leagueStandings-{championshipId}`; rows and playoffs carry the same `_key`/`_type` values the website scraper wrote). Needs a Postgres connection. |
+
+Teams, players and practices always read Sanity. `GET /v1/teams` stays there because the `teams` table has no Sanity document ID, `logoAlt`, `description` or `updatedAt`, and it also holds raw names and scraper-created teams that have no published profile.
+
+**Season fallback.** With `Standings__Source=postgres`, a season that isn't in Postgres is read from Sanity for that request, and the API logs it. `GET /v1/standings` serves the championship in `championship_config` when it has been scraped and Sanity's current standings otherwise. That keeps 2026-2027 working while rugbyfl.com returns HTTP 500 for championship 203. `GET /v1/standings/seasons` lists every Postgres season and adds Sanity's cards for the seasons Postgres lacks (2026-2027 and the archived 2022-2025 seasons today). If Sanity is down, it lists the Postgres seasons alone. Backfill the archived seasons with `--scrape-standings --championship-id … --season-label …` to stop depending on Sanity for them.
+
+**Differences from Sanity a reader may notice:**
+
+- Standings positions are contiguous (1..n). Sanity's 2025-2026 rows end 11, 18, 19, 20 after a hand trim, so the last three teams move up to 12–14.
+- `lastUpdated` and `updatedAt` are the scrape time. A row with no pool has `pool: null`, and a playoff without a date has `date: null`.
+- Fixture names drop a trailing season year ("Orlando Otters 2026" shows as "Orlando Otters", as in Sanity), so the website's `/fixtures/[slug]` URLs (date plus team names) stay the same. `homeLogo`, `homeTeamSlug` and `homeTeamCity` (and the away fields) come from the team's profile: the team row when it has a logo, city or website from `--import-reference-data`, or else the profile team that owns the team's name as an alias (that is how "Claymores" gets the Central Florida Claymores logo). A team without a profile gets nulls rather than a slug, so the website never links to a missing `/opponents` page. `recap` is always null.
 
 ### Run it
 
@@ -322,9 +337,9 @@ Render one-off jobs don't run through a shell, so run each step as its own job (
 1. **Scrape.** `--import-reference-data` once (logos, slugs, aliases and the current championship from Sanity), then `--scrape-fixtures --all`, `--scrape-fixtures` (adds venues for the current season), and `--scrape-standings --force` plus any backfills (`--scrape-standings --championship-id 191 --season-label 2025-2026`).
 2. **Adopt.** `--adopt-sanity-overrides`. Every Sanity match with `manualOverride == true`, or whose `_id` doesn't start with `scraped-` (created by hand in Studio), is written onto the scraper row with the same (date, home, away) after name resolution, or inserted if there is none. Sanity's status, scores, competition, note, match type, season, kickoff and venue win; a blank Sanity kickoff or venue keeps the scraped one. The row gets `manual_override = true`, so later scrapes skip it, and `origin_sanity_id` (migration 010) records the document. If a document's date or teams change later, rerunning moves that row. Home and away may be the same team (the intra-club "Claymores v Claymores" Highland games). Unknown names become `needs_review` teams and are listed. Rerunning changes nothing; the summary prints adopted, updated, unchanged, unresolved and skipped counts.
 3. **Compare.** `--compare-with-sanity`. It matches games on (date, home, away) after resolution and lists games only in Sanity, games only in Postgres, field differences, and duplicate Sanity documents for one game. Kickoffs are compared as times ("1:00pm" equals "1:00 PM"). Locked rows that equal Sanity count as matching and are tallied on a `LOCKED` line. A kickoff time or venue that Sanity leaves blank is counted as enrichment, not as a difference. Standings rows are compared by team, and playoff lists are compared too. Review what is left and resolve teams in `needs_review`.
-4. **Serve scraped fixtures.** Set `Fixtures__Source=scraper` on the web service. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity.
-5. **Standings read path.** Standings endpoints still read Sanity. Add a Postgres read path for `standings`/`standings_rows`/`standings_playoffs` and switch it before Sanity's standings go stale.
-6. **Disable the Vercel crons** (`app/api/scrape-rugby`, `app/api/scrape-standings`) so nothing writes to Sanity any more. Do this only after steps 4 and 5, since the website still reads Sanity until then.
+4. **Serve Postgres.** `render.yaml` sets `Fixtures__Source=scraper` and `Standings__Source=postgres` on the web service (see [Read sources](#scraper)). This changes what the Vercel preview and the app read. The production website still reads Sanity directly. From here on, edit games in Postgres (and set `manual_override = true`) rather than in Sanity. To roll back, set either value to `sanity`.
+5. **Point the production website at the API** (`CLAYMORES_API_BASE_URL` in the Vercel Production environment) once the preview is verified.
+6. **Disable the Vercel crons** (`app/api/scrape-rugby`, `app/api/scrape-standings`) so nothing writes to Sanity any more. Do this only after step 5, since the production website reads Sanity until then, and only once rugbyfl.com serves the current championship (203) so its standings are in Postgres; until then the API serves 2026-2027 standings from Sanity, which only the Vercel cron keeps fresh.
 
 ## Player dues
 

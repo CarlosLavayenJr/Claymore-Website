@@ -11,14 +11,81 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
     public const string SanitySource = "sanity";
     public const string ScraperSource = "scraper";
 
+    /// <summary>
+    /// Scraper rows in the JSON shape Sanity's match projection returns (see <see cref="SanityData"/>),
+    /// built from the typed columns and the teams table at read time, so team logo, slug and city
+    /// changes show up without a rescrape. Columns: id, fixture_date, season, payload.
+    /// <list type="bullet">
+    /// <item>Names are the stored display names minus a trailing season year: rugbyfl.com lists
+    /// "Orlando Otters 2026", Sanity (and so the website's fixture slugs) shows "Orlando Otters".</item>
+    /// <item>Logo, slug and city come from the team's profile: the team row itself when it carries
+    /// profile data (copied from Sanity by --import-reference-data), else the profile team that owns
+    /// the team's name as an alias. That is how the seeded "Claymores" row gets the "Central Florida
+    /// Claymores" profile. Teams without a profile get nulls, like Sanity matches without a team
+    /// reference, so the website never links to an /opponents page that doesn't exist.</item>
+    /// <item>updatedAt uses Sanity's second-precision UTC format.</item>
+    /// </list>
+    /// </summary>
+    internal const string ScraperPayloadQuery = """
+        SELECT f.sanity_id AS id, f.fixture_date, f.season, jsonb_build_object(
+            'id', f.sanity_id,
+            'updatedAt', to_char(f.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+            'date', to_char(f.fixture_date, 'YYYY-MM-DD'),
+            'season', f.season,
+            'homeTeam', COALESCE(NULLIF(regexp_replace(f.home_team_raw, '\s+(19|20)[0-9]{2}$', ''), ''), f.home_team_raw),
+            'awayTeam', COALESCE(NULLIF(regexp_replace(f.away_team_raw, '\s+(19|20)[0-9]{2}$', ''), ''), f.away_team_raw),
+            'homeScore', f.home_score,
+            'awayScore', f.away_score,
+            'status', f.status,
+            'venue', f.venue,
+            'kickoffTime', to_char(f.kickoff_time, 'FMHH12:MI AM'),
+            'note', f.note,
+            'matchType', f.match_type,
+            'competition', f.competition,
+            'recap', NULL,
+            'homeLogo', hp.logo_url,
+            'awayLogo', ap.logo_url,
+            'homeTeamSlug', hp.slug,
+            'awayTeamSlug', ap.slug,
+            'homeTeamCity', hp.city,
+            'awayTeamCity', ap.city) AS payload
+        FROM fixtures f
+        LEFT JOIN LATERAL (
+            SELECT p.slug, p.city, p.logo_url FROM (
+                SELECT 0 AS rank, t.id, t.slug, t.city, t.logo_url, t.website FROM teams t WHERE t.id = f.home_team_id
+                UNION ALL
+                SELECT 1, t.id, t.slug, t.city, t.logo_url, t.website
+                FROM teams h JOIN team_aliases a ON a.alias_normalized = lower(h.name) JOIN teams t ON t.id = a.team_id
+                WHERE h.id = f.home_team_id
+            ) p
+            WHERE p.logo_url IS NOT NULL OR p.city IS NOT NULL OR p.website IS NOT NULL
+            ORDER BY p.rank, p.id LIMIT 1
+        ) hp ON true
+        LEFT JOIN LATERAL (
+            SELECT p.slug, p.city, p.logo_url FROM (
+                SELECT 0 AS rank, t.id, t.slug, t.city, t.logo_url, t.website FROM teams t WHERE t.id = f.away_team_id
+                UNION ALL
+                SELECT 1, t.id, t.slug, t.city, t.logo_url, t.website
+                FROM teams h JOIN team_aliases a ON a.alias_normalized = lower(h.name) JOIN teams t ON t.id = a.team_id
+                WHERE h.id = f.away_team_id
+            ) p
+            WHERE p.logo_url IS NOT NULL OR p.city IS NOT NULL OR p.website IS NOT NULL
+            ORDER BY p.rank, p.id LIMIT 1
+        ) ap ON true
+        WHERE f.source = 'scraper'
+        """;
+
     public async Task<JsonElement[]> ListAsync(int? season, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
-            SELECT payload FROM fixtures
-            WHERE source = @source AND (@season IS NULL OR season = @season)
-            ORDER BY fixture_date, sanity_id
-            """);
-        command.Parameters.AddWithValue("source", readSource);
+        await using var command = dataSource.CreateCommand(readSource == ScraperSource
+            ? "SELECT payload FROM (" + ScraperPayloadQuery + """
+                ) p WHERE @season IS NULL OR season = @season ORDER BY fixture_date, id
+                """
+            : """
+                SELECT payload FROM fixtures
+                WHERE source = 'sanity' AND (@season IS NULL OR season = @season)
+                ORDER BY fixture_date, sanity_id
+                """);
         command.Parameters.Add("season", NpgsqlDbType.Integer).Value = (object?)season ?? DBNull.Value;
         await using var reader = await command.ExecuteReaderAsync(ct);
         var fixtures = new List<JsonElement>();
@@ -29,10 +96,10 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
 
     public async Task<JsonElement> FindAsync(string id, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand(
-            "SELECT payload FROM fixtures WHERE sanity_id = @id AND source = @source");
+        await using var command = dataSource.CreateCommand(readSource == ScraperSource
+            ? "SELECT payload FROM (" + ScraperPayloadQuery + ") p WHERE id = @id"
+            : "SELECT payload FROM fixtures WHERE sanity_id = @id AND source = 'sanity'");
         command.Parameters.AddWithValue("id", id);
-        command.Parameters.AddWithValue("source", readSource);
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? reader.GetFieldValue<JsonElement>(0) : default;
     }
