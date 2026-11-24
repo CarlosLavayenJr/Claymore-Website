@@ -46,7 +46,7 @@ const navLinks = [
     { href: '/blog', label: 'News' },
 ]
 
-export const Navbar = () => {
+export const Navbar = ({ showSignIn = false }: { showSignIn?: boolean }) => {
     const [isOpen, setIsOpen] = useState(false)
     const [fixturesOpen, setFixturesOpen] = useState(false)
     const [mobileFixturesOpen, setMobileFixturesOpen] = useState(false)
@@ -124,6 +124,8 @@ export const Navbar = () => {
                             ))}
 
                             <ExternalNavLink href={SHOP_URL}>Shop</ExternalNavLink>
+
+                            {showSignIn && <NavLink href="/sign-in">Sign in</NavLink>}
 
                             <Link href="/contact" className="relative group px-3 py-2 text-white font-claymore text-lg">
                                 <span className="relative z-10">Contact</span>
@@ -207,6 +209,15 @@ export const Navbar = () => {
                         </Link>
                     ))}
 
+                    {showSignIn && (
+                        <Link
+                            href="/sign-in"
+                            onClick={closeMenu}
+                            className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
+                        >
+                            Sign in
+                        </Link>
+                    )}
                     <a
                         href={SHOP_URL}
                         target="_blank"
