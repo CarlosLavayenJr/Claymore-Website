@@ -23,20 +23,15 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
 
     public async Task<List<ClubMember>> ListAsync(CancellationToken ct)
     {
-        var invited = new[] { "PlayerEmails", "AdminEmails" }
-            .SelectMany(group => configuration.GetSection($"Authentication:Google:{group}").GetChildren())
-            .Select(entry => entry.Value?.Trim().ToLowerInvariant())
-            .OfType<string>()
-            .Where(email => email.Length > 0)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
+        // Members who have signed in and are still invited, either through the
+        // configured bootstrap lists or the club_invitations table.
+        var invited = ClubRoles.ConfiguredEmails(configuration);
         var members = new List<ClubMember>();
-        if (invited.Length == 0) return members;
 
         await using var command = dataSource.CreateCommand("""
             SELECT google_subject, email, display_name FROM club_members
             WHERE lower(email) = ANY(@invited)
+               OR lower(email) IN (SELECT email FROM club_invitations)
             ORDER BY lower(COALESCE(display_name, email)), email, google_subject
             """);
         command.Parameters.AddWithValue("invited", invited);

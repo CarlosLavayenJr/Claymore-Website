@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS teams (
     name text PRIMARY KEY CHECK (length(name) > 0)
 );
@@ -15,5 +13,3 @@ CREATE TABLE IF NOT EXISTS fixtures (
 
 CREATE INDEX IF NOT EXISTS fixtures_season_date_idx
     ON fixtures (season, fixture_date, sanity_id);
-
-COMMIT;

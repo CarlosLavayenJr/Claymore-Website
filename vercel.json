@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- . ':(exclude)api' ':(exclude)mobile'",
+  "ignoreCommand": "git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- . ':(exclude)api' ':(exclude)mobile' ':(exclude)render.yaml'",
   "crons": [
     {
       "path": "/api/scrape-rugby?seasonId=28",

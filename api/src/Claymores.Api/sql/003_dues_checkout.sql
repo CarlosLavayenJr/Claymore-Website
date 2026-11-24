@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS dues_checkouts (
     id uuid PRIMARY KEY,
     assessment_id uuid NOT NULL REFERENCES dues_assessments(id),
@@ -14,5 +12,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS dues_one_pending_checkout_idx
 
 ALTER TABLE dues_payments
     ADD COLUMN IF NOT EXISTS checkout_id uuid UNIQUE REFERENCES dues_checkouts(id);
-
-COMMIT;

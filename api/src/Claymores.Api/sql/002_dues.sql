@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS dues_assessments (
     id uuid PRIMARY KEY,
     player_subject text NOT NULL CHECK (length(player_subject) BETWEEN 1 AND 255),
@@ -20,5 +18,3 @@ CREATE TABLE IF NOT EXISTS dues_payments (
 );
 
 CREATE INDEX IF NOT EXISTS dues_payment_assessment_idx ON dues_payments (assessment_id, recorded_at);
-
-COMMIT;

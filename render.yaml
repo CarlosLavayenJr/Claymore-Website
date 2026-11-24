@@ -1,0 +1,43 @@
+# Render Blueprint for the Claymores API and its Postgres database.
+# The website is deployed by Vercel, not Render. Secrets marked sync: false are
+# entered in the Render dashboard when the Blueprint is first applied.
+services:
+  - type: web
+    name: claymores-api
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    healthCheckPath: /health/ready
+    buildFilter:
+      paths:
+        - api/**
+        - render.yaml
+      ignoredPaths:
+        - api/**/*.md
+        - api/tests/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: claymores-db
+          property: connectionString
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Cors__PublicOrigins__0
+        value: https://www.claymoresrfc.com
+      # Google sign-in. Leave both blank to run with public data only.
+      - key: Authentication__Google__ClientId
+        sync: false
+      - key: Authentication__Google__ClientSecret
+        sync: false
+      # Bootstrap admin. Invite everyone else from the API afterwards.
+      - key: Authentication__Google__AdminEmails__0
+        sync: false
+
+databases:
+  - name: claymores-db
+    databaseName: claymores
+    region: virginia
+    plan: basic-256mb
+    ipAllowList: []

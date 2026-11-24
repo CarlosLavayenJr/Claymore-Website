@@ -2,11 +2,15 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.OpenApi;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("Claymores");
+Hosting.UsePlatformPort(builder);
+var forwardedHeaders = Hosting.ConfigureForwardedHeaders(builder);
+var connectionString = Hosting.ResolveConnectionString(builder.Configuration);
 var authority = builder.Configuration["Authentication:Authority"];
 var audience = builder.Configuration["Authentication:Audience"];
 var duesEnabled = builder.Configuration.GetValue<bool>("Dues:Enabled");
@@ -23,6 +27,8 @@ if (string.IsNullOrWhiteSpace(authority) != string.IsNullOrWhiteSpace(audience))
     throw new InvalidOperationException("Set both Authentication:Authority and Authentication:Audience.");
 
 builder.Services.AddProblemDetails();
+builder.Services.AddMemoryCache();
+builder.Services.AddDataProtection().SetApplicationName("claymores-api");
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCors(options => options.AddPolicy("PublicReads",
     policy => policy.WithOrigins(publicOrigins).WithMethods("GET")));
@@ -73,12 +79,17 @@ if (duesEnabled && (!googleEnabled || string.IsNullOrWhiteSpace(connectionString
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
+    builder.Services.AddSingleton<DatabaseMigrator>();
     builder.Services.AddSingleton<FixtureDatabase>();
-    if (duesEnabled)
+    builder.Services.AddOptions<KeyManagementOptions>()
+        .Configure<NpgsqlDataSource>((options, dataSource) => options.XmlRepository = new PostgresKeyRepository(dataSource));
+    if (googleEnabled)
     {
-        builder.Services.AddSingleton<DuesLedger>();
+        builder.Services.AddSingleton<ClubInvitations>();
         builder.Services.AddSingleton<ClubMemberDirectory>();
     }
+    if (duesEnabled)
+        builder.Services.AddSingleton<DuesLedger>();
 }
 
 if (checkoutEnabled)
@@ -94,21 +105,44 @@ if (checkoutEnabled)
 }
 
 var app = builder.Build();
-if (args is ["--import-fixtures"])
+var migrator = app.Services.GetService<DatabaseMigrator>();
+if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _])
 {
-    var database = app.Services.GetService<FixtureDatabase>()
-        ?? throw new InvalidOperationException("Set ConnectionStrings:Claymores before importing.");
-    var sanity = app.Services.GetRequiredService<SanityData>();
-    var fixtures = await sanity.FixturesAsync(null, CancellationToken.None);
-    Console.WriteLine($"Upserted {await database.ImportAsync(fixtures, CancellationToken.None)} fixtures.");
+    if (migrator is null)
+        throw new InvalidOperationException("Set ConnectionStrings:Claymores or DATABASE_URL first.");
+    var applied = await migrator.MigrateAsync(CancellationToken.None);
+    Console.WriteLine(applied.Count == 0 ? "Database is up to date." : $"Applied {string.Join(", ", applied)}.");
+
+    if (args is ["--import-fixtures"])
+    {
+        var database = app.Services.GetRequiredService<FixtureDatabase>();
+        var sanity = app.Services.GetRequiredService<SanityData>();
+        var fixtures = await sanity.FixturesAsync(null, CancellationToken.None);
+        Console.WriteLine($"Upserted {await database.ImportAsync(fixtures, CancellationToken.None)} fixtures.");
+    }
+    else if (args is ["--invite", var email, var role])
+    {
+        var invitations = new ClubInvitations(app.Services.GetRequiredService<NpgsqlDataSource>(),
+            app.Services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>());
+        email = ClubInvitations.Normalize(email);
+        if (!ClubInvitations.IsValidEmail(email) || !ClubInvitations.Roles.Contains(role))
+            throw new ArgumentException("Usage: --invite <email> <player|admin>");
+        await invitations.UpsertAsync(email, role, "command line", CancellationToken.None);
+        Console.WriteLine($"Invited {email} as {role}.");
+    }
     await app.DisposeAsync();
     return;
 }
+if (migrator is not null && app.Configuration.GetValue("Database:MigrateOnStartup", true))
+    await migrator.MigrateAsync(CancellationToken.None);
 
+if (forwardedHeaders)
+    app.UseForwardedHeaders();
 app.UseExceptionHandler(new ExceptionHandlerOptions
 {
     StatusCodeSelector = error => error switch
     {
+        BadHttpRequestException badRequest => badRequest.StatusCode,
         HttpRequestException => StatusCodes.Status502BadGateway,
         OperationCanceledException { InnerException: TimeoutException } => StatusCodes.Status504GatewayTimeout,
         _ => StatusCodes.Status500InternalServerError
@@ -119,10 +153,14 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwagger();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("./v1/swagger.json", "Claymores API v1"));
 }
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 GoogleSignIn.Map(app, googleEnabled);
+if (googleEnabled && migrator is not null)
+    InvitationEndpoints.Map(app);
 if (duesEnabled)
 {
     DuesEndpoints.Map(app);
@@ -135,6 +173,27 @@ app.MapGet("/health", () => Results.Ok(new HealthResponse("ok")))
     .WithTags("Health")
     .WithSummary("Check that the API is running")
     .Produces<HealthResponse>();
+app.MapGet("/health/ready", async (CancellationToken ct) =>
+{
+    if (migrator is null)
+        return Results.Ok(new ReadinessResponse("ready", "not configured", []));
+    try
+    {
+        var pending = await migrator.PendingAsync(ct);
+        return pending.Length == 0
+            ? Results.Ok(new ReadinessResponse("ready", "ok", pending))
+            : Results.Json(new ReadinessResponse("not ready", "migrations pending", pending), statusCode: 503);
+    }
+    catch (Exception error) when (error is NpgsqlException or TimeoutException or System.Net.Sockets.SocketException)
+    {
+        return Results.Json(new ReadinessResponse("not ready", "unreachable", []), statusCode: 503);
+    }
+})
+    .WithTags("Health")
+    .WithSummary("Check that the API can reach its database")
+    .WithDescription("Returns 503 when Postgres is configured but unreachable or has migrations pending. Sanity is not checked.")
+    .Produces<ReadinessResponse>()
+    .Produces<ReadinessResponse>(StatusCodes.Status503ServiceUnavailable);
 var api = app.MapGroup("/v1").RequireCors("PublicReads");
 
 api.MapGet("/fixtures", async (int? season, SanityData sanity, CancellationToken ct) =>
@@ -264,3 +323,7 @@ app.MapGet("/v1/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityRes
     .Produces(StatusCodes.Status401Unauthorized);
 
 await app.RunAsync();
+
+record ReadinessResponse(string Status, string Database, string[] PendingMigrations);
+
+public partial class Program;

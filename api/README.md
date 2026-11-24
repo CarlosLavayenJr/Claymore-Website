@@ -20,7 +20,7 @@ Production still reads Sanity. Keep source documents and assets in place while t
 
 ## Run locally
 
-Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). From this project directory, run:
+Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The API project is in [`src/Claymores.Api`](src/Claymores.Api) and its tests are in [`tests/Claymores.Api.Tests`](tests/Claymores.Api.Tests). From `src/Claymores.Api`, run:
 
 ```sh
 dotnet --version
@@ -41,6 +41,7 @@ Swagger is enabled by default in Development. To expose it in another environmen
 | Method and path | Access | Response |
 | --- | --- | --- |
 | `GET /health` | Public | `200` and `{"status":"ok"}` when the API process is running |
+| `GET /health/ready` | Public | `200` when Postgres is reachable and fully migrated (or not configured). `503` otherwise. Render uses this as the health check. |
 | `GET /v1/fixtures` | Public | `200` and an array sorted by date and ID. Add `?season=2027` to filter by fixture year. |
 | `GET /v1/fixtures/{id}` | Public | `200` and the fixture object, or `404` for an unknown ID. Copy an `id` from the list. |
 | `GET /v1/standings` | Public | `200` and the current standings document. Add `?season=2025-2026` to request a specific season. Returns `404` when no standings match. |
@@ -90,9 +91,24 @@ Both roles start at the same Google sign-in URL. The API checks the verified Goo
 3. Open [Google sign-in](https://localhost:7057/auth/google) directly in your browser. It redirects back to `/auth/account`, where you can see your role and sign out. The JSON session check is at `/auth/session`. Use an incognito window to test the second account, and verify that a Google account outside both lists gets `403`. Use Swagger separately to explore the public API.
 4. To test from the website, start the local integration branch with `CLAYMORES_GOOGLE_SIGN_IN_ORIGIN=https://localhost:7057` alongside the site variables below. Open `/sign-in` and select **Continue with Google**. The website entry is available only with an HTTPS auth origin and is disabled on Vercel Production.
 
+### Invite members
+
+Who can sign in is stored in the `club_invitations` table. The `AdminEmails` and `PlayerEmails` settings still work and are meant for bootstrapping: set one admin email there, then invite everyone else. An admin role from either source wins. Role changes take effect within 30 seconds, including for members who are already signed in.
+
+- From the command line, with the database configured: `dotnet run -- --invite player@example.com player` (or `admin`).
+- Through the API, signed in as an admin on the API origin:
+
+  | Method and path | Behavior |
+  | --- | --- |
+  | `GET /v1/admin/invitations` | Lists invited emails and roles |
+  | `PUT /v1/admin/invitations/{email}` with `{"role":"player"}` or `{"role":"admin"}` | Invites a member or changes their role |
+  | `DELETE /v1/admin/invitations/{email}` | Removes an invitation. Admins can't remove or demote themselves. |
+
+  The `PUT` and `DELETE` requests require the same-origin browser session, like the other admin writes.
+
 The website entry hands off to the API-hosted account page. Flutter sign-in follows after browser verification. Keep local OAuth client settings separate from any future preview or production settings.
 
-In the current Codex workspace, an isolated Postgres database is already prepared. After setting Google user secrets and trusting the .NET development certificate, run `node work/postgres-check/local-preview.mjs` from the workspace root to apply migrations, import fixtures, and start the HTTPS Google and dues preview. This local runner does not need Neon. The `work/dotnet/dotnet` executable can be used in place of `dotnet` if the SDK is only installed in this workspace.
+In the Codex workspace, `work/postgres-check/local-preview.mjs` starts an embedded local Postgres for the Google and dues preview. It still builds the older copy in `outputs/claymores-api`, not this folder. Point it at `src/Claymores.Api` before relying on it.
 
 ## Test authentication locally
 
@@ -122,9 +138,10 @@ The API validates access tokens issued for that audience. Hosted sign-in still r
 
 ## Migrate and import fixtures into Postgres
 
+Migrations run automatically. On startup, the API applies every script in [`src/Claymores.Api/sql`](src/Claymores.Api/sql) that the database hasn't recorded yet, in name order, each in its own transaction, and records it in `schema_migrations`. A Postgres advisory lock keeps two instances from migrating at once. The scripts are idempotent, so databases set up by hand before the runner existed migrate cleanly. Set `Database__MigrateOnStartup=false` to turn this off, and run `dotnet run -- --migrate` to migrate without starting the server. To change the schema, add a new numbered script; don't edit one that has already been applied.
+
 1. Create a development database in Neon or another Postgres instance.
-2. Apply [`sql/001_fixtures.sql`](sql/001_fixtures.sql) to that database. You can paste the script into the Neon SQL Editor and run it there. It creates `teams`, `fixtures`, and an index for season and date queries.
-3. In the terminal where you run the API, set `ConnectionStrings__Claymores` to an Npgsql connection string. Copy the values from your database provider and use this shape:
+2. In the terminal where you run the API, set `ConnectionStrings__Claymores` to an Npgsql connection string, or set `DATABASE_URL` to a `postgres://` URL as Render and Neon provide it. `ConnectionStrings__Claymores` wins if both are set. An Npgsql connection string has this shape:
 
    ```text
    Host=<host>;Port=5432;Database=<database>;Username=<user>;Password=<password>;SSL Mode=Require
@@ -139,16 +156,16 @@ The API validates access tokens issued for that audience. Hosted sign-in still r
    export ConnectionStrings__Claymores
    ```
 
-4. Import the published Sanity fixtures. Run the same command again to check repeatability.
+3. Import the published Sanity fixtures. This applies any pending migrations first. Run the same command again to check repeatability.
 
    ```sh
-   dotnet run --launch-profile http -- --import-fixtures
-   dotnet run --launch-profile http -- --import-fixtures
+   dotnet run -- --import-fixtures
+   dotnet run -- --import-fixtures
    ```
 
    Both runs report how many fixtures they processed. The importer uses the Sanity document ID as the fixture primary key and updates existing rows on conflict. It preserves rows absent from a later import. The import runs in a transaction. Rerun it when Sanity changes or when the API imports additional fixture fields.
 
-5. In the SQL editor, verify the row counts and check that no Sanity ID appears more than once:
+4. In the SQL editor, verify the row counts and check that no Sanity ID appears more than once:
 
    ```sql
    SELECT count(*) AS fixtures, count(DISTINCT sanity_id) AS unique_fixtures
@@ -159,13 +176,13 @@ The API validates access tokens issued for that audience. Hosted sign-in still r
 
    The initial verification returned 63 fixtures after both imports. Subsequent totals can grow as fixtures are published in Sanity.
 
-6. From the same terminal, run `dotnet run --launch-profile http` and try the fixture endpoints again. The configured API reads fixtures from Postgres, so apply the migration and import before starting it in this mode. To switch back to Sanity-backed fixture reads, unset `ConnectionStrings__Claymores` and restart the API.
+5. From the same terminal, run `dotnet run --launch-profile http` and try the fixture endpoints again. The configured API reads fixtures from Postgres, so import before starting it in this mode. To switch back to Sanity-backed fixture reads, unset `ConnectionStrings__Claymores` and restart the API.
 
 ## Player dues
 
 The dues ledger records USD amounts in integer cents. An admin assigns the amount due and records payments the club has already received. The signed-in account page shows the player’s own amount due, total paid, and remaining balance. The dues detail endpoint also shows their payment history. The ledger does not charge cards.
 
-For local testing, configure Google sign-in and a development Postgres database. Apply [`sql/002_dues.sql`](sql/002_dues.sql), [`sql/003_dues_checkout.sql`](sql/003_dues_checkout.sql), and [`sql/004_club_members.sql`](sql/004_club_members.sql) in order, then start the HTTPS API with `Dues__Enabled=true`. Dues routes appear in Swagger when that flag is enabled and Google and Postgres are configured. Apply the fixtures migration too if you use the existing fixture endpoints with this database.
+For local testing, configure Google sign-in and a development Postgres database, then start the HTTPS API with `Dues__Enabled=true`. The dues tables are created by the automatic migrations. Dues routes appear in Swagger when that flag is enabled and Google and Postgres are configured.
 
 | Method and path | Access | Behavior |
 | --- | --- | --- |
@@ -224,17 +241,39 @@ Review pending rows with `SELECT id, assessment_id, amount_cents, stripe_session
 
 ## Project map
 
+All paths are under [`src/Claymores.Api`](src/Claymores.Api).
+
 | File | Responsibility |
 | --- | --- |
-| [`Program.cs`](Program.cs) | API routes, dependency setup, JWT validation, and Swagger |
-| [`SanityData.cs`](SanityData.cs) | Published Sanity queries for fixtures, standings, teams, players, and practices |
-| [`FixtureDatabase.cs`](FixtureDatabase.cs) | Npgsql fixture reads and transactional import |
-| [`ClubMemberDirectory.cs`](ClubMemberDirectory.cs) | Member directory populated after Google sign-in |
-| [`DuesAdminPage.cs`](DuesAdminPage.cs) | Treasurer interface and payment history |
-| [`DuesLedger.cs`](DuesLedger.cs) | Role-gated dues endpoints and transactional payment ledger |
-| [`DuesCheckout.cs`](DuesCheckout.cs) | Test checkout and signed Stripe webhooks |
-| [`DuesCheckoutStore.cs`](DuesCheckoutStore.cs) | Durable reservations, payment credits, and expiration |
-| [`sql/001_fixtures.sql`](sql/001_fixtures.sql) | Initial Postgres schema |
+| `Program.cs` | API routes, dependency setup, JWT validation, Swagger, startup migrations, and command-line tasks |
+| `Hosting.cs` | Render settings: `PORT`, `DATABASE_URL`, and forwarded headers |
+| `DatabaseMigrator.cs` | Applies `sql/*.sql` once each and reports pending migrations |
+| `PostgresKeyRepository.cs` | Stores the sign-in key ring in Postgres |
+| `ClubInvitations.cs` | Invitation table, role resolution, and admin invitation endpoints |
+| `SanityData.cs` | Published Sanity queries for fixtures, standings, teams, players, and practices |
+| `FixtureDatabase.cs` | Npgsql fixture reads and transactional import |
+| `ClubMemberDirectory.cs` | Member directory populated after Google sign-in |
+| `GoogleSignIn.cs` | Google sign-in, session cookie, and account page |
+| `DuesAdminPage.cs` | Treasurer interface and payment history |
+| `DuesLedger.cs` | Role-gated dues endpoints and transactional payment ledger |
+| `DuesCheckout.cs` | Test checkout and signed Stripe webhooks |
+| `DuesCheckoutStore.cs` | Durable reservations, payment credits, and expiration |
+| `sql/` | Numbered Postgres migrations |
+
+## Tests
+
+From this folder, run:
+
+```sh
+dotnet test --solution Claymores.slnx
+```
+
+Tests that need Postgres skip unless `CLAYMORES_TEST_DATABASE` is set to a connection string for a user that can create databases. Each test class creates and drops its own database. For example:
+
+```sh
+CLAYMORES_TEST_DATABASE='Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=<password>' \
+  dotnet test --solution Claymores.slnx
+```
 
 ## Website-first rollout
 
@@ -268,14 +307,30 @@ Compare the preview against the existing site before switching production. Check
 ## Backend work before production
 
 1. Configure the Google OAuth client, then test the player and admin flows through the website sign-in button. Plan Flutter sign-in when the website flow is verified.
-2. Define club access in Postgres. Start with a member record linked to the provider's issuer and subject, then agree on permissions for players and club admins.
+2. Club access is in Postgres (`club_invitations`). Mobile sign-in still needs a token endpoint, because the dues policies only accept the browser session cookie.
 3. Choose one editing workflow for fixtures. If Sanity Studio stays the editor, add a signed, retryable sync with deletion and reconciliation coverage before serving imported fixtures to the website. If Postgres becomes the editor, add protected write endpoints and an admin workflow.
-4. Deploy the API and Neon to staging. Check request timeouts, logs, cache refresh, missing records, and rollback to direct Sanity reads before changing the production environment.
+4. Deploy the API and its database to Render (see below). Check request timeouts, logs, cache refresh, missing records, and rollback to direct Sanity reads before changing the production environment.
 
 ## Flutter web access
 
 Native clients can call the API over HTTPS. If the Flutter web build is hosted on a separate origin, use a same-origin proxy or add its exact origin under `Cors:PublicOrigins`. For example, `Cors__PublicOrigins__0=http://127.0.0.1:8766` allows local public GET requests from that preview. Sign-in, identity, dues, and payment webhooks are outside this CORS policy.
 
-## Deployment
+## Deploy on Render
 
-Keep the Next.js frontend on Vercel and deploy the ASP.NET Core service separately to a .NET-capable host. Run the migration and import before using Postgres in a hosted environment. Configure database and OIDC settings on the API host, serve the API over HTTPS, and verify health, fixture, standings, and authenticated requests before changing either client. The frontend will use the API URL and its own access token when needed. The Postgres connection string belongs on the API host.
+The website stays on Vercel. The API and its Postgres database run on Render, defined by [`render.yaml`](../render.yaml) at the repository root.
+
+1. In Render, select **New > Blueprint** and connect the `Claymore-Website` repository. Render reads `render.yaml` and proposes the `claymores-api` web service and the `claymores-db` database, both in the Virginia region.
+2. Enter the values marked `sync: false` when prompted: the Google OAuth client ID and secret, and one bootstrap admin email. Leave the Google values blank to start with public data only.
+3. Apply the Blueprint. Render builds [`Dockerfile`](Dockerfile), starts the API, and waits for `/health/ready`. The first start creates every table.
+4. Add the production Google redirect URI, `https://<service>.onrender.com/signin-google` (or your custom domain), to the Google OAuth client.
+5. Optionally import the Sanity fixtures from the service's **Shell** tab: `dotnet Claymores.Api.dll --import-fixtures`. Until you do, fixture endpoints read from Postgres and return nothing, so skip this step only if fixtures will come from the new scraper.
+
+Notes:
+
+- **What triggers a deploy:** changes under `api/` (except Markdown and tests) or to `render.yaml`. Website-only commits don't redeploy the API.
+- **Plans:** the Blueprint uses the `starter` web plan and the `basic-256mb` database. Render's free web plan sleeps when idle, which delays the first request and can miss Stripe webhooks. Its free database expires after 30 days.
+- **Neon instead of Render Postgres:** delete the `databases` block and the `fromDatabase` entry, and set `DATABASE_URL` to the Neon URL as a secret.
+- **HTTPS:** Render terminates TLS. Because `RENDER=true` is set on Render, the API trusts `X-Forwarded-Proto`, so the Google redirect uses `https` and the session cookie stays Secure. Set `ForwardedHeaders__Enabled=true` on any other host behind a TLS proxy, and only there. HSTS is sent outside Development.
+- **Restarts:** the sign-in key ring is stored in the `data_protection_keys` table, so members stay signed in across deploys and restarts.
+- **Dues and Stripe:** leave `Dues__Enabled` and `Stripe__CheckoutEnabled` unset in production for now. Checkout only accepts Stripe test keys.
+- **Running the container elsewhere:** from this folder, run `docker build -t claymores-api .` and then `docker run -p 8080:8080 -e DATABASE_URL=... claymores-api`.

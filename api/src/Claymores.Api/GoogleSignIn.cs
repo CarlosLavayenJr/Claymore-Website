@@ -43,7 +43,8 @@ internal static class GoogleSignIn
             options.Events.OnValidatePrincipal = async context =>
             {
                 var identity = context.Principal?.Identity as ClaimsIdentity;
-                var currentRole = ResolveRole(context.Principal, configuration);
+                var currentRole = await ClubRoles.ResolveAsync(context.Principal, configuration,
+                    context.HttpContext.RequestServices.GetService<ClubInvitations>(), context.HttpContext.RequestAborted);
                 if (identity is null || currentRole is null)
                 {
                     context.RejectPrincipal();
@@ -73,17 +74,19 @@ internal static class GoogleSignIn
             options.ClaimActions.Remove("email_verified");
             options.SaveTokens = false;
             options.Scope.Add("email");
-            options.Events.OnTokenValidated = context =>
+            options.Events.OnTokenValidated = async context =>
             {
+                var invitations = context.HttpContext.RequestServices.GetService<ClubInvitations>();
                 if (context.Principal?.Identity is not ClaimsIdentity identity ||
-                    ResolveRole(context.Principal, configuration) is not { } role)
+                    await ClubRoles.ResolveAsync(context.Principal, configuration, invitations,
+                        context.HttpContext.RequestAborted) is not { } role)
                 {
                     context.HandleResponse();
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return context.Response.WriteAsync("This Google account has not been invited.");
+                    await context.Response.WriteAsync("This Google account has not been invited.");
+                    return;
                 }
                 identity.AddClaim(new Claim(identity.RoleClaimType, role));
-                return Task.CompletedTask;
             };
             options.Events.OnTicketReceived = async context =>
             {
@@ -413,22 +416,4 @@ internal static class GoogleSignIn
         .admin-record input { width: 100%; }
         .amounts + p { margin-top: .65rem; }
         """;
-
-    private static string? ResolveRole(ClaimsPrincipal? user, IConfiguration configuration)
-    {
-        var email = user?.FindFirstValue("email");
-        if (string.IsNullOrWhiteSpace(email) ||
-            string.IsNullOrWhiteSpace(user?.FindFirstValue("sub")) ||
-            !bool.TryParse(user?.FindFirstValue("email_verified"), out var verified) ||
-            !verified)
-            return null;
-
-        if (IsInvited(configuration, "AdminEmails", email))
-            return "admin";
-        return IsInvited(configuration, "PlayerEmails", email) ? "player" : null;
-    }
-
-    private static bool IsInvited(IConfiguration configuration, string group, string email) =>
-        configuration.GetSection($"Authentication:Google:{group}").GetChildren()
-            .Any(entry => string.Equals(entry.Value?.Trim(), email, StringComparison.OrdinalIgnoreCase));
 }
