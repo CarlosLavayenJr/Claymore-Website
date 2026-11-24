@@ -108,8 +108,9 @@ class AuthApi {
     return switch (response.statusCode) {
       202 || 200 => JoinReply(JoinReplyKind.pending, email: text('email')),
       409 => const JoinReply(JoinReplyKind.alreadyMember),
-      429 when text('status') == 'denied_recently' =>
-        const JoinReply(JoinReplyKind.deniedRecently),
+      429 when text('status') == 'denied_recently' => const JoinReply(
+        JoinReplyKind.deniedRecently,
+      ),
       400 => JoinReply(JoinReplyKind.invalid, field: text('field')),
       401 => const JoinReply(JoinReplyKind.invalidToken),
       _ => throw ApiException.fromResponse(response),
@@ -135,9 +136,19 @@ class AuthApi {
   }
 
   Future<AuthSession> _session(String path, Map<String, String> body) async {
-    final json = await _api.postJson(path, body);
-    if (json is! Map<String, dynamic>) throw const ApiException(502);
-    return AuthSession.fromJson(json);
+    final response = await _api.send('POST', path, body: body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException.fromResponse(response);
+    }
+    final json = _object(response);
+    try {
+      return AuthSession.fromJson(
+        json,
+        serverDate: parseHttpDate(response.headers['date']),
+      );
+    } on Object {
+      throw const ApiException(502);
+    }
   }
 }
 

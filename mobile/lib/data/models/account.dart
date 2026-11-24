@@ -20,15 +20,20 @@ class AuthUser {
 }
 
 /// Response of `POST /v1/auth/mobile/google` and `/refresh`.
+///
+/// [accessTokenExpiresAt] is the server's clock. The device clock may be
+/// skewed, so the session is timed by its [lifetime] (expiry minus the
+/// response's `Date` header) from when the app received it.
 class AuthSession {
   const AuthSession({
     required this.accessToken,
     required this.accessTokenExpiresAt,
     required this.refreshToken,
     required this.user,
+    this.serverDate,
   });
 
-  AuthSession.fromJson(Map<String, dynamic> json)
+  AuthSession.fromJson(Map<String, dynamic> json, {this.serverDate})
     : accessToken = json['accessToken'] as String,
       accessTokenExpiresAt = DateTime.parse(
         json['accessTokenExpiresAt'] as String,
@@ -39,6 +44,37 @@ class AuthSession {
   final String accessToken, refreshToken;
   final DateTime accessTokenExpiresAt;
   final AuthUser user;
+
+  /// The server's `Date` header on the response, when it sent one.
+  final DateTime? serverDate;
+
+  /// Assumed when the response has no `Date` header.
+  static const fallbackLifetime = Duration(hours: 1);
+
+  /// How long the access token lives, measured on the server's clock only.
+  Duration get lifetime {
+    final date = serverDate;
+    if (date == null) return fallbackLifetime;
+    final lifetime = accessTokenExpiresAt.difference(date);
+    return lifetime.isNegative ? Duration.zero : lifetime;
+  }
+}
+
+const _months = {
+  'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6, //
+  'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+};
+
+/// Parses an HTTP `Date` header (IMF-fixdate, e.g.
+/// `Tue, 24 Nov 2026 12:00:00 GMT`). Null when absent or malformed.
+DateTime? parseHttpDate(String? value) {
+  final match = RegExp(
+    r'^\w{3}, (\d{2}) (\w{3}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$',
+  ).firstMatch(value?.trim() ?? '');
+  final month = _months[match?.group(2)];
+  if (match == null || month == null) return null;
+  int part(int i) => int.parse(match.group(i)!);
+  return DateTime.utc(part(3), month, part(1), part(4), part(5), part(6));
 }
 
 /// `DuesAssessment` in api/src/Claymores.Api/DuesLedger.cs.

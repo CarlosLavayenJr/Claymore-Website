@@ -36,4 +36,21 @@ class MemberRepository {
     if (url == null || url.scheme != 'https') throw const ApiException(502);
     return url;
   }
+
+  /// `DELETE /v1/me`: deletes the signed-in account (204). For an Apple
+  /// account, [appleAuthorizationCode] lets the server revoke Apple's tokens.
+  /// Throws [ApiException]: 409 `last_admin`, 401 when not signed in.
+  Future<void> deleteAccount({String? appleAuthorizationCode}) async {
+    final response = await _api.send(
+      'DELETE',
+      '/v1/me',
+      body: appleAuthorizationCode == null
+          ? null
+          : {'appleAuthorizationCode': appleAuthorizationCode},
+      auth: true,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException.fromResponse(response);
+    }
+  }
 }

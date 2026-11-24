@@ -76,6 +76,14 @@ class SignInCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(auth.message!, style: textTheme.bodySmall),
                 ],
+                if (auth.canRetryRestore) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    key: const Key('retry-restore'),
+                    onPressed: auth.retryRestore,
+                    child: const Text('TRY AGAIN'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (auth.canSignIn || auth.canSignInWithApple) ...[
                   SignInButtons(auth: auth),

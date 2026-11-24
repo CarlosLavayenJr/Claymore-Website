@@ -28,8 +28,19 @@ abstract final class Brand {
   static const pinkTint = Color(0x1afd80b5);
   static const pinkBorder = Color(0x66fd80b5);
 
+  /// Destructive actions only (delete account). Not part of the website
+  /// palette; about 6.5:1 on white.
+  static const danger = Color(0xffb3261e);
+
   static const display = 'Claymore';
 }
+
+/// A text button for destructive actions (delete account), in [Brand.danger].
+final ButtonStyle destructiveButtonStyle = TextButton.styleFrom(
+  foregroundColor: Brand.danger,
+  overlayColor: Brand.danger,
+  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+);
 
 /// Google's "Sign in with Google" button, light theme
 /// (developers.google.com/identity/branding-guidelines): white fill, #747775

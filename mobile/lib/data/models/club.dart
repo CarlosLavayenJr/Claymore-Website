@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 class Fixture {
   Fixture(Map<String, dynamic> json)
     : id = (json['id'] ?? json['_id']) as String,
@@ -96,6 +98,17 @@ class ClubData {
   final bool isSnapshot;
 }
 
-List<Fixture> parseFixtures(Object? payload) => (payload as List)
-    .map((match) => Fixture(match as Map<String, dynamic>))
-    .toList(growable: false);
+/// Parses each fixture on its own: one malformed item is skipped (and logged
+/// in debug builds) instead of discarding the whole list. A payload that is
+/// not a list at all still throws, so callers can fall back.
+List<Fixture> parseFixtures(Object? payload) {
+  final fixtures = <Fixture>[];
+  for (final match in payload as List) {
+    try {
+      fixtures.add(Fixture(match as Map<String, dynamic>));
+    } catch (error) {
+      debugPrint('Skipping an invalid fixture: $error');
+    }
+  }
+  return List.unmodifiable(fixtures);
+}
