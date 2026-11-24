@@ -12,19 +12,21 @@ internal sealed class BearerOperationFilter : IOperationFilter
             return;
 
         var policy = metadata.OfType<IAuthorizeData>().Select(item => item.Policy);
-        var scheme = policy.Any(name => name is GoogleSignIn.RolePolicy or GoogleSignIn.AdminPolicy)
-            ? "ClubSession" : "Bearer";
+        // Club routes take the browser session or, with mobile sign-in on, an API bearer token.
+        string[] schemes = policy.Any(name => name is GoogleSignIn.RolePolicy or GoogleSignIn.AdminPolicy)
+            ? ["ClubSession", "Bearer"] : ["Bearer"];
         operation.Security ??= [];
-        operation.Security.Add(new OpenApiSecurityRequirement
-        {
-            [new OpenApiSecuritySchemeReference(scheme, context.Document)] = []
-        });
+        foreach (var scheme in schemes)
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference(scheme, context.Document)] = []
+            });
     }
 }
 
 internal sealed record HealthResponse(string Status);
 
-internal sealed record CurrentIdentityResponse(string? Subject, string? Name);
+internal sealed record CurrentIdentityResponse(string? Subject, string? Name, string? Email, string? Role);
 
 internal sealed record FixtureResponse(
     string Id,

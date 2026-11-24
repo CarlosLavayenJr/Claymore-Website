@@ -107,12 +107,14 @@ internal static class GoogleSignIn
             };
         });
 
+        // The browser session cookie, plus API-issued bearer tokens when mobile sign-in is on.
+        string[] schemes = MobileAuth.IsEnabled(configuration) ? [Session, MobileAuth.Scheme] : [Session];
         authentication.Services.AddAuthorization(options =>
         {
             options.AddPolicy(RolePolicy, policy => policy
-                .AddAuthenticationSchemes(Session).RequireAuthenticatedUser().RequireRole("player", "admin"));
+                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole("player", "admin"));
             options.AddPolicy(AdminPolicy, policy => policy
-                .AddAuthenticationSchemes(Session).RequireAuthenticatedUser().RequireRole("admin"));
+                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole("admin"));
         });
         return true;
     }
