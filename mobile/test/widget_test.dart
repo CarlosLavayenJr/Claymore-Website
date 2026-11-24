@@ -1,5 +1,6 @@
-import 'package:claymores/club_data.dart';
-import 'package:claymores/club_time.dart';
+import 'package:claymores/data/club_repository.dart';
+import 'package:claymores/app/config.dart';
+import 'package:claymores/data/club_time.dart';
 import 'package:claymores/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -64,7 +65,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text('PLAYER DUES'),
-      duesEnabled ? findsOneWidget : findsNothing,
+      AppConfig.duesEnabled ? findsOneWidget : findsNothing,
     );
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
