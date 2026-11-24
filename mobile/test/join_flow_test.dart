@@ -145,6 +145,11 @@ void main() {
         JoinReplyKind.invalidToken,
       );
       expect(send(500, ''), throwsA(isA<ApiException>()));
+      // A rate limit is not a denial.
+      expect(
+        send(429, '{"error":"rate_limited"}'),
+        throwsA(isA<ApiException>()),
+      );
     });
 
     test('Apple sends the identity token and raw nonce', () async {

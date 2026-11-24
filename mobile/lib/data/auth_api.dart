@@ -108,7 +108,8 @@ class AuthApi {
     return switch (response.statusCode) {
       202 || 200 => JoinReply(JoinReplyKind.pending, email: text('email')),
       409 => const JoinReply(JoinReplyKind.alreadyMember),
-      429 => const JoinReply(JoinReplyKind.deniedRecently),
+      429 when text('status') == 'denied_recently' =>
+        const JoinReply(JoinReplyKind.deniedRecently),
       400 => JoinReply(JoinReplyKind.invalid, field: text('field')),
       401 => const JoinReply(JoinReplyKind.invalidToken),
       _ => throw ApiException.fromResponse(response),

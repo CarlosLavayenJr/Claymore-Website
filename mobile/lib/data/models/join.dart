@@ -24,7 +24,8 @@ enum JoinReplyKind {
   /// 409 `{"status":"already_member"}`: just sign in.
   alreadyMember,
 
-  /// 429 `{"status":"denied_recently"}`.
+  /// 429 `{"status":"denied_recently"}`. A rate-limit 429
+  /// (`{"error":"rate_limited"}`) is thrown as an [ApiException] instead.
   deniedRecently,
 
   /// 400 `{"error":"invalid_request","field"}`.
