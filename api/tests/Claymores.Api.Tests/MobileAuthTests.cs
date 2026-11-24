@@ -30,6 +30,21 @@ internal sealed class FakeGoogleValidator : IGoogleIdTokenValidator
     }
 }
 
+/// <summary>Apple identity tokens look like "apple|subject|email|verified|nonce" in these tests.</summary>
+internal sealed class FakeAppleValidator : IAppleIdentityTokenValidator
+{
+    public static string Token(string subject, string email, string nonce, bool verified = true) =>
+        $"apple|{subject}|{email}|{(verified ? "true" : "false")}|{nonce}";
+
+    public Task<AppleIdentity?> ValidateAsync(string identityToken, string rawNonce, CancellationToken ct)
+    {
+        var parts = identityToken.Split('|');
+        return Task.FromResult(parts is ["apple", var subject, var email, var verified, var nonce] && nonce == rawNonce
+            ? new AppleIdentity(subject, email, verified == "true")
+            : null);
+    }
+}
+
 /// <summary>Stands in for Stripe's Checkout Sessions API at the HTTP layer.</summary>
 internal sealed class FakeStripe : HttpMessageHandler
 {
@@ -92,6 +107,7 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
             ["Authentication:Google:ClientSecret"] = "test-secret",
             ["Authentication:Google:MobileClientIds:0"] = "ios-client.apps.googleusercontent.com",
             ["Authentication:Tokens:SigningKey"] = SigningKey,
+            ["Authentication:Apple:ClientIds:0"] = "com.claymoresrfc.claymores",
             ["MobileAuth:Enabled"] = "true",
             ["Dues:Enabled"] = "true",
             ["Stripe:CheckoutEnabled"] = "true",
@@ -102,6 +118,7 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
         }, services =>
         {
             services.AddSingleton<IGoogleIdTokenValidator, FakeGoogleValidator>();
+            services.AddSingleton<IAppleIdentityTokenValidator, FakeAppleValidator>();
             services.AddSingleton(new Stripe.Checkout.SessionService(new Stripe.StripeClient("sk_test_fake",
                 httpClient: new Stripe.SystemNetHttpClient(new HttpClient(_stripe)))));
         });
@@ -427,6 +444,153 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
         Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Request(sameOrigin: true), Ct)).StatusCode);
     }
 
+    private Task<HttpResponseMessage> AppleAsync(string subject, string email, string? fullName = null,
+        bool verified = true, string nonce = "nonce-1", string? rawNonce = null) =>
+        Client().PostAsJsonAsync("/v1/auth/mobile/apple", new
+        {
+            identityToken = FakeAppleValidator.Token(subject, email, nonce, verified),
+            rawNonce = rawNonce ?? nonce,
+            fullName,
+        }, Ct);
+
+    private async Task<string?> StoredNameAsync(string subject)
+    {
+        await using var dataSource = database.CreateDataSource();
+        await using var command = dataSource.CreateCommand("SELECT display_name FROM club_members WHERE google_subject = @s");
+        command.Parameters.AddWithValue("s", subject);
+        return await command.ExecuteScalarAsync(Ct) as string;
+    }
+
+    [Fact]
+    public async Task Apple_sign_in_issues_tokens_with_a_prefixed_subject()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("apple@example.com");
+
+        var response = await AppleAsync("000123.apple", "apple@example.com", fullName: "Apple Player");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
+        var root = json.RootElement;
+        Assert.Equal(["accessToken", "accessTokenExpiresAt", "refreshToken", "user"],
+            root.EnumerateObject().Select(p => p.Name).ToArray());
+        var user = root.GetProperty("user");
+        Assert.Equal("apple|000123.apple", user.GetProperty("subject").GetString());
+        Assert.Equal("Apple Player", user.GetProperty("name").GetString());
+        Assert.Equal("player", user.GetProperty("role").GetString());
+
+        var me = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/me", root.GetProperty("accessToken").GetString()!), Ct);
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        var identity = (await me.Content.ReadFromJsonAsync<Dictionary<string, string>>(Ct))!;
+        Assert.Equal("apple|000123.apple", identity["subject"]);
+
+        // The session keeps the email, so refresh can re-check the invitation.
+        await using var dataSource = database.CreateDataSource();
+        await using var session = dataSource.CreateCommand(
+            "SELECT email FROM mobile_refresh_tokens WHERE google_subject = 'apple|000123.apple'");
+        Assert.Equal("apple@example.com", await session.ExecuteScalarAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Apple_and_google_subjects_never_collide()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("collide@example.com");
+        var google = await SignInAsync("same-sub", "collide@example.com");
+        var apple = await AppleAsync("same-sub", "collide@example.com");
+        Assert.Equal(HttpStatusCode.OK, apple.StatusCode);
+        Assert.Equal("same-sub", google.User.Subject);
+        Assert.Equal("apple|same-sub", (await apple.Content.ReadFromJsonAsync<TokenBody>(Ct))!.User.Subject);
+
+        await using var dataSource = database.CreateDataSource();
+        await using var count = dataSource.CreateCommand(
+            "SELECT count(*) FROM club_members WHERE google_subject IN ('same-sub', 'apple|same-sub')");
+        Assert.Equal(2L, await count.ExecuteScalarAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Apple_name_is_stored_on_first_sign_in_and_kept_after()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("named@example.com");
+
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("named", "named@example.com", fullName: "  First Name  ")).StatusCode);
+        Assert.Equal("First Name", await StoredNameAsync("apple|named"));
+
+        // Later sign-ins don't include the name: keep the stored one and return it.
+        var again = await AppleAsync("named", "named@example.com");
+        Assert.Equal("First Name", (await again.Content.ReadFromJsonAsync<TokenBody>(Ct))!.User.Name);
+        Assert.Equal("First Name", await StoredNameAsync("apple|named"));
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("named", "named@example.com", fullName: " ")).StatusCode);
+        Assert.Equal("First Name", await StoredNameAsync("apple|named"));
+
+        // A new name (after the member re-authorizes the app) replaces it.
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("named", "named@example.com", fullName: "New Name")).StatusCode);
+        Assert.Equal("New Name", await StoredNameAsync("apple|named"));
+    }
+
+    [Fact]
+    public async Task Apple_relay_email_not_invited_returns_the_address()
+    {
+        database.SkipIfUnavailable();
+        var relay = await AppleAsync("relay", "abc123xyz@privaterelay.appleid.com");
+        Assert.Equal(HttpStatusCode.Forbidden, relay.StatusCode);
+        Assert.Equal("""{"error":"not_invited","email":"abc123xyz@privaterelay.appleid.com"}""",
+            await relay.Content.ReadAsStringAsync(Ct));
+
+        var plain = await AppleAsync("plain", "stranger-apple@example.com");
+        Assert.Equal(HttpStatusCode.Forbidden, plain.StatusCode);
+        Assert.Equal("""{"error":"not_invited"}""", await plain.Content.ReadAsStringAsync(Ct));
+
+        // Once an admin invites the relay address, it signs in.
+        await InviteAsync("abc123xyz@privaterelay.appleid.com");
+        Assert.Equal(HttpStatusCode.OK, (await AppleAsync("relay", "abc123xyz@privaterelay.appleid.com")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Apple_invalid_tokens_nonce_mismatch_and_unverified_email_get_401()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("apple401@example.com");
+
+        async Task Assert401(Task<HttpResponseMessage> call)
+        {
+            var response = await call;
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal("""{"error":"invalid_token"}""", await response.Content.ReadAsStringAsync(Ct));
+        }
+
+        await Assert401(AppleAsync("a401", "apple401@example.com", nonce: "n1", rawNonce: "n2"));
+        await Assert401(AppleAsync("a401", "apple401@example.com", verified: false));
+        await Assert401(Client().PostAsJsonAsync("/v1/auth/mobile/apple",
+            new { identityToken = "not-a-token", rawNonce = "n" }, Ct));
+        await Assert401(Client().PostAsJsonAsync("/v1/auth/mobile/apple",
+            new { identityToken = FakeAppleValidator.Token("a401", "apple401@example.com", "") }, Ct));
+    }
+
+    [Fact]
+    public async Task Apple_sessions_refresh_and_follow_the_invitation()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("applerefresh@example.com");
+        var first = (await (await AppleAsync("refresh", "applerefresh@example.com", fullName: "Refresh Player"))
+            .Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+
+        var rotated = await RefreshAsync(first.RefreshToken);
+        Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
+        var second = (await rotated.Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        Assert.NotEqual(first.RefreshToken, second.RefreshToken);
+        Assert.Equal(new TokenUser("apple|refresh", "Refresh Player", "applerefresh@example.com", "player"), second.User);
+
+        // A promotion applies on refresh; removing the invitation ends the session.
+        await InviteAsync("applerefresh@example.com", "admin");
+        var third = (await (await RefreshAsync(second.RefreshToken)).Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        Assert.Equal("admin", third.User.Role);
+
+        await _factory!.Services.GetRequiredService<ClubInvitations>().RemoveAsync("applerefresh@example.com", Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, (await RefreshAsync(third.RefreshToken)).StatusCode);
+    }
+
     /// <summary>A session cookie as the Google sign-in flow would issue it.</summary>
     private string SessionCookie(string subject, string email)
     {
@@ -483,6 +647,19 @@ public sealed class MobileAuthConfigurationTests
         using var factory = ApiFactory.With(Settings(Convert.ToBase64String(new byte[32]), connection: ""));
         var error = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
         Assert.Contains("Mobile sign-in requires", error.ToString());
+    }
+
+    [Fact]
+    public async Task Apple_route_is_not_mapped_without_apple_client_ids()
+    {
+        await using var factory = ApiFactory.With(Settings(Convert.ToBase64String(new byte[32])));
+        var client = factory.CreateClient();
+        var ct = TestContext.Current.CancellationToken;
+        var apple = await client.PostAsJsonAsync("/v1/auth/mobile/apple", new { identityToken = "x", rawNonce = "y" }, ct);
+        Assert.Equal(HttpStatusCode.NotFound, apple.StatusCode);
+        // Google is mapped in the same configuration (an empty token fails validation instead).
+        var google = await client.PostAsJsonAsync("/v1/auth/mobile/google", new { idToken = "" }, ct);
+        Assert.Equal(HttpStatusCode.Unauthorized, google.StatusCode);
     }
 
     [Fact]

@@ -42,6 +42,9 @@ services:
         generateValue: true
       - key: Authentication__Google__MobileClientIds__0
         sync: false
+      # Sign in with Apple (iOS app): the bundle ID is the identity token's audience.
+      - key: Authentication__Apple__ClientIds__0
+        value: com.claymoresrfc.claymores
 
 databases:
   - name: claymores-db

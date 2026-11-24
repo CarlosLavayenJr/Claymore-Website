@@ -12,7 +12,7 @@ using Npgsql;
 
 /// <summary>
 /// Sign-in for the Flutter app. The app sends the Google ID token from native Google
-/// sign-in; the API checks it, resolves the club role, and issues its own short-lived
+/// sign-in (or an Apple identity token, see <see cref="AppleSignIn"/>); the API checks it, resolves the club role, and issues its own short-lived
 /// access token (HMAC JWT) plus a rotating refresh token stored hashed in Postgres.
 /// </summary>
 internal static class MobileAuth
@@ -34,6 +34,7 @@ internal static class MobileAuth
         services.AddSingleton<MobileTokens>();
         services.AddSingleton<MobileSessionStore>();
         services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+        services.AddSingleton<IAppleIdentityTokenValidator, AppleIdentityTokenValidator>();
 
         authentication.AddJwtBearer(Scheme, options =>
         {
@@ -130,6 +131,9 @@ internal static class MobileAuth
             .WithSummary("Exchange a Google ID token from the app for API tokens")
             .Produces<MobileTokenResponse>().Produces(401).Produces(403);
 
+        if (app.Services.GetRequiredService<MobileAuthSettings>().AppleAudiences.Length > 0)
+            AppleSignIn.Map(group);
+
         group.MapPost("/refresh", async (MobileRefreshRequest request, MobileSessionStore sessions, MobileTokens tokens,
                 IConfiguration configuration, HttpContext context, ILogger<MobileSessionStore> logger, CancellationToken ct) =>
             {
@@ -173,7 +177,8 @@ internal sealed record MobileUser(string Subject, string? Name, string Email, st
 internal sealed record MobileTokenResponse(
     string AccessToken, DateTimeOffset AccessTokenExpiresAt, string RefreshToken, MobileUser User);
 
-internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudiences)
+/// <param name="AppleAudiences">Apple client IDs (the iOS bundle ID). Empty: Sign in with Apple is off.</param>
+internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudiences, string[] AppleAudiences)
 {
     public static MobileAuthSettings Read(IConfiguration configuration)
     {
@@ -199,7 +204,14 @@ internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudi
             .ToArray();
         if (audiences.Length == 0)
             throw new InvalidOperationException("Mobile sign-in needs at least one Google client ID.");
-        return new(key, audiences);
+
+        var apple = configuration.GetSection("Authentication:Apple:ClientIds").GetChildren()
+            .Select(entry => entry.Value?.Trim())
+            .OfType<string>()
+            .Where(id => id.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new(key, audiences, apple);
     }
 }
 
