@@ -4,10 +4,28 @@ using Npgsql;
 internal sealed record DuesAssessment(
     Guid Id, string PlayerSubject, string Description, int AmountCents, DateOnly? DueDate,
     long PaidCents, long BalanceCents, long PendingCheckoutCents);
-internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt);
+/// <param name="Method">stripe, cash, venmo, zelle, check or other; null for entries made before methods existed.</param>
+/// <param name="Note">The treasurer's note. Admin views only: always null in a player's own history.</param>
+internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt, string? Method = null, string? Note = null);
 internal sealed record DuesDetail(DuesAssessment Assessment, IReadOnlyList<DuesPayment> Payments);
 internal sealed record CreateAssessment(Guid Id, string? PlayerSubject, string? Description, int AmountCents, DateOnly? DueDate);
-internal sealed record RecordDuesPayment(Guid Id, int AmountCents);
+/// <param name="Method">How the club received it: cash, venmo, zelle, check or other (default other).</param>
+/// <param name="Note">Optional, up to 500 characters, shown to admins only.</param>
+internal sealed record RecordDuesPayment(Guid Id, int AmountCents, string? Method = null, string? Note = null)
+{
+    /// <summary>Methods a treasurer can record by hand. "stripe" is reserved for checkout payments.</summary>
+    public static readonly string[] ManualMethods = ["cash", "venmo", "zelle", "check", "other"];
+    public const int MaxNoteLength = 500;
+
+    /// <summary>The trimmed method (other when blank) and note (null when blank), or null when invalid.</summary>
+    public (string Method, string? Note)? Normalize()
+    {
+        var method = string.IsNullOrWhiteSpace(Method) ? "other" : Method.Trim().ToLowerInvariant();
+        var note = string.IsNullOrWhiteSpace(Note) ? null : Note.Trim();
+        if (!ManualMethods.Contains(method) || note?.Length > MaxNoteLength) return null;
+        return (method, note);
+    }
+}
 
 internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 {
@@ -47,14 +65,17 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         }
 
         await using var payments = new NpgsqlCommand("""
-            SELECT id, amount_cents, recorded_at FROM dues_payments
+            SELECT id, amount_cents, recorded_at, method, note FROM dues_payments
             WHERE assessment_id = @id ORDER BY recorded_at, id
             """, connection, transaction);
         payments.Parameters.AddWithValue("id", id);
         await using var paymentReader = await payments.ExecuteReaderAsync(ct);
         var entries = new List<DuesPayment>();
         while (await paymentReader.ReadAsync(ct))
-            entries.Add(new(paymentReader.GetGuid(0), paymentReader.GetInt32(1), paymentReader.GetDateTime(2)));
+            entries.Add(new(paymentReader.GetGuid(0), paymentReader.GetInt32(1), paymentReader.GetDateTime(2),
+                paymentReader.IsDBNull(3) ? null : paymentReader.GetString(3),
+                // A player's own history never shows the treasurer's note.
+                subject is null && !paymentReader.IsDBNull(4) ? paymentReader.GetString(4) : null));
         return new(assessment, entries);
     }
 
@@ -80,6 +101,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 
     public async Task<PaymentResult> RecordAsync(Guid assessmentId, RecordDuesPayment payment, string admin, CancellationToken ct)
     {
+        if (payment.Normalize() is not var (method, note)) return PaymentResult.Invalid;
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         // Serialize payments for one assessment so concurrent partial payments cannot overpay it.
@@ -89,12 +111,14 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         if (await assessment.ExecuteScalarAsync(ct) is not int amount) return PaymentResult.NotFound;
 
         await using (var replay = new NpgsqlCommand(
-            "SELECT assessment_id, amount_cents FROM dues_payments WHERE id = @id", connection, transaction))
+            "SELECT assessment_id, amount_cents, method, note FROM dues_payments WHERE id = @id", connection, transaction))
         {
             replay.Parameters.AddWithValue("id", payment.Id);
             await using var reader = await replay.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
-                return reader.GetGuid(0) == assessmentId && reader.GetInt32(1) == payment.AmountCents
+                return reader.GetGuid(0) == assessmentId && reader.GetInt32(1) == payment.AmountCents &&
+                       (reader.IsDBNull(2) ? null : reader.GetString(2)) == method &&
+                       (reader.IsDBNull(3) ? null : reader.GetString(3)) == note
                     ? PaymentResult.Recorded : PaymentResult.Conflict;
         }
 
@@ -109,14 +133,16 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         if (payment.AmountCents > amount - paid) return PaymentResult.Overpayment;
 
         await using var insert = new NpgsqlCommand("""
-            INSERT INTO dues_payments (id, assessment_id, amount_cents, recorded_by)
-            VALUES (@id, @assessment, @amount, @admin)
+            INSERT INTO dues_payments (id, assessment_id, amount_cents, recorded_by, method, note)
+            VALUES (@id, @assessment, @amount, @admin, @method, @note)
             ON CONFLICT (id) DO NOTHING
             """, connection, transaction);
         insert.Parameters.AddWithValue("id", payment.Id);
         insert.Parameters.AddWithValue("assessment", assessmentId);
         insert.Parameters.AddWithValue("amount", payment.AmountCents);
         insert.Parameters.AddWithValue("admin", admin);
+        insert.Parameters.AddWithValue("method", method);
+        insert.Parameters.Add("note", NpgsqlTypes.NpgsqlDbType.Text).Value = (object?)note ?? DBNull.Value;
         if (await insert.ExecuteNonQueryAsync(ct) == 0) return PaymentResult.Conflict;
         await transaction.CommitAsync(ct);
         return PaymentResult.Recorded;
@@ -131,7 +157,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
     }
 }
 
-internal enum PaymentResult { Recorded, NotFound, Conflict, Overpayment }
+internal enum PaymentResult { Recorded, NotFound, Conflict, Overpayment, Invalid }
 
 internal static class DuesEndpoints
 {
@@ -149,6 +175,12 @@ internal static class DuesEndpoints
 
         var admin = app.MapGroup("/v1/admin/dues").WithTags("Dues").RequireAuthorization(GoogleSignIn.AdminPolicy);
         admin.AddEndpointFilter(NoStore);
+
+        // Who dues can be assigned to: members who have signed in at least once and are still invited.
+        app.MapGet("/v1/admin/members", async (ClubMemberDirectory members, CancellationToken ct) =>
+                Results.Ok((await members.ListAsync(ct)).Select(m => new { subject = m.Subject, email = m.Email, name = m.Name })))
+            .WithTags("Members").RequireAuthorization(GoogleSignIn.AdminPolicy).AddEndpointFilter(NoStore)
+            .WithSummary("List members who have signed in, for assigning dues").Produces(200).Produces(401).Produces(403);
         admin.MapGet("/", async (DuesLedger ledger, CancellationToken ct) => Results.Ok(await ledger.ListAsync(null, ct)))
             .WithSummary("List club dues").Produces<List<DuesAssessment>>().Produces(401).Produces(403);
         admin.MapGet("/{id:guid}", async (Guid id, DuesLedger ledger, CancellationToken ct) =>
@@ -178,10 +210,11 @@ internal static class DuesEndpoints
                 PaymentResult.Recorded => Results.Ok(new { request.Id }),
                 PaymentResult.NotFound => Results.NotFound(),
                 PaymentResult.Overpayment => Results.Conflict(new { error = "Payment exceeds the available balance after any pending checkout." }),
+                PaymentResult.Invalid => Results.BadRequest(new { error = "Method must be cash, venmo, zelle, check or other, and the note at most 500 characters." }),
                 _ => Results.Conflict(new { error = "Payment ID is already in use." })
             };
         }).AddEndpointFilter(SameOrigin)
-            .WithSummary("Record a full or partial payment already received").Produces(200).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
+            .WithSummary("Record a full or partial payment already received (cash, Venmo, ...) with an optional note").Produces(200).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
     }
 
     private static ValueTask<object?> NoStore(EndpointFilterInvocationContext context, EndpointFilterDelegate next)

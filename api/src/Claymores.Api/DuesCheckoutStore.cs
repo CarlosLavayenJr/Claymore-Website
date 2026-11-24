@@ -173,8 +173,8 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         if (paid)
         {
             await using var credit = new NpgsqlCommand("""
-                INSERT INTO dues_payments (id, assessment_id, amount_cents, recorded_by, checkout_id)
-                VALUES (@id, @assessment, @amount, @recorded_by, @checkout)
+                INSERT INTO dues_payments (id, assessment_id, amount_cents, recorded_by, checkout_id, method)
+                VALUES (@id, @assessment, @amount, @recorded_by, @checkout, 'stripe')
                 """, connection, tx);
             credit.Parameters.AddWithValue("id", Guid.NewGuid());
             credit.Parameters.AddWithValue("checkout", attempt);

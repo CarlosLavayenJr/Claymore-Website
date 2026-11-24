@@ -15,6 +15,7 @@ import {
     RoleBadge,
     secondaryCtaClass,
 } from '@/components/members/member-ui'
+import { paymentMethodLabel } from '@/lib/claymores/admin-dues'
 import { formatCents, type DuesAssessment, type DuesDetail } from '@/lib/claymores/api-client'
 import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { checkoutReturnStatus } from '@/lib/claymores/checkout'
@@ -102,16 +103,25 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
                         <thead>
                             <tr className="border-b border-[#EAEAEA] text-left text-[#555555]">
                                 <th scope="col" className="py-2 font-semibold">Recorded</th>
+                                <th scope="col" className="hidden py-2 font-semibold sm:table-cell">Method</th>
                                 <th scope="col" className="py-2 text-right font-semibold">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {detail.payments.map(p => (
-                                <tr key={p.id} className="border-b border-[#EAEAEA] last:border-0">
-                                    <td className="py-2 text-[#111111]">{formatDate(p.recordedAt, true) ?? '—'}</td>
-                                    <td className="py-2 text-right font-semibold text-[#111111]">{formatCents(p.amountCents)}</td>
-                                </tr>
-                            ))}
+                            {detail.payments.map(p => {
+                                const method = paymentMethodLabel(p.method) ?? '—'
+                                return (
+                                    <tr key={p.id} className="border-b border-[#EAEAEA] last:border-0">
+                                        <td className="py-2 pr-2 text-[#111111]">
+                                            {formatDate(p.recordedAt, true) ?? '—'}
+                                            {/* Narrow screens: method under the date instead of its own column. */}
+                                            <span className="block text-xs text-[#555555] sm:hidden">{method}</span>
+                                        </td>
+                                        <td className="hidden py-2 pr-2 text-[#555555] sm:table-cell">{method}</td>
+                                        <td className="py-2 text-right font-semibold text-[#111111]">{formatCents(p.amountCents)}</td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 )}
