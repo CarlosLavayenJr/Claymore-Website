@@ -24,6 +24,7 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
     /// Claymores" profile. Teams without a profile get nulls, like Sanity matches without a team
     /// reference, so the website never links to an /opponents page that doesn't exist.</item>
     /// <item>updatedAt uses Sanity's second-precision UTC format.</item>
+    /// <item>Retired rows (no longer listed on rugbyfl.com, see <see cref="ScrapeStore.UpsertFixturesAsync"/>) are left out.</item>
     /// </list>
     /// </summary>
     internal const string ScraperPayloadQuery = """
@@ -72,7 +73,7 @@ public sealed class FixtureDatabase(NpgsqlDataSource dataSource, string readSour
             WHERE p.logo_url IS NOT NULL OR p.city IS NOT NULL OR p.website IS NOT NULL
             ORDER BY p.rank, p.id LIMIT 1
         ) ap ON true
-        WHERE f.source = 'scraper'
+        WHERE f.source = 'scraper' AND f.retired_at IS NULL
         """;
 
     public async Task<JsonElement[]> ListAsync(int? season, CancellationToken ct)

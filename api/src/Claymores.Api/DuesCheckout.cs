@@ -179,6 +179,90 @@ internal sealed class DuesCheckout(
         return new CheckoutOutcome(url);
     }
 
+    /// <summary>A reservation must be at least this old before a treasurer can release it.</summary>
+    internal static readonly TimeSpan ReleaseAfter = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Treasurer action for a pending checkout that never got a Stripe session bound (the create's
+    /// response was lost and the player didn't retry). Such a reservation blocks new checkouts for the
+    /// assessment, and after 12 hours it can't be resumed either. This asks Stripe for sessions with
+    /// <c>client_reference_id</c> = the checkout ID (every session this API creates has it), among those
+    /// created from the reservation's start until the 12-hour create cut-off. With none, or only expired
+    /// ones, the reservation is released. Otherwise the session is bound and reported, so the normal
+    /// resume and webhook flow takes over.
+    /// </summary>
+    public async Task<ReleaseOutcome> ReleaseAsync(Guid assessmentId, Guid checkoutId, string releasedBy, CancellationToken ct)
+    {
+        if (await store.FindAsync(assessmentId, checkoutId, ct) is not { } checkout)
+            return new(ReleaseResult.NotFound);
+        if (checkout.Status != "pending")
+            return new(ReleaseResult.NotPending);
+        if (checkout.SessionId is { } bound)
+            return new(ReleaseResult.AlreadyBound, bound);
+        if (checkout.Mode != settings.Mode)
+            return new(ReleaseResult.OtherMode);
+        if (DateTime.UtcNow - checkout.CreatedAt < ReleaseAfter)
+            return new(ReleaseResult.TooRecent);
+
+        var sessions = new List<Session>();
+        try
+        {
+            var options = new SessionListOptions
+            {
+                Limit = 100,
+                Created = new DateRangeOptions
+                {
+                    GreaterThanOrEqual = checkout.CreatedAt.AddMinutes(-5),
+                    LessThanOrEqual = checkout.CreatedAt.AddHours(12).AddMinutes(5),
+                },
+            };
+            await foreach (var session in stripe.ListAutoPagingAsync(options, cancellationToken: ct))
+                if (Guid.TryParse(session.ClientReferenceId, out var reference) && reference == checkout.Id)
+                    sessions.Add(session);
+        }
+        catch (StripeException error)
+        {
+            logger.LogWarning("Stripe {Mode} session lookup failed with status {Status} for checkout {Attempt}.",
+                settings.ModeName, error.HttpStatusCode, checkout.Id);
+            return new(ReleaseResult.StripeUnavailable);
+        }
+
+        var live = sessions.Where(session => session.Status != "expired")
+            .OrderBy(session => session.Status == "complete" ? 0 : 1).FirstOrDefault();
+        if (live is null)
+        {
+            if (!await store.ReleaseAsync(checkout.Id, releasedBy, ct))
+                return new(ReleaseResult.NotPending);
+            logger.LogInformation("Checkout {Attempt} released by {Admin}; Stripe had {Count} expired sessions for it.",
+                checkout.Id, releasedBy, sessions.Count);
+            return new(ReleaseResult.Released);
+        }
+
+        if (!MatchesAttempt(live, checkout.Id, checkout.AmountCents))
+        {
+            logger.LogError("Stripe session {Session} names checkout {Attempt} but doesn't match it.", live.Id, checkout.Id);
+            return new(ReleaseResult.Mismatch, live.Id, live.Status);
+        }
+        await store.BindAsync(checkout.Id, live.Id, ct);
+        return new(ReleaseResult.Bound, live.Id, live.Status);
+    }
+
+    internal static IResult ReleaseResponse(ReleaseOutcome outcome) => outcome.Result switch
+    {
+        ReleaseResult.Released => Results.Ok(new { status = "released" }),
+        ReleaseResult.Bound => Results.Ok(new { status = "bound", sessionId = outcome.SessionId, sessionStatus = outcome.SessionStatus }),
+        ReleaseResult.NotFound => Results.NotFound(),
+        ReleaseResult.NotPending => Results.Conflict(new { error = "not_pending" }),
+        ReleaseResult.AlreadyBound => Results.Conflict(new { error = "bound", sessionId = outcome.SessionId }),
+        ReleaseResult.OtherMode => Results.Conflict(new { error = "other_mode" }),
+        ReleaseResult.TooRecent => Results.Conflict(new { error = "too_recent" }),
+        ReleaseResult.Mismatch => Results.Json(new { error = "session_mismatch", sessionId = outcome.SessionId }, statusCode: 502),
+        _ => Results.Json(new { error = "stripe_unavailable" }, statusCode: 502),
+    };
+
+    private static string AdminName(ClaimsPrincipal user) =>
+        user.FindFirstValue("email") ?? user.FindFirstValue("sub") ?? "admin";
+
     internal static string Name(CheckoutReturn target) => target switch
     {
         CheckoutReturn.App => "app",
@@ -280,6 +364,34 @@ internal sealed class DuesCheckout(
                 .ProducesProblem(502);
         }
 
+        app.MapPost("/v1/admin/dues/{assessmentId:guid}/checkouts/{checkoutId:guid}/release",
+                async (Guid assessmentId, Guid checkoutId, ClaimsPrincipal user, DuesCheckout checkout, CancellationToken ct) =>
+                    ReleaseResponse(await checkout.ReleaseAsync(assessmentId, checkoutId, AdminName(user), ct)))
+            .RequireAuthorization(GoogleSignIn.AdminPolicy)
+            .AddEndpointFilter(SameOriginGuard.Filter)
+            .WithTags("Dues")
+            .WithSummary("Release a pending checkout that has no Stripe session after checking Stripe")
+            .WithDescription("For a pending checkout older than an hour with no bound Stripe session. Releases it when " +
+                "Stripe has no session for it, or only expired ones; otherwise binds the session and reports it.")
+            .Produces(200).Produces(401).Produces(403).Produces(404).Produces(409).Produces(502);
+
+        app.MapPost(DuesAdminPage.Path + "/{assessmentId:guid}/checkouts/{checkoutId:guid}/release",
+                async (Guid assessmentId, Guid checkoutId, HttpContext context, DuesCheckout checkout, CancellationToken ct) =>
+                {
+                    var outcome = await checkout.ReleaseAsync(assessmentId, checkoutId, AdminName(context.User), ct);
+                    context.Response.Headers.Location = $"{DuesAdminPage.Path}?notice=" + outcome.Result switch
+                    {
+                        ReleaseResult.Released => "checkout-released",
+                        ReleaseResult.Bound => "checkout-bound",
+                        ReleaseResult.StripeUnavailable or ReleaseResult.Mismatch => "checkout-stripe",
+                        _ => "checkout-unchanged",
+                    };
+                    return Results.StatusCode(StatusCodes.Status303SeeOther);
+                })
+            .RequireAuthorization(GoogleSignIn.AdminPolicy)
+            .AddEndpointFilter(SameOriginGuard.Filter)
+            .ExcludeFromDescription();
+
         app.MapPost("/v1/webhooks/stripe",
                 (DuesCheckout checkout, HttpContext context, CancellationToken ct) => checkout.WebhookAsync(context, ct))
             .WithTags("Dues")
@@ -289,6 +401,10 @@ internal sealed class DuesCheckout(
 }
 
 internal enum CheckoutReturn { Account, App, Web }
+
+internal enum ReleaseResult { Released, Bound, NotFound, NotPending, AlreadyBound, OtherMode, TooRecent, Mismatch, StripeUnavailable }
+
+internal sealed record ReleaseOutcome(ReleaseResult Result, string? SessionId = null, string? SessionStatus = null);
 
 internal enum StripeMode { Test, Live }
 

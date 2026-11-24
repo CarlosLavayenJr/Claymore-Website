@@ -376,6 +376,84 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Approve_requires_a_pending_request()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("stale-approver@example.com");
+        Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-stale", "stale@example.com")).StatusCode);
+        var id = await RequestIdAsync("google", "g-stale");
+        var path = $"/v1/admin/join-requests/{id}/approve";
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Client().SendAsync(Bearer(HttpMethod.Post, path, admin, new { role = "player" }), Ct)).StatusCode);
+        // Promoted to admin through the invitations route afterwards...
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            "/v1/admin/invitations/stale@example.com", admin, new { role = "admin" }), Ct)).StatusCode);
+
+        // ...a stale approve (another tab, a retry) can't demote them.
+        var again = await Client().SendAsync(Bearer(HttpMethod.Post, path, admin, new { role = "player" }), Ct);
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal("""{"error":"not_pending"}""", await again.Content.ReadAsStringAsync(Ct));
+        Assert.Equal("admin", await InvitedRoleAsync("stale@example.com"));
+
+        // A denied request can't be approved either.
+        Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-stale-denied", "stale-denied@example.com")).StatusCode);
+        var denied = await RequestIdAsync("google", "g-stale-denied");
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(
+            Bearer(HttpMethod.Post, $"/v1/admin/join-requests/{denied}/deny", admin, new { }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/join-requests/{denied}/approve", admin, new { role = "player" }), Ct)).StatusCode);
+        Assert.Null(await InvitedRoleAsync("stale-denied@example.com"));
+    }
+
+    [Fact]
+    public async Task A_direct_invitation_approves_the_pending_request_for_that_email()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("direct-inviter@example.com");
+        Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-direct", "Direct@Example.com")).StatusCode);
+        var id = await RequestIdAsync("google", "g-direct");
+
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            "/v1/admin/invitations/direct@example.com", admin, new { role = "player" }), Ct)).StatusCode);
+        Assert.Equal("approved", await GoogleStatusAsync("g-direct", "Direct@Example.com"));
+        await using (var dataSource = database.CreateDataSource())
+        await using (var decided = dataSource.CreateCommand("SELECT decided_by FROM join_requests WHERE id = @id"))
+        {
+            decided.Parameters.AddWithValue("id", id);
+            Assert.Equal("direct-inviter@example.com", await decided.ExecuteScalarAsync(Ct));
+        }
+
+        // It no longer shows as pending, and approving it now is a conflict.
+        var pending = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/join-requests?status=pending", admin), Ct);
+        Assert.DoesNotContain((await pending.Content.ReadFromJsonAsync<List<JsonElement>>(Ct))!,
+            item => item.GetProperty("id").GetGuid() == id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/join-requests/{id}/approve", admin, new { role = "admin" }), Ct)).StatusCode);
+        Assert.Equal("player", await InvitedRoleAsync("direct@example.com"));
+    }
+
+    [Fact]
+    public async Task Approving_as_player_keeps_an_existing_admin_invitation()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("keep-approver@example.com");
+        Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-keep", "keep@example.com")).StatusCode);
+        var id = await RequestIdAsync("google", "g-keep");
+        // An admin invitation written outside the API (an older build, or SQL) leaves the request pending.
+        await using (var dataSource = database.CreateDataSource())
+        await using (var insert = dataSource.CreateCommand(
+            "INSERT INTO club_invitations (email, role, invited_by) VALUES ('keep@example.com', 'admin', 'sql')"))
+            await insert.ExecuteNonQueryAsync(Ct);
+
+        var approve = await Client().SendAsync(
+            Bearer(HttpMethod.Post, $"/v1/admin/join-requests/{id}/approve", admin, new { role = "player" }), Ct);
+        Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
+        Assert.Equal("approved", (await approve.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("status").GetString());
+        Assert.Equal("admin", await InvitedRoleAsync("keep@example.com"));
+    }
+
+    [Fact]
     public async Task Non_admins_cannot_use_the_admin_routes()
     {
         database.SkipIfUnavailable();
@@ -545,5 +623,36 @@ public sealed class JoinRequestRateLimitTests(PostgresDatabase database) : IClas
         var status = await client.PostAsJsonAsync("/v1/auth/mobile/google/request-status",
             new { idToken = FakeGoogleValidator.Token("g-limit-0", "limit0@example.com") }, ct);
         Assert.Equal(HttpStatusCode.TooManyRequests, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Behind_the_proxy_the_limit_uses_the_right_most_forwarded_address()
+    {
+        database.SkipIfUnavailable();
+        var settings = JoinRequestTests.Settings(database.ConnectionString!, 2);
+        settings["ForwardedHeaders:Enabled"] = "true";
+        await using var factory = ApiFactory.With(settings, JoinRequestTests.Fakes);
+        var client = factory.CreateClient();
+        var ct = TestContext.Current.CancellationToken;
+        var n = 0;
+
+        Task<HttpResponseMessage> Request(string forwardedFor)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/mobile/google/request-status")
+            {
+                Content = JsonContent.Create(new { idToken = FakeGoogleValidator.Token($"g-fwd-{n++}", "fwd@example.com") })
+            };
+            // Render's proxy appends the address it saw; anything to the left came from the client.
+            request.Headers.Add("X-Forwarded-For", forwardedFor);
+            return client.SendAsync(request, ct);
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Request("198.51.100.1, 203.0.113.10")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Request("198.51.100.2, 203.0.113.10")).StatusCode);
+        // A different spoofed left-hand entry doesn't open a new partition.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await Request("198.51.100.3, 203.0.113.10")).StatusCode);
+        // Another client (a different address appended by the proxy) has its own limit.
+        Assert.Equal(HttpStatusCode.OK, (await Request("203.0.113.20")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Request("203.0.113.10, 203.0.113.20")).StatusCode);
     }
 }

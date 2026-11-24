@@ -117,6 +117,9 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         builder.Services.AddSingleton<ClubInvitations>();
         builder.Services.AddSingleton<ClubMemberDirectory>();
         builder.Services.AddSingleton<JoinRequestStore>();
+        builder.Services.AddSingleton<AccountDeletion>();
+        builder.Services.AddHttpClient<IAppleAuthClient, AppleAuthClient>(AppleAuthClient.Configure);
+        builder.Services.AddSingleton<AppleTokenRevocation>();
     }
     if (duesEnabled)
         builder.Services.AddSingleton<DuesLedger>();
@@ -175,6 +178,8 @@ if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] || scra
 if (migrator is not null && app.Configuration.GetValue("Database:MigrateOnStartup", true))
     await migrator.MigrateAsync(CancellationToken.None);
 
+// First, so everything after it (the scheme for redirects and cookies, and the client IP that
+// UseRateLimiter partitions on) sees the forwarded values. See Hosting.ConfigureForwardedHeaders.
 if (forwardedHeaders)
     app.UseForwardedHeaders();
 app.UseExceptionHandler(new ExceptionHandlerOptions
@@ -205,6 +210,7 @@ if (googleEnabled && migrator is not null)
 {
     InvitationEndpoints.Map(app);
     JoinRequestEndpoints.Map(app, mobileAuthEnabled);
+    AccountDeletion.Map(app);
 }
 if (duesEnabled)
 {

@@ -188,4 +188,56 @@ public sealed class SanityAdoptionPostgresTests(PostgresDatabase database) : ICl
             "SELECT string_agg(to_char(fixture_date, 'YYYY-MM-DD'), ',') FROM fixtures WHERE origin_sanity_id = 'hand-1'"));
         Assert.Equal("2027-02-27", await Scalar<string>("SELECT payload->>'date' FROM fixtures WHERE origin_sanity_id = 'hand-1'"));
     }
+
+    [Fact]
+    public async Task A_moved_adopted_row_gets_a_new_id_so_the_old_key_can_be_scraped_again()
+    {
+        database.SkipIfUnavailable();
+        var ct = TestContext.Current.CancellationToken;
+        var store = new ScrapeStore(_dataSource!);
+        var service = new ScrapeService(_site, store, NullLogger<ScrapeService>.Instance);
+        Task<FixtureScrapeResult> Scrape() => service.ScrapeFixturesAsync(new FixtureScrapeRequest([117], [42], false), "cli", ct);
+        JsonElement[] Docs(string date) => JsonSerializer.Deserialize<JsonElement[]>($$"""
+            [{"id":"hand-move","date":"{{date}}","homeTeam":"Claymores","awayTeam":"Daytona","homeScore":0,
+              "awayScore":0,"status":"upcoming","matchType":"friendly","manualOverride":true}]
+            """)!;
+
+        // The scraper wrote the game on May 4; an admin locked it in Sanity, adoption took it over.
+        _site.ClubPages[(117, 42)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, May 4, 2030", "Claymores", "Daytona"),
+            new ClubPageBuilder.Game("Saturday, May 11, 2030", "Claymores", "Lakeland"));
+        Assert.Equal(2, (await Scrape()).Pages.Single().Inserted);
+        var oldId = await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2030-05-04'");
+        Assert.Equal(1, (await SanityAdoption.RunAsync(store, Docs("2030-05-04"), ct)).Updated);
+
+        // The Sanity document moves to May 18: the row moves with a fresh id and keeps its origin.
+        Assert.Equal(1, (await SanityAdoption.RunAsync(store, Docs("2030-05-18"), ct)).Updated);
+        var movedId = await Scalar<string>("SELECT sanity_id FROM fixtures WHERE origin_sanity_id = 'hand-move'");
+        Assert.NotEqual(oldId, movedId);
+        Assert.StartsWith("rfl-2030-05-18-", movedId);
+        Assert.Equal(movedId, await Scalar<string>("SELECT payload->>'id' FROM fixtures WHERE origin_sanity_id = 'hand-move'"));
+
+        // rugbyfl.com still lists May 4 (plus a new game): the scrape inserts the old key without a
+        // primary key conflict, and the rest of the batch is written.
+        _site.ClubPages[(117, 42)] = ClubPageBuilder.Build(
+            new ClubPageBuilder.Game("Saturday, May 4, 2030", "Claymores", "Daytona"),
+            new ClubPageBuilder.Game("Saturday, May 11, 2030", "Claymores", "Lakeland"),
+            new ClubPageBuilder.Game("Saturday, May 25, 2030", "Claymores", "Brevard"));
+        var page = (await Scrape()).Pages.Single();
+        Assert.Equal((2, 1, 0), (page.Inserted, page.Unchanged, page.Retired));
+        Assert.Equal(oldId, await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2030-05-04'"));
+        // The adopted row is locked: never retired although the page doesn't list May 18.
+        Assert.False(await Scalar<bool>("SELECT retired_at IS NOT NULL FROM fixtures WHERE origin_sanity_id = 'hand-move'"));
+
+        // A row moved before this fix still holds the old id. The scraper picks a free id instead of
+        // aborting the batch on the primary key.
+        await Execute($"""
+            DELETE FROM fixtures WHERE sanity_id = '{oldId}';
+            UPDATE fixtures SET sanity_id = '{oldId}' WHERE origin_sanity_id = 'hand-move';
+            """);
+        page = (await Scrape()).Pages.Single();
+        Assert.Equal((1, 2), (page.Inserted, page.Unchanged));
+        Assert.Equal(oldId + "-2", await Scalar<string>("SELECT sanity_id FROM fixtures WHERE fixture_date = '2030-05-04'"));
+        Assert.Equal(oldId, await Scalar<string>("SELECT sanity_id FROM fixtures WHERE origin_sanity_id = 'hand-move'"));
+    }
 }

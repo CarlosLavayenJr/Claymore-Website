@@ -53,6 +53,14 @@ services:
       # Sign in with Apple (iOS app): the bundle ID is the identity token's audience.
       - key: Authentication__Apple__ClientIds__0
         value: com.claymoresrfc.claymores
+      # Apple token revocation on account deletion (see api/README.md, Delete my account).
+      # Team ID is public. Add the Sign in with Apple key's ID here as Authentication__Apple__KeyId
+      # once the key exists; until then revocation is skipped and logged.
+      - key: Authentication__Apple__TeamId
+        value: 57539PPNC3
+      # The .p8 key contents (PEM). Secret: set in the Render dashboard only.
+      - key: Authentication__Apple__PrivateKey
+        sync: false
       # Where Stripe returns website checkouts (returnTo "web"). Checkout itself stays off
       # (Stripe__CheckoutEnabled unset) and Stripe__Mode defaults to test; see api/README.md.
       - key: Stripe__WebReturnUrl

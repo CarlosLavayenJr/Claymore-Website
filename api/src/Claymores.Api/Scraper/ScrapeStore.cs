@@ -7,12 +7,16 @@ public sealed record TeamRef(long Id, string Name);
 
 public sealed record FixtureUpsert(ScrapedFixture Fixture, TeamRef Home, TeamRef Away, int ClubId, int SeasonId, string? Venue);
 
-public sealed record UpsertCounts(int Inserted, int Updated, int Unchanged, int SkippedManualOverride)
+/// <param name="Retired">Scraper rows of the page that this run no longer saw and that were retired.</param>
+public sealed record UpsertCounts(int Inserted, int Updated, int Unchanged, int SkippedManualOverride, int Retired = 0)
 {
     public static UpsertCounts operator +(UpsertCounts a, UpsertCounts b) =>
         new(a.Inserted + b.Inserted, a.Updated + b.Updated, a.Unchanged + b.Unchanged,
-            a.SkippedManualOverride + b.SkippedManualOverride);
+            a.SkippedManualOverride + b.SkippedManualOverride, a.Retired + b.Retired);
 }
+
+/// <summary>One rugbyfl.com club page (club and season) that was fetched and parsed successfully.</summary>
+public sealed record ScrapedPage(int ClubId, int SeasonId);
 
 public sealed record ChampionshipConfig(bool Active, string ChampionshipId, string SeasonLabel, string? DivisionName);
 
@@ -113,9 +117,18 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
     /// <summary>
     /// Inserts new games and updates scores, status, notes and the rest on existing ones, keyed by
     /// (date, home team, away team). Rows with manual_override are never touched. A venue or kickoff
-    /// that the current run did not capture keeps its stored value. Runs in one transaction.
+    /// that the current run did not capture keeps its stored value. A retired row seen again is
+    /// un-retired. Runs in one transaction.
     /// </summary>
-    public async Task<UpsertCounts> UpsertFixturesAsync(IReadOnlyList<FixtureUpsert> fixtures, DateTimeOffset scrapedAt, CancellationToken ct)
+    /// <param name="page">
+    /// The page these fixtures came from, after a successful fetch and parse. Its other scraper rows
+    /// (same club and season, not manual_override) that this run didn't see are retired in the same
+    /// transaction: the game was rescheduled (new date, so a new key), a team was re-resolved (new key),
+    /// or the game was removed. Null skips retirement. A page with no fixtures retires nothing: an empty
+    /// parse more likely means the markup changed than that every game was removed.
+    /// </param>
+    public async Task<UpsertCounts> UpsertFixturesAsync(IReadOnlyList<FixtureUpsert> fixtures, DateTimeOffset scrapedAt,
+        CancellationToken ct, ScrapedPage? page = null)
     {
         var counts = new UpsertCounts(0, 0, 0, 0);
         if (fixtures.Count == 0) return counts;
@@ -155,19 +168,24 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                     source_season_id = EXCLUDED.source_season_id,
                     source_game_id = COALESCE(EXCLUDED.source_game_id, f.source_game_id),
                     last_scraped_at = EXCLUDED.last_scraped_at,
-                    updated_at = EXCLUDED.updated_at
+                    updated_at = EXCLUDED.updated_at,
+                    retired_at = NULL
                 WHERE NOT f.manual_override AND (
                     f.season, f.home_team_raw, f.away_team_raw, f.status, f.match_type, f.competition, f.note,
-                    f.home_score, f.away_score, f.kickoff_time, f.venue, f.source_game_id)
+                    f.home_score, f.away_score, f.kickoff_time, f.venue, f.source_game_id, f.retired_at)
                     IS DISTINCT FROM (
                     EXCLUDED.season, EXCLUDED.home_team_raw, EXCLUDED.away_team_raw, EXCLUDED.status,
                     EXCLUDED.match_type, EXCLUDED.competition, EXCLUDED.note, EXCLUDED.home_score,
                     EXCLUDED.away_score, COALESCE(EXCLUDED.kickoff_time, f.kickoff_time),
-                    COALESCE(EXCLUDED.venue, f.venue), COALESCE(EXCLUDED.source_game_id, f.source_game_id))
+                    COALESCE(EXCLUDED.venue, f.venue), COALESCE(EXCLUDED.source_game_id, f.source_game_id),
+                    NULL::timestamptz)
                 RETURNING sanity_id, (xmax = 0) AS inserted
                 """, connection, transaction);
             var p = command.Parameters;
-            p.AddWithValue("id", FixtureId(f.Date, item.Home.Id, item.Away.Id));
+            // The id is used only for a new row. A row adopted from Sanity and then moved can still
+            // hold the id derived from this key; take a free one rather than fail the whole batch.
+            p.AddWithValue("id", await FreeFixtureIdAsync(connection, transaction,
+                FixtureId(f.Date, item.Home.Id, item.Away.Id), f.Date, item.Home.Id, item.Away.Id, null, ct));
             p.AddWithValue("date", f.Date);
             p.AddWithValue("season", f.Season);
             p.AddWithValue("home", item.Home.Name);
@@ -230,17 +248,61 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
             refresh.Parameters.AddWithValue("ids", ids.ToArray());
             await refresh.ExecuteNonQueryAsync(ct);
         }
+
+        if (page is { } scraped)
+        {
+            // Every row this run saw now has last_scraped_at = scrapedAt (inserted, updated, or touched as
+            // unchanged). Locked rows (manual_override; every adopted row has it) are never retired.
+            await using var retire = new NpgsqlCommand("""
+                UPDATE fixtures SET retired_at = @scraped_at, updated_at = @scraped_at
+                WHERE source = 'scraper' AND retired_at IS NULL AND NOT manual_override AND origin_sanity_id IS NULL
+                  AND source_club_id = @club_id AND source_season_id = @season_id
+                  AND (last_scraped_at IS NULL OR last_scraped_at < @scraped_at)
+                """, connection, transaction);
+            retire.Parameters.AddWithValue("scraped_at", scrapedAt);
+            retire.Parameters.AddWithValue("club_id", scraped.ClubId);
+            retire.Parameters.AddWithValue("season_id", scraped.SeasonId);
+            counts += new UpsertCounts(0, 0, 0, 0, await retire.ExecuteNonQueryAsync(ct));
+        }
         await transaction.CommitAsync(ct);
         return counts;
     }
 
+    /// <summary>
+    /// <paramref name="baseId"/>, or <c>{baseId}-2</c>, <c>-3</c> and so on when another row holds it.
+    /// The row that already has this natural key (date, home, away) owns the id, and so does
+    /// <paramref name="self"/> (a row being moved to this key).
+    /// </summary>
+    private static async Task<string> FreeFixtureIdAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        string baseId, DateOnly date, long homeTeamId, long awayTeamId, string? self, CancellationToken ct)
+    {
+        for (var n = 1; ; n++)
+        {
+            var candidate = n == 1 ? baseId : $"{baseId}-{n}";
+            await using var taken = new NpgsqlCommand("""
+                SELECT EXISTS (SELECT 1 FROM fixtures WHERE sanity_id = @id
+                    AND sanity_id IS DISTINCT FROM @self
+                    AND NOT (source = 'scraper' AND fixture_date = @date
+                             AND home_team_id = @home_id AND away_team_id = @away_id))
+                """, connection, transaction);
+            taken.Parameters.AddWithValue("id", candidate);
+            taken.Parameters.Add("self", NpgsqlDbType.Text).Value = (object?)self ?? DBNull.Value;
+            taken.Parameters.AddWithValue("date", date);
+            taken.Parameters.AddWithValue("home_id", homeTeamId);
+            taken.Parameters.AddWithValue("away_id", awayTeamId);
+            if (!(bool)(await taken.ExecuteScalarAsync(ct))!)
+                return candidate;
+        }
+    }
+
+    /// <summary>Scraper rows that are not retired, for the Sanity comparison.</summary>
     public async Task<StoredFixture[]> ScrapedFixturesAsync(CancellationToken ct)
     {
         await using var command = dataSource.CreateCommand("""
             SELECT sanity_id, fixture_date, home_team_raw, away_team_raw, home_team_id, away_team_id,
                    home_score, away_score, status, match_type, competition, note,
                    to_char(kickoff_time, 'FMHH12:MI AM'), venue, manual_override
-            FROM fixtures WHERE source = 'scraper' ORDER BY fixture_date, sanity_id
+            FROM fixtures WHERE source = 'scraper' AND retired_at IS NULL ORDER BY fixture_date, sanity_id
             """);
         await using var reader = await command.ExecuteReaderAsync(ct);
         var rows = new List<StoredFixture>();
@@ -316,7 +378,8 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
 
             if (existing is null)
             {
-                var id = FixtureId(c.Date, home.Id, away.Id);
+                var id = await FreeFixtureIdAsync(connection, transaction, FixtureId(c.Date, home.Id, away.Id),
+                    c.Date, home.Id, away.Id, null, ct);
                 await using var insert = new NpgsqlCommand("""
                     INSERT INTO fixtures (
                         sanity_id, source, fixture_date, season, home_team, away_team, home_team_id, away_team_id,
@@ -335,9 +398,17 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                 continue;
             }
 
-            // A moved row takes the document's date, teams and names; otherwise the scraped names stay.
+            // A moved row takes the document's date, teams and names, and a fresh id derived from its new
+            // key (origin_sanity_id still links it to the document). Keeping the old rfl-{oldDate}-... id
+            // would make a later scrape of the old key collide with it on the primary key.
+            // Otherwise the scraped names and the id stay. Adopting also un-retires the row.
+            var newId = moved
+                ? await FreeFixtureIdAsync(connection, transaction, FixtureId(c.Date, home.Id, away.Id),
+                    c.Date, home.Id, away.Id, existing, ct)
+                : existing;
             await using var update = new NpgsqlCommand("""
                 UPDATE fixtures f SET
+                    sanity_id = @new_id, retired_at = NULL,
                     fixture_date = @date, home_team = @home, away_team = @away, home_team_id = @home_id, away_team_id = @away_id,
                     home_team_raw = CASE WHEN @moved THEN @home_raw ELSE f.home_team_raw END,
                     away_team_raw = CASE WHEN @moved THEN @away_raw ELSE f.away_team_raw END,
@@ -347,17 +418,20 @@ public sealed partial class ScrapeStore(NpgsqlDataSource dataSource)
                     manual_override = true, origin_sanity_id = @origin, updated_at = now()
                 WHERE f.sanity_id = @id AND (
                     f.fixture_date, f.home_team_id, f.away_team_id, f.season, f.status, f.match_type, f.competition, f.note,
-                    f.home_score, f.away_score, f.kickoff_time, f.venue, f.manual_override, f.origin_sanity_id)
+                    f.home_score, f.away_score, f.kickoff_time, f.venue, f.manual_override, f.origin_sanity_id,
+                    f.sanity_id, f.retired_at)
                     IS DISTINCT FROM (
                     @date, @home_id, @away_id, @season, @status, @match_type, @competition, @note,
-                    @home_score, @away_score, COALESCE(@kickoff, f.kickoff_time), COALESCE(@venue, f.venue), true, @origin)
+                    @home_score, @away_score, COALESCE(@kickoff, f.kickoff_time), COALESCE(@venue, f.venue), true, @origin,
+                    @new_id, NULL::timestamptz)
                 """, connection, transaction);
             update.Parameters.AddWithValue("id", existing);
+            update.Parameters.AddWithValue("new_id", newId);
             update.Parameters.AddWithValue("moved", moved);
             Bind(update.Parameters);
             if (await update.ExecuteNonQueryAsync(ct) == 1)
             {
-                ids.Add(existing);
+                ids.Add(newId);
                 outcomes[i] = AdoptionOutcome.Updated;
             }
             else

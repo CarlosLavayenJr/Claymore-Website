@@ -178,8 +178,17 @@ internal sealed record MobileTokenResponse(
     string AccessToken, DateTimeOffset AccessTokenExpiresAt, string RefreshToken, MobileUser User);
 
 /// <param name="AppleAudiences">Apple client IDs (the iOS bundle ID). Empty: Sign in with Apple is off.</param>
-internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudiences, string[] AppleAudiences)
+/// <param name="RefreshGraceSeconds">
+/// How long a just-rotated refresh token still returns its (still active) successor instead of
+/// counting as reuse: <c>MobileAuth:RefreshGraceSeconds</c>, default 60, 0 turns it off.
+/// </param>
+internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudiences, string[] AppleAudiences,
+    int RefreshGraceSeconds = MobileAuthSettings.DefaultRefreshGraceSeconds)
 {
+    internal const int DefaultRefreshGraceSeconds = 60;
+
+    public TimeSpan RefreshGrace => TimeSpan.FromSeconds(RefreshGraceSeconds);
+
     public static MobileAuthSettings Read(IConfiguration configuration)
     {
         byte[] key;
@@ -211,7 +220,11 @@ internal sealed record MobileAuthSettings(byte[] SigningKey, string[] GoogleAudi
             .Where(id => id.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        return new(key, audiences, apple);
+
+        var grace = configuration.GetValue("MobileAuth:RefreshGraceSeconds", DefaultRefreshGraceSeconds);
+        if (grace is < 0 or > 600)
+            throw new InvalidOperationException("MobileAuth:RefreshGraceSeconds must be from 0 to 600.");
+        return new(key, audiences, apple, grace);
     }
 }
 
@@ -336,16 +349,35 @@ internal sealed class GoogleIdTokenValidator : IGoogleIdTokenValidator
 }
 
 internal sealed record RefreshSession(ClubMember Member, Guid FamilyId, string RefreshToken);
-internal sealed record RefreshRotation(RefreshSession? Session, bool ReuseDetected = false);
+/// <param name="Grace">The token was rotated moments ago; Session holds its current successor.</param>
+internal sealed record RefreshRotation(RefreshSession? Session, bool ReuseDetected = false, bool Grace = false);
 
 /// <summary>
-/// Refresh tokens: 32 random bytes (base64url), stored as SHA-256 hashes in
-/// <c>mobile_refresh_tokens</c>. Each use rotates the token; presenting an already
-/// rotated or revoked token revokes its whole family.
+/// Refresh tokens: 32 bytes (base64url), stored as SHA-256 hashes in <c>mobile_refresh_tokens</c>.
+/// A sign-in starts a family with a random token. Each use rotates the token; presenting an already
+/// rotated or revoked token revokes its whole family (reuse detection), except within the grace
+/// window below.
 /// </summary>
-internal sealed class MobileSessionStore(NpgsqlDataSource dataSource)
+/// <remarks>
+/// <para>
+/// Grace window: the app may refresh twice in parallel (two requests that both hit an expired access
+/// token). The loser presents a token that the winner rotated a moment ago. If that token was rotated
+/// (not revoked by logout or reuse) less than <see cref="MobileAuthSettings.RefreshGrace"/> ago and its
+/// successor is still active, the loser gets the same successor and a fresh access token.
+/// </para>
+/// <para>
+/// Only hashes are stored, so the successor's plaintext can't be read back. Instead a rotation's
+/// successor is derived from the presented token: HMAC-SHA256 under a key derived from the API
+/// signing key. Anyone who can present the old token in the window gets the successor anyway, so the
+/// derivation reveals nothing extra; without the signing key it can't be computed. Logout revokes the
+/// successor, so a rotated token never works after logout.
+/// </para>
+/// </remarks>
+internal sealed class MobileSessionStore(NpgsqlDataSource dataSource, MobileAuthSettings settings)
 {
     internal static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(60);
+    private readonly byte[] _successorKey =
+        HMACSHA256.HashData(settings.SigningKey, "claymores-refresh-successor-v1"u8);
 
     public async Task<string> StartAsync(ClubMember member, CancellationToken ct)
     {
@@ -360,15 +392,17 @@ internal sealed class MobileSessionStore(NpgsqlDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
         Guid id, family;
+        Guid? replacedBy;
         ClubMember member;
-        bool revoked, expired;
+        bool revoked, expired, inGrace;
         await using (var find = new NpgsqlCommand("""
             SELECT id, family_id, google_subject, email, display_name,
-                   revoked_at IS NOT NULL, expires_at <= now()
+                   revoked_at IS NOT NULL, expires_at <= now(), replaced_by, revoked_at > now() - @grace
             FROM mobile_refresh_tokens WHERE token_hash = @hash FOR UPDATE
             """, connection, tx))
         {
             find.Parameters.AddWithValue("hash", Hash(token));
+            find.Parameters.AddWithValue("grace", settings.RefreshGrace);
             await using var reader = await find.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct))
                 return new(null);
@@ -377,6 +411,31 @@ internal sealed class MobileSessionStore(NpgsqlDataSource dataSource)
             member = new ClubMember(reader.GetString(2), reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4));
             revoked = reader.GetBoolean(5);
             expired = reader.GetBoolean(6);
+            replacedBy = reader.IsDBNull(7) ? null : reader.GetGuid(7);
+            inGrace = !reader.IsDBNull(8) && reader.GetBoolean(8);
+        }
+
+        if (revoked && replacedBy is { } successorId && inGrace)
+        {
+            // Rotated (not revoked by logout or reuse) moments ago: a parallel refresh. Hand out the
+            // same successor while it is still active.
+            var successor = Successor(token);
+            await using var check = new NpgsqlCommand("""
+                SELECT google_subject, email, display_name FROM mobile_refresh_tokens
+                WHERE id = @id AND family_id = @family AND token_hash = @hash
+                  AND revoked_at IS NULL AND expires_at > now()
+                """, connection, tx);
+            check.Parameters.AddWithValue("id", successorId);
+            check.Parameters.AddWithValue("family", family);
+            check.Parameters.AddWithValue("hash", Hash(successor));
+            await using var reader = await check.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                var current = new ClubMember(reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2));
+                await reader.DisposeAsync();
+                await tx.CommitAsync(ct);
+                return new(new RefreshSession(current, family, successor), Grace: true);
+            }
         }
 
         if (revoked)
@@ -396,7 +455,7 @@ internal sealed class MobileSessionStore(NpgsqlDataSource dataSource)
             revoke.Parameters.AddWithValue("next", next);
             await revoke.ExecuteNonQueryAsync(ct);
         }
-        var nextToken = NewToken();
+        var nextToken = Successor(token);
         await InsertAsync(connection, tx, next, family, nextToken, member, ct);
         await tx.CommitAsync(ct);
         return new(new RefreshSession(member, family, nextToken));
@@ -450,4 +509,8 @@ internal sealed class MobileSessionStore(NpgsqlDataSource dataSource)
     internal static byte[] Hash(string token) => SHA256.HashData(Encoding.UTF8.GetBytes(token));
 
     private static string NewToken() => Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
+
+    /// <summary>The token that rotating <paramref name="token"/> issues (see the remarks on this class).</summary>
+    private string Successor(string token) =>
+        Base64Url.EncodeToString(HMACSHA256.HashData(_successorKey, Encoding.UTF8.GetBytes(token)));
 }

@@ -58,6 +58,16 @@ public static class Hosting
     /// redirect URI uses https and the Secure session cookie is issued. Only enable this when
     /// the app is reachable solely through that proxy, as on Render.
     /// </summary>
+    /// <remarks>
+    /// The client IP: <c>ForwardLimit = 1</c> (the default, set explicitly here) makes the middleware
+    /// read only the right-most <c>X-Forwarded-For</c> entry, the one the platform proxy appended for
+    /// the connection it received. Entries further left came from the client and are ignored, so a
+    /// client can't pick its own rate-limit partition by sending the header. Program.cs runs
+    /// <c>UseForwardedHeaders</c> first, before <c>UseRateLimiter</c>, so the join-request limiter
+    /// partitions on the forwarded address in <c>HttpContext.Connection.RemoteIpAddress</c>.
+    /// The known proxy lists are cleared because the platform's proxy addresses aren't fixed; that is
+    /// safe only while the app accepts no traffic except through the proxy.
+    /// </remarks>
     public static bool ConfigureForwardedHeaders(WebApplicationBuilder builder)
     {
         var enabled = builder.Configuration.GetValue<bool?>("ForwardedHeaders:Enabled")
@@ -67,6 +77,7 @@ public static class Hosting
         builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.ForwardLimit = 1;
             options.KnownIPNetworks.Clear();
             options.KnownProxies.Clear();
         });

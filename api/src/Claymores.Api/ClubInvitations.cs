@@ -44,18 +44,54 @@ internal sealed class ClubInvitations(NpgsqlDataSource dataSource, IMemoryCache 
         return invitations;
     }
 
+    /// <summary>
+    /// Invites <paramref name="email"/> or changes its role, and marks that email's pending join
+    /// requests approved by <paramref name="invitedBy"/>, since they no longer need a decision.
+    /// </summary>
     public async Task UpsertAsync(string email, string role, string? invitedBy, CancellationToken ct)
     {
-        await using var command = dataSource.CreateCommand("""
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await UpsertAsync(connection, transaction, email, role, invitedBy, keepAdmin: false, ct);
+        await transaction.CommitAsync(ct);
+        Forget(email);
+    }
+
+    /// <summary>
+    /// The invitation write inside the caller's transaction. With <paramref name="keepAdmin"/>, an
+    /// existing admin invitation is never lowered to player (join request approvals use this). The
+    /// caller commits, then calls <see cref="Forget"/>.
+    /// </summary>
+    /// <returns>The email's role afterwards.</returns>
+    internal static async Task<string> UpsertAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        string email, string role, string? invitedBy, bool keepAdmin, CancellationToken ct)
+    {
+        await using var command = new NpgsqlCommand("""
             INSERT INTO club_invitations (email, role, invited_by) VALUES (@email, @role, @by)
-            ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, updated_at = now()
-            """);
+            ON CONFLICT (email) DO UPDATE SET
+                role = CASE WHEN @keepAdmin AND club_invitations.role = 'admin' THEN 'admin' ELSE EXCLUDED.role END,
+                updated_at = now()
+            RETURNING role
+            """, connection, transaction);
         command.Parameters.AddWithValue("email", Normalize(email));
         command.Parameters.AddWithValue("role", role);
         command.Parameters.Add("by", NpgsqlTypes.NpgsqlDbType.Text).Value = (object?)invitedBy ?? DBNull.Value;
-        await command.ExecuteNonQueryAsync(ct);
-        cache.Remove("club-invitation:" + Normalize(email));
+        command.Parameters.AddWithValue("keepAdmin", keepAdmin);
+        var stored = (string)(await command.ExecuteScalarAsync(ct))!;
+
+        await using var approve = new NpgsqlCommand("""
+            UPDATE join_requests SET status = 'approved', decided_by = @by, decided_at = now(), deny_reason = NULL,
+                updated_at = now()
+            WHERE status = 'pending' AND lower(btrim(email)) = @email
+            """, connection, transaction);
+        approve.Parameters.AddWithValue("email", Normalize(email));
+        approve.Parameters.Add("by", NpgsqlTypes.NpgsqlDbType.Text).Value = (object?)invitedBy ?? DBNull.Value;
+        await approve.ExecuteNonQueryAsync(ct);
+        return stored;
     }
+
+    /// <summary>Drops the cached role so the next lookup sees a committed change.</summary>
+    public void Forget(string email) => cache.Remove("club-invitation:" + Normalize(email));
 
     public async Task<bool> RemoveAsync(string email, CancellationToken ct)
     {
@@ -91,8 +127,9 @@ internal static class ClubRoles
         return null;
     }
 
-    public static string[] ConfiguredEmails(IConfiguration configuration) =>
-        new[] { "PlayerEmails", "AdminEmails" }
+    /// <summary>Normalized emails in the bootstrap lists: both, or one of "PlayerEmails" and "AdminEmails".</summary>
+    public static string[] ConfiguredEmails(IConfiguration configuration, params string[] groups) =>
+        (groups.Length == 0 ? ["PlayerEmails", "AdminEmails"] : groups)
             .SelectMany(group => configuration.GetSection($"Authentication:Google:{group}").GetChildren())
             .Select(entry => entry.Value is null ? null : ClubInvitations.Normalize(entry.Value))
             .OfType<string>()

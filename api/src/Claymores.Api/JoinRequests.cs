@@ -90,17 +90,48 @@ internal sealed class JoinRequestStore(NpgsqlDataSource dataSource, ClubInvitati
         return await reader.ReadAsync(ct) ? Read(reader) : null;
     }
 
-    /// <summary>Invites the request's email with <paramref name="role"/> and marks the request approved.</summary>
-    public async Task<(JoinDecisionResult Result, JoinRequest? Request)> ApproveAsync(Guid id, string role,
+    /// <summary>
+    /// Approves a pending request: invites its email with <paramref name="role"/> and marks it approved,
+    /// in one transaction with the request row locked. A request that is no longer pending (decided
+    /// already, or approved by a direct invitation) is <see cref="JoinDecisionResult.NotPending"/>, so a
+    /// stale page can't change anyone's role. An existing admin invitation is kept as admin even when
+    /// the approval says player.
+    /// </summary>
+    /// <returns>The outcome, the updated request, and the email's role afterwards.</returns>
+    public async Task<(JoinDecisionResult Result, JoinRequest? Request, string? Role)> ApproveAsync(Guid id, string role,
         string? adminEmail, CancellationToken ct)
     {
-        if (await FindAsync(id, ct) is not { } request)
-            return (JoinDecisionResult.NotFound, null);
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        JoinRequest? request;
+        await using (var find = new NpgsqlCommand(
+            $"SELECT {Columns} FROM join_requests WHERE id = @id FOR UPDATE", connection, transaction))
+        {
+            find.Parameters.AddWithValue("id", id);
+            await using var reader = await find.ExecuteReaderAsync(ct);
+            request = await reader.ReadAsync(ct) ? Read(reader) : null;
+        }
+        if (request is null)
+            return (JoinDecisionResult.NotFound, null, null);
+        if (request.Status != "pending")
+            return (JoinDecisionResult.NotPending, request, null);
         if (IsSelf(adminEmail, request.Email) && role != "admin")
-            return (JoinDecisionResult.Self, request);
+            return (JoinDecisionResult.Self, request, null);
 
-        await invitations.UpsertAsync(request.Email, role, adminEmail, ct);
-        return (JoinDecisionResult.Done, await DecideAsync(id, "approved", adminEmail, null, null, ct));
+        // Also marks this request (and any other pending one for the email) approved by adminEmail.
+        var stored = await ClubInvitations.UpsertAsync(connection, transaction, request.Email, role, adminEmail,
+            keepAdmin: true, ct);
+        await using (var reread = new NpgsqlCommand(
+            $"SELECT {Columns} FROM join_requests WHERE id = @id", connection, transaction))
+        {
+            reread.Parameters.AddWithValue("id", id);
+            await using var reader = await reread.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            request = Read(reader);
+        }
+        await transaction.CommitAsync(ct);
+        invitations.Forget(request.Email);
+        return (JoinDecisionResult.Done, request, stored);
     }
 
     /// <summary>Denies a pending request.</summary>
@@ -265,7 +296,7 @@ internal static class JoinRequestEndpoints
             {
                 if (request?.Role is not { } role || !ClubInvitations.Roles.Contains(role))
                     return InvalidRequest("role");
-                var (result, approved) = await store.ApproveAsync(id, role, user.FindFirstValue("email"), ct);
+                var (result, approved, _) = await store.ApproveAsync(id, role, user.FindFirstValue("email"), ct);
                 return Decision(result, approved);
             })
             .AddEndpointFilter(SameOriginGuard.Filter)
@@ -412,8 +443,8 @@ internal static class JoinRequestAdminPage
         var role = form["role"].ToString();
         if (!ClubInvitations.Roles.Contains(role))
             return ReturnToPage(context, "invalid");
-        var (result, _) = await store.ApproveAsync(id, role, context.User.FindFirstValue("email"), ct);
-        return ReturnToPage(context, Notice(result, "approved"));
+        var (result, _, stored) = await store.ApproveAsync(id, role, context.User.FindFirstValue("email"), ct);
+        return ReturnToPage(context, Notice(result, stored == "admin" && role != "admin" ? "approved-admin" : "approved"));
     }
 
     private static async Task<IResult> DenyAsync(Guid id, HttpContext context, JoinRequestStore store, CancellationToken ct)
@@ -485,6 +516,7 @@ internal static class JoinRequestAdminPage
         var message = notice switch
         {
             "approved" => "Request approved. They can sign in now.",
+            "approved-admin" => "Request approved. This email was already invited as an admin and stays an admin.",
             "denied" => "Request denied. They can ask again after 24 hours.",
             "invalid" => "Choose a role, and keep the reason under 500 characters.",
             "missing" => "This request no longer exists.",
@@ -494,7 +526,7 @@ internal static class JoinRequestAdminPage
         };
         if (message.Length == 0)
             return "";
-        var style = notice is "approved" or "denied" ? "" : " notice-error";
+        var style = notice is "approved" or "approved-admin" or "denied" ? "" : " notice-error";
         return $"""<p class="checkout-note{style}" role="status">{message}</p>""";
     }
 

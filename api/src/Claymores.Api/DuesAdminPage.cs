@@ -25,6 +25,11 @@ internal static class DuesAdminPage
         GoogleSignIn.SetPageHeaders(context);
         var members = await directory.ListAsync(ct);
         var assessments = await ledger.ListAsync(null, ct);
+        // Pending checkouts without a Stripe session, old enough for the treasurer to release.
+        var unbound = (context.RequestServices.GetService<DuesCheckoutStore>() is { } checkouts
+                ? await checkouts.ListUnboundAsync(DuesCheckout.ReleaseAfter, ct)
+                : new List<CheckoutRecord>())
+            .ToLookup(checkout => checkout.AssessmentId);
         var membersBySubject = members.ToDictionary(member => member.Subject, StringComparer.Ordinal);
         var notice = RenderNotice(context.Request.Query["notice"]);
         var entries = assessments.Count == 0
@@ -57,7 +62,8 @@ internal static class DuesAdminPage
         string RenderEntry(DuesAssessment assessment)
         {
             var member = membersBySubject.GetValueOrDefault(assessment.PlayerSubject);
-            return RenderAssessment(assessment, member is null ? assessment.PlayerSubject : MemberLabel(member));
+            return RenderAssessment(assessment, member is null ? assessment.PlayerSubject : MemberLabel(member),
+                unbound[assessment.Id]);
         }
     }
 
@@ -205,7 +211,7 @@ internal static class DuesAdminPage
             """;
     }
 
-    private static string RenderAssessment(DuesAssessment assessment, string member)
+    private static string RenderAssessment(DuesAssessment assessment, string member, IEnumerable<CheckoutRecord> unbound)
     {
         var description = Encode(assessment.Description);
         var dueDate = assessment.DueDate is { } date ? $" · Due {date.ToString("MMM d, yyyy", DollarCulture)}" : "";
@@ -213,6 +219,12 @@ internal static class DuesAdminPage
         var pending = assessment.PendingCheckoutCents > 0
             ? $"<p>Pending checkout {Dollars(assessment.PendingCheckoutCents)}</p>"
             : "";
+        var release = string.Concat(unbound.Select(checkout => $"""
+            <form class="checkout admin-form" action="{Path}/{assessment.Id:D}/checkouts/{checkout.Id:D}/release" method="post">
+              <p>This checkout never reached Stripe. Release it to let the member start a new one; Stripe is checked first.</p>
+              <button class="button button-secondary" type="submit">Check Stripe and release</button>
+            </form>
+            """));
         var payment = available <= 0 ? "" : $"""
             <form class="checkout admin-form" action="{Path}/{assessment.Id:D}/payments" method="post">
               <input type="hidden" name="requestId" value="{Guid.NewGuid():D}">
@@ -235,6 +247,7 @@ internal static class DuesAdminPage
                 <div class="balance"><dt>Remaining</dt><dd>{Dollars(assessment.BalanceCents)}</dd></div>
               </dl>
               {pending}
+              {release}
               <p><a class="history-link" href="{Path}/{assessment.Id:D}">View payment history</a></p>
               {payment}
             </li>
@@ -254,11 +267,15 @@ internal static class DuesAdminPage
             "missing-assessment" => "This assessment is no longer available.",
             "overpayment" => "The payment exceeds the available balance after pending checkout.",
             "conflict" => "This form was already used with different details. Try again from this page.",
+            "checkout-released" => "Checkout released. Stripe had no payment for it, and the member can start a new one.",
+            "checkout-bound" => "Stripe has a session for this checkout. It is now linked and settles through Stripe.",
+            "checkout-stripe" => "Stripe could not confirm this checkout. Try again later.",
+            "checkout-unchanged" => "This checkout was already settled or linked, or is less than an hour old.",
             _ => ""
         };
         if (message.Length == 0)
             return "";
-        var style = notice is "assigned" or "recorded" ? "" : " notice-error";
+        var style = notice is "assigned" or "recorded" or "checkout-released" or "checkout-bound" ? "" : " notice-error";
         return $"""<p class="checkout-note{style}" role="status">{message}</p>""";
     }
 
