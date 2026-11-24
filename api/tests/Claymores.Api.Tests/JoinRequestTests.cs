@@ -530,6 +530,63 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Treasurer_records_cash_with_a_note_that_only_admins_see()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("treasurer@example.com");
+        // The player signs in once (that is what lists them for dues), as a player.
+        await InviteAsync("cashplayer@example.com", "player");
+        var signIn = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+            new { idToken = FakeGoogleValidator.Token("sub-cashplayer", "cashplayer@example.com", name: "Cash Player") }, Ct);
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+        using var tokens = JsonDocument.Parse(await signIn.Content.ReadAsStringAsync(Ct));
+        var player = tokens.RootElement.GetProperty("accessToken").GetString()!;
+
+        var members = await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/members", admin), Ct);
+        Assert.Equal(HttpStatusCode.OK, members.StatusCode);
+        Assert.Contains("\"subject\":\"sub-cashplayer\"", await members.Content.ReadAsStringAsync(Ct));
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/members", player), Ct)).StatusCode);
+
+        var dues = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.Created, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues", admin,
+            new { id = dues, playerSubject = "sub-cashplayer", description = "Season dues", amountCents = 10000 }), Ct)).StatusCode);
+
+        var payment = new { id = Guid.NewGuid(), amountCents = 4000, method = "Cash", note = "  Paid cash at practice 11/20  " };
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(
+            Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin, payment), Ct)).StatusCode);
+        // A retry of the same request is fine; the same ID with another note is a conflict.
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(
+            Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin, payment), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments", admin, payment with { note = "Different" }), Ct)).StatusCode);
+        // Stripe is reserved for checkout; unknown methods and long notes are rejected.
+        foreach (var bad in new object[]
+                 {
+                     new { id = Guid.NewGuid(), amountCents = 100, method = "stripe" },
+                     new { id = Guid.NewGuid(), amountCents = 100, method = "bitcoin" },
+                     new { id = Guid.NewGuid(), amountCents = 100, method = "cash", note = new string('x', 501) },
+                 })
+            Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(
+                Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin, bad), Ct)).StatusCode);
+        // No method still works (older clients) and is recorded as other.
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments", admin, new { id = Guid.NewGuid(), amountCents = 1000 }), Ct)).StatusCode);
+
+        var adminView = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/dues/{dues}", admin), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"method\":\"cash\"", adminView);
+        Assert.Contains("\"note\":\"Paid cash at practice 11/20\"", adminView);
+        Assert.Contains("\"method\":\"other\"", adminView);
+        Assert.Contains("\"balanceCents\":5000", adminView);
+
+        var playerView = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/dues/mine/{dues}", player), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"method\":\"cash\"", playerView);
+        Assert.DoesNotContain("Paid cash at practice", playerView);
+    }
+
+    [Fact]
     public async Task Admin_page_lists_requests_and_its_forms_approve_and_deny()
     {
         database.SkipIfUnavailable();

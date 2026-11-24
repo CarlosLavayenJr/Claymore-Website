@@ -79,7 +79,9 @@ internal static class DuesAdminPage
         {
             var recorded = TimeZoneInfo.ConvertTimeFromUtc(payment.RecordedAt, clubZone)
                 .ToString("MMM d, yyyy 'at' h:mm tt 'ET'", DollarCulture);
-            return $"<li><strong>{Dollars(payment.AmountCents)}</strong> · {recorded}</li>";
+            var how = payment.Method is { } m ? $" · {MethodLabel(m)}" : "";
+            var note = payment.Note is { } n ? $"<br><span class=\"empty\">{Encode(n)}</span>" : "";
+            return $"<li><strong>{Dollars(payment.AmountCents)}</strong>{how} · {recorded}{note}</li>";
         }));
         var history = entries.Length == 0
             ? """<p class="empty">No payments have been recorded.</p>"""
@@ -146,12 +148,13 @@ internal static class DuesAdminPage
             return ReturnToPage(context, "invalid-payment");
 
         var admin = context.User.FindFirstValue("sub")!;
-        var result = await ledger.RecordAsync(id, new(requestId, cents), admin, ct);
+        var result = await ledger.RecordAsync(id, new(requestId, cents, form["method"], form["note"]), admin, ct);
         return ReturnToPage(context, result switch
         {
             PaymentResult.Recorded => "recorded",
             PaymentResult.NotFound => "missing-assessment",
             PaymentResult.Overpayment => "overpayment",
+            PaymentResult.Invalid => "invalid-payment",
             _ => "conflict"
         });
     }
@@ -231,7 +234,20 @@ internal static class DuesAdminPage
               <div class="checkout-controls admin-record">
                 <label class="admin-field">Payment received (USD)
                   <input name="amount" type="number" inputmode="decimal" min="0.01" step="0.01"
-                         max="{Amount(available)}" required>
+                         max="{Amount(available)}" value="{Amount(available)}" required>
+                </label>
+                <label class="admin-field">Paid by
+                  <select name="method">
+                    <option value="cash">Cash</option>
+                    <option value="venmo">Venmo</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="check">Check</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label class="admin-field">Note (optional)
+                  <input name="note" type="text" maxlength="{RecordDuesPayment.MaxNoteLength}"
+                         placeholder="Paid cash at practice 11/20">
                 </label>
                 <button class="button" type="submit">Record payment</button>
               </div>
@@ -262,7 +278,7 @@ internal static class DuesAdminPage
             "recorded" => "Payment recorded.",
             "invalid-assignment" => "Choose a member and enter a description and a valid USD amount.",
             "invalid-date" => "Enter a due date between 1900 and 2200.",
-            "invalid-payment" => "Enter a positive USD amount with up to two decimal places.",
+            "invalid-payment" => "Enter a positive USD amount with up to two decimal places, a method, and a note of at most 500 characters.",
             "missing-member" => "Choose a member from the current list.",
             "missing-assessment" => "This assessment is no longer available.",
             "overpayment" => "The payment exceeds the available balance after pending checkout.",
@@ -278,6 +294,16 @@ internal static class DuesAdminPage
         var style = notice is "assigned" or "recorded" or "checkout-released" or "checkout-bound" ? "" : " notice-error";
         return $"""<p class="checkout-note{style}" role="status">{message}</p>""";
     }
+
+    internal static string MethodLabel(string method) => method switch
+    {
+        "stripe" => "Card (Stripe)",
+        "cash" => "Cash",
+        "venmo" => "Venmo",
+        "zelle" => "Zelle",
+        "check" => "Check",
+        _ => "Other",
+    };
 
     private static string MemberLabel(ClubMember member) =>
         string.IsNullOrWhiteSpace(member.Name) ? member.Email : $"{member.Name} ({member.Email})";
