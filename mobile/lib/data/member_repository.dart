@@ -37,6 +37,31 @@ class MemberRepository {
     return url;
   }
 
+  /// `GET /v1/me/identities`: which sign-ins open this account
+  /// (`google`, `apple`).
+  Future<Set<String>> identities() async =>
+      _providers(await _api.getJson('/v1/me/identities', auth: true));
+
+  /// `POST /v1/me/identities/apple`: links an Apple account, so Sign in with
+  /// Apple opens this account even with "Hide My Email". Returns the linked
+  /// sign-ins. Throws [ApiException]: 409 `linked_elsewhere` when that Apple
+  /// account belongs to another member, 401 for a rejected Apple token.
+  Future<Set<String>> linkApple({
+    required String identityToken,
+    required String rawNonce,
+  }) async => _providers(
+    await _api.postJson('/v1/me/identities/apple', {
+      'identityToken': identityToken,
+      'rawNonce': rawNonce,
+    }, auth: true),
+  );
+
+  static Set<String> _providers(Object? json) => {
+    if (json is Map && json['providers'] is List)
+      for (final p in json['providers'] as List)
+        if (p is String) p,
+  };
+
   /// `DELETE /v1/me`: deletes the signed-in account (204). For an Apple
   /// account, [appleAuthorizationCode] lets the server revoke Apple's tokens.
   /// Throws [ApiException]: 409 `last_admin`, 401 when not signed in.

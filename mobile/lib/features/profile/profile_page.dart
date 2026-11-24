@@ -104,8 +104,12 @@ class _SignedInProfileState extends State<_SignedInProfile> {
     super.dispose();
   }
 
+  /// Which sign-ins open this account; null until loaded or when it fails.
+  Future<Set<String>>? identities;
+
   void load() {
     if (AppConfig.duesEnabled) dues = widget.members.myDues();
+    identities = widget.members.identities();
   }
 
   Future<void> refresh() async {
@@ -163,6 +167,13 @@ class _SignedInProfileState extends State<_SignedInProfile> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 24),
+          const SectionHeading('SIGN-IN'),
+          _SignInMethods(
+            members: widget.members,
+            identities: identities,
+            onLinked: () => setState(load),
           ),
           if (AppConfig.duesEnabled) ...[
             const SizedBox(height: 24),
@@ -402,6 +413,95 @@ class DuesTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The sign-ins that open this account, and a button to link Sign in with
+/// Apple (iOS), so it opens this account too, even with "Hide My Email".
+class _SignInMethods extends StatefulWidget {
+  const _SignInMethods({
+    required this.members,
+    required this.identities,
+    required this.onLinked,
+  });
+
+  final MemberRepository members;
+  final Future<Set<String>>? identities;
+  final VoidCallback onLinked;
+
+  @override
+  State<_SignInMethods> createState() => _SignInMethodsState();
+}
+
+class _SignInMethodsState extends State<_SignInMethods> {
+  bool busy = false;
+
+  Future<void> link() async {
+    final auth = AppScope.of(context).auth;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => busy = true);
+    final result = await auth.linkApple(widget.members);
+    if (!mounted) return;
+    setState(() => busy = false);
+    final message = switch (result) {
+      LinkAppleResult.linked => 'Sign in with Apple now opens this account.',
+      LinkAppleResult.linkedElsewhere =>
+        'That Apple ID already belongs to another club account. '
+            'Ask a club admin to sort it out.',
+      LinkAppleResult.cancelled => null,
+      LinkAppleResult.sessionEnded => 'Your session ended. Sign in again.',
+      LinkAppleResult.failed ||
+      LinkAppleResult.unavailable => 'Couldn’t link Apple. Try again.',
+    };
+    if (message != null) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
+    if (result == LinkAppleResult.linked) widget.onLinked();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = AppScope.of(context).auth;
+    final textTheme = Theme.of(context).textTheme;
+    return Panel(
+      child: FutureBuilder<Set<String>>(
+        future: widget.identities,
+        builder: (context, snapshot) {
+          final providers = snapshot.data ?? const <String>{};
+          final hasApple = providers.contains('apple');
+          String label(String p) => p == 'apple' ? 'Apple' : 'Google';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                providers.isEmpty
+                    ? 'Sign in with the Google account or Apple ID the club '
+                          'invited.'
+                    : 'Opens with: ${providers.map(label).join(' and ')}',
+                style: textTheme.bodyMedium,
+              ),
+              if (snapshot.connectionState == ConnectionState.done &&
+                  !snapshot.hasError &&
+                  !hasApple &&
+                  auth.canSignInWithApple) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Link Sign in with Apple so it opens this account too, '
+                  'even if you hide your email from Apple.',
+                  style: textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : link,
+                  icon: const Icon(Icons.apple),
+                  label: Text(busy ? 'LINKING…' : 'LINK SIGN IN WITH APPLE'),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
