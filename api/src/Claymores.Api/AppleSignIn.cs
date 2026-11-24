@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -29,7 +30,10 @@ internal static class AppleSignIn
                 if (apple is null || !apple.EmailVerified)
                     return InvalidToken();
 
-                var member = new ClubMember(SubjectPrefix + apple.Subject, apple.Email, CleanName(request.FullName));
+                // One member per person: a linked Apple account (even "Hide My Email") or one with the
+                // same email as a Google member signs in as that member, with the member's email.
+                var signIn = new ClubMember(SubjectPrefix + apple.Subject, apple.Email, CleanName(request.FullName));
+                var member = await directory.ResolveAsync(signIn, ct);
                 var role = await ClubRoles.ResolveAsync(MobileAuth.VerifiedPrincipal(member), configuration,
                     context.RequestServices.GetService<ClubInvitations>(), ct);
                 if (role is null)
@@ -43,6 +47,7 @@ internal static class AppleSignIn
 
                 // Apple only sends the name on the first authorization: keep the stored one otherwise.
                 var name = await directory.ObserveSignInAsync(member, ct, keepExistingName: true);
+                await directory.RememberIdentityAsync(signIn.Subject, member.Subject, ct);
                 member = member with { Name = name };
                 if (context.RequestServices.GetService<AutomaticDues>() is { } automatic)
                     await automatic.EnsureAsync(member.Subject, role, ct);
@@ -51,6 +56,47 @@ internal static class AppleSignIn
             })
             .WithSummary("Exchange an Apple identity token from the app for API tokens")
             .Produces<MobileTokenResponse>().Produces(401).Produces(403);
+    }
+
+    /// <summary>
+    /// Signed-in members link their Apple account, so Sign in with Apple opens the same member even
+    /// with "Hide My Email". The app sends a fresh Apple identity token and its raw nonce.
+    /// </summary>
+    public static void MapLink(WebApplication app)
+    {
+        var me = app.MapGroup("/v1/me/identities").WithTags("Identity")
+            .RequireAuthorization(GoogleSignIn.RolePolicy);
+        me.AddEndpointFilter(async (context, next) =>
+        {
+            context.HttpContext.Response.Headers.CacheControl = "no-store";
+            return await next(context);
+        });
+
+        me.MapGet("/", async (ClaimsPrincipal user, ClubMemberDirectory directory, CancellationToken ct) =>
+                Results.Ok(new { providers = await directory.ProvidersAsync(user.FindFirstValue("sub")!, ct) }))
+            .WithSummary("Which sign-ins (google, apple) open my account")
+            .Produces(200).Produces(401).Produces(403);
+
+        me.MapPost("/apple", async (MobileAppleSignInRequest request, ClaimsPrincipal user,
+                IAppleIdentityTokenValidator validator, ClubMemberDirectory directory, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(request.IdentityToken) || string.IsNullOrEmpty(request.RawNonce) ||
+                    request.RawNonce.Length > 512)
+                    return InvalidToken();
+                var apple = await validator.ValidateAsync(request.IdentityToken, request.RawNonce, ct);
+                if (apple is null || !apple.EmailVerified)
+                    return InvalidToken();
+
+                var member = user.FindFirstValue("sub")!;
+                if (!await directory.LinkAsync(SubjectPrefix + apple.Subject, member, ct))
+                    return Results.Json(new { error = "linked_elsewhere" }, statusCode: 409);
+                return Results.Ok(new { providers = await directory.ProvidersAsync(member, ct) });
+            })
+            .AddEndpointFilter(SameOriginGuard.Filter)
+            .WithSummary("Link my Apple account, so Sign in with Apple opens this account")
+            .WithDescription("Body as for /v1/auth/mobile/apple (identityToken, rawNonce). 409 linked_elsewhere when " +
+                "that Apple account already belongs to another member with dues.")
+            .Produces(200).Produces(401).Produces(403).Produces(409);
     }
 
     internal static bool IsRelayEmail(string email) =>
