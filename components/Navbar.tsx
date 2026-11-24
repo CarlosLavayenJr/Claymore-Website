@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Menu, ChevronDown } from "lucide-react"
@@ -31,6 +31,14 @@ const ExternalNavLink = ({ href, children }: NavLinkProps) => (
     </a>
 )
 
+// The member session cookie is httpOnly. A separate, token-free hint cookie
+// tells the navbar to say "Account" instead of "Sign in" without making
+// every public page dynamic.
+const MEMBER_HINT_COOKIE = 'claymores_member'
+const subscribeNoop = () => () => {}
+const readMemberHint = () => document.cookie.split('; ').some(c => c === `${MEMBER_HINT_COOKIE}=1`)
+const useSignedInHint = () => useSyncExternalStore(subscribeNoop, readMemberHint, () => false)
+
 const SHOP_URL = 'https://tytanrugby.com/collections/claymores-rfc'
 
 const fixturesChildren = [
@@ -46,7 +54,9 @@ const navLinks = [
     { href: '/blog', label: 'News' },
 ]
 
-export const Navbar = ({ showSignIn = false }: { showSignIn?: boolean }) => {
+export const Navbar = ({ memberAuth = false }: { memberAuth?: boolean }) => {
+    const signedIn = useSignedInHint()
+    const member = signedIn ? { href: '/account', label: 'Account' } : { href: '/sign-in', label: 'Sign in' }
     const [isOpen, setIsOpen] = useState(false)
     const [fixturesOpen, setFixturesOpen] = useState(false)
     const [mobileFixturesOpen, setMobileFixturesOpen] = useState(false)
@@ -125,7 +135,7 @@ export const Navbar = ({ showSignIn = false }: { showSignIn?: boolean }) => {
 
                             <ExternalNavLink href={SHOP_URL}>Shop</ExternalNavLink>
 
-                            {showSignIn && <NavLink href="/sign-in">Sign in</NavLink>}
+                            {memberAuth && <NavLink href={member.href}>{member.label}</NavLink>}
 
                             <Link href="/contact" className="relative group px-3 py-2 text-white font-claymore text-lg">
                                 <span className="relative z-10">Contact</span>
@@ -209,13 +219,13 @@ export const Navbar = ({ showSignIn = false }: { showSignIn?: boolean }) => {
                         </Link>
                     ))}
 
-                    {showSignIn && (
+                    {memberAuth && (
                         <Link
-                            href="/sign-in"
+                            href={member.href}
                             onClick={closeMenu}
                             className="w-full text-center py-4 font-claymore text-3xl text-[#111111] hover:text-[#fd80b5] border-b border-[#EAEAEA] transition-colors"
                         >
-                            Sign in
+                            {member.label}
                         </Link>
                     )}
                     <a
