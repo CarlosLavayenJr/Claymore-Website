@@ -1,3 +1,17 @@
+# Claymores
+
+This repository holds the Central Florida Claymores website, API, and mobile app.
+
+| Folder | What it is | Deploys to |
+| --- | --- | --- |
+| `/` (root) | Next.js website and Sanity Studio | Vercel |
+| [`api/`](api/README.md) | ASP.NET Core 10 API for the website and app | Not deployed yet |
+| [`mobile/`](mobile/README.md) | Flutter app | Not released yet |
+
+Vercel builds the website only when files outside `api/` and `mobile/` change, through the `ignoreCommand` in `vercel.json`. Both folders are also listed in `.vercelignore`, so they aren't uploaded with the site.
+
+---
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
