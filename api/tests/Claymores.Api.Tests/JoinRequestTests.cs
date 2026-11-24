@@ -587,6 +587,50 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Dues_can_be_assigned_to_every_member_once()
+    {
+        database.SkipIfUnavailable();
+        await using (var data = database.CreateDataSource())
+        await using (var clean = data.CreateCommand("DELETE FROM dues_payments; DELETE FROM dues_checkouts; DELETE FROM dues_assessments; DELETE FROM club_members;"))
+            await clean.ExecuteNonQueryAsync(Ct);
+        var admin = await AdminTokenAsync("bulkadmin@example.com");
+        await InviteAsync("bulkplayer@example.com", "player");
+        Assert.Equal(HttpStatusCode.OK, (await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+            new { idToken = FakeGoogleValidator.Token("sub-bulkplayer", "bulkplayer@example.com") }, Ct)).StatusCode);
+
+        async Task<JsonElement> AssignAll(object body)
+        {
+            var response = await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues/all-members", admin, body), Ct);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement.Clone();
+        }
+        async Task<long> Count()
+        {
+            await using var data = database.CreateDataSource();
+            await using var command = data.CreateCommand("SELECT count(*) FROM dues_assessments");
+            return (long)(await command.ExecuteScalarAsync(Ct))!;
+        }
+
+        var batch = new { batchId = Guid.NewGuid(), description = "Season dues", amountCents = 10000, dueDate = "2027-01-31" };
+        var first = await AssignAll(batch);
+        Assert.Equal((2, 0, 2), (first.GetProperty("created").GetInt32(), first.GetProperty("skipped").GetInt32(),
+            first.GetProperty("members").GetInt32()));
+        // Retrying the same request creates nothing new.
+        await AssignAll(batch);
+        Assert.Equal(2, await Count());
+        // A changed retry of the same batch is refused.
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues/all-members",
+            admin, batch with { amountCents = 5000 }), Ct)).StatusCode);
+        // A second click (new batch, same description) skips everyone who already has it...
+        var again = await AssignAll(new { batchId = Guid.NewGuid(), description = " season DUES ", amountCents = 10000 });
+        Assert.Equal((0, 2), (again.GetProperty("created").GetInt32(), again.GetProperty("skipped").GetInt32()));
+        // ...unless the admin turns that off.
+        var forced = await AssignAll(new { batchId = Guid.NewGuid(), description = "Season dues", amountCents = 10000, skipExisting = false });
+        Assert.Equal(2, forced.GetProperty("created").GetInt32());
+        Assert.Equal(4, await Count());
+    }
+
+    [Fact]
     public async Task Admin_page_lists_requests_and_its_forms_approve_and_deny()
     {
         database.SkipIfUnavailable();

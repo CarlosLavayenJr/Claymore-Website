@@ -4,7 +4,7 @@ import { useActionState, useId, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
 import { assignDues, recordDuesPayment, type AssignDuesState, type RecordPaymentState } from './actions'
 import { ctaClass, inputClass, labelClass, Notice } from '@/components/members/member-ui'
-import { DEFAULT_DUES_DESCRIPTION, DUES_LIMITS, MANUAL_PAYMENT_METHODS } from '@/lib/claymores/admin-dues'
+import { ALL_MEMBERS, DEFAULT_DUES_DESCRIPTION, DUES_LIMITS, MANUAL_PAYMENT_METHODS } from '@/lib/claymores/admin-dues'
 
 const selectClass = `${inputClass} pr-8`
 
@@ -80,8 +80,22 @@ export function AssignDuesForm({ members, initialId }: { members: MemberOption[]
                         className={`${selectClass} mt-1`}
                     >
                         <option value="" disabled>{disabled ? 'No members have signed in yet' : 'Choose a player…'}</option>
+                        {!disabled && (
+                            <option value={ALL_MEMBERS}>
+                                Everyone who has signed in ({members.length} member{members.length === 1 ? '' : 's'})
+                            </option>
+                        )}
                         {members.map(m => <option key={m.subject} value={m.subject}>{m.label}</option>)}
                     </select>
+                    <label className="mt-2 flex items-start gap-2 text-sm text-[#555555]">
+                        <input
+                            type="checkbox"
+                            name="skipExisting"
+                            defaultChecked={values?.skipExisting ?? true}
+                            className="mt-0.5 accent-[#77c3ef]"
+                        />
+                        <span>When assigning to everyone, skip anyone who already has dues with this description.</span>
+                    </label>
                 </div>
                 <div className="sm:col-span-2">
                     <label htmlFor={`${id}-description`} className={labelClass}>Description</label>

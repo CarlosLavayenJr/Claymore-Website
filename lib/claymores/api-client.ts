@@ -52,6 +52,18 @@ export type AdminDuesDetail = { assessment: AdminDuesAssessment; payments: DuesP
 /** A member who has signed in at least once (GET /v1/admin/members). */
 export type ClubMember = { subject: string; email: string; name: string | null }
 
+/** Same dues for every member who has signed in. `batchId` makes a retry create nothing new. */
+export type NewDuesForAllMembers = {
+    batchId: string
+    description: string
+    amountCents: number
+    dueDate?: string
+    /** Leave out members who already have dues with this description (default true). */
+    skipExisting: boolean
+}
+
+export type AssignAllResult = { created: number; skipped: number; members: number }
+
 export type NewDuesAssessment = {
     /** Client-generated idempotency key; reuse it (with the identical body) on retry. */
     id: string
@@ -260,6 +272,10 @@ export class ClaymoresApiClient {
     /** 201 on success. Idempotent on `input.id`. */
     createDues(input: NewDuesAssessment) {
         return this.request<unknown>('POST', '/v1/admin/dues', input)
+    }
+
+    assignDuesToAllMembers(input: NewDuesForAllMembers) {
+        return this.request<AssignAllResult>('POST', '/v1/admin/dues/all-members', input)
     }
 
     /** Records a cash/Venmo/Zelle/check/other payment. Idempotent on `input.id`. */
