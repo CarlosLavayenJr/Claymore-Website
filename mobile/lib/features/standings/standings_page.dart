@@ -274,12 +274,7 @@ class LeagueTable extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              row.teamName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: cellStyle(row),
-                            ),
+                            TeamName(row.teamName, style: cellStyle(row)),
                             if (showPools && row.pool.isNotEmpty)
                               Text(row.pool, style: textTheme.bodySmall),
                           ],
@@ -404,8 +399,10 @@ class PlayoffList extends StatelessWidget {
           TeamLogo(name: team, size: 22),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
+            child: TeamName(
               team,
+              maxLines: null,
+              overflow: null,
               style: TextStyle(
                 fontWeight: won || isClaymoresTeam(team)
                     ? FontWeight.w700

@@ -87,17 +87,20 @@ void main() {
     expect(find.text('Men Division 3'), findsOneWidget);
     expect(find.text('2026-2027'), findsOneWidget);
     expect(find.text('W'), findsOneWidget);
+    // Scraped names show as the club's team names, like the website:
+    // "Orlando Griffins RFC (D3)" is "Orlando Griffins".
     for (final team in [
-      'Orlando Griffins RFC (D3)',
-      'Jacksonville RFC',
-      'Daytona Beach Coconuts RFC',
-      'Lakeland Lancers RFC',
-      'Central Florida Claymores RFC',
+      'Orlando Griffins',
+      'Jacksonville Rugby',
+      'Daytona Coconuts',
+      'Lakeland Lancers',
+      'Central Florida Claymores',
     ]) {
       expect(find.text(team), findsOneWidget, reason: team);
     }
-    expect(find.text('Sarasota Surge RFC'), findsNothing);
-    expect(find.text('Tallahassee'), findsNothing);
+    expect(find.text('Orlando Griffins RFC (D3)'), findsNothing);
+    expect(find.text('Sarasota Rugby Club'), findsNothing);
+    expect(find.text('Tallahassee Rugby'), findsNothing);
 
     final us = find.byKey(const ValueKey('preview-6'));
     final decoration =
@@ -128,7 +131,7 @@ void main() {
     fail = false;
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(find.text('Jacksonville RFC'), findsOneWidget);
+    expect(find.text('Jacksonville Rugby'), findsOneWidget);
   });
 
   testWidgets('is hidden without an API', (tester) async {
