@@ -19,6 +19,17 @@ class TestClubRepository extends ClubRepository {
   ''', isSnapshot: false);
 }
 
+class ClubEventRepository extends ClubRepository {
+  @override
+  Future<ClubData> load() async => ClubData('''
+  {"result":{"matches":[
+    {"_id":"highland","date":"2099-01-16","season":2099,"homeTeam":"Claymores",
+     "awayTeam":"Claymores","status":"upcoming","matchType":"friendly",
+     "competition":"Annual Highland games"}
+  ],"practice":null}}
+  ''', isSnapshot: false);
+}
+
 void main() {
   setUp(() {
     SharedPreferencesAsyncPlatform.instance =
@@ -53,8 +64,9 @@ void main() {
     expect(find.text('31–5'), findsOneWidget);
   });
 
-  testWidgets('The app is public: no sign-in gate, no availability or dues',
-      (tester) async {
+  testWidgets('The app is public: no sign-in gate, no availability or dues', (
+    tester,
+  ) async {
     await tester.pumpWidget(ClaymoresApp(repository: TestClubRepository()));
     await tester.pumpAndSettle();
     expect(find.text('NEXT MATCH'), findsOneWidget);
@@ -67,7 +79,11 @@ void main() {
 
   test('Availability shows only when enabled and signed in', () {
     final signedIn = ValueNotifier(false);
-    final gate = AvailabilityGate(signedIn, () => signedIn.value, enabled: true);
+    final gate = AvailabilityGate(
+      signedIn,
+      () => signedIn.value,
+      enabled: true,
+    );
     expect(gate.value, isFalse);
     signedIn.value = true;
     expect(gate.value, isTrue);
@@ -77,5 +93,16 @@ void main() {
     expect(off.value, isFalse);
     gate.dispose();
     off.dispose();
+  });
+
+  testWidgets('A Claymores vs Claymores listing shows as a club event', (
+    tester,
+  ) async {
+    await tester.pumpWidget(ClaymoresApp(repository: ClubEventRepository()));
+    await tester.pumpAndSettle();
+    expect(find.text('ANNUAL HIGHLAND GAMES'), findsOneWidget);
+    expect(find.text('CLUB EVENT'), findsOneWidget);
+    expect(find.text('VS CLAYMORES'), findsNothing);
+    expect(find.text('FRIENDLY'), findsNothing);
   });
 }

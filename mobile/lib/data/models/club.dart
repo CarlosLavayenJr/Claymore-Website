@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../teams.dart';
+
 class Fixture {
   Fixture(Map<String, dynamic> json)
     : id = (json['id'] ?? json['_id']) as String,
@@ -16,10 +18,15 @@ class Fixture {
       kickoff = json['kickoffTime'] as String? ?? '',
       matchType = json['matchType'] as String? ?? '',
       note = json['note'] as String? ?? '',
+      competition = (json['competition'] as String?)?.trim() ?? '',
       homeLogo = _logo(json['homeLogo']),
       awayLogo = _logo(json['awayLogo']);
 
   final String id, home, away, status, venue, kickoff, note, matchType;
+
+  /// The league or event name, e.g. "Florida Rugby Union D3 — Pod B" or
+  /// "Annual Highland games". Empty when the source has none.
+  final String competition;
   final DateTime date;
   final int? season, homeScore, awayScore;
   final String? homeLogo, awayLogo;
@@ -33,7 +40,15 @@ class Fixture {
         : null;
   }
 
-  String get title => '$home vs $away';
+  /// True when the Claymores are listed as both teams. rugbyfl.com lists the
+  /// club's own events (the Highland Games) this way; there is no opponent.
+  bool get isClubEvent =>
+      TeamResolver.isClaymores(home) && TeamResolver.isClaymores(away);
+
+  /// What to call a club event: its competition name, or "Club event".
+  String get eventName => competition.isNotEmpty ? competition : 'Club event';
+
+  String get title => isClubEvent ? eventName : '$home vs $away';
 
   String get statusLabel => switch (status) {
     'played' when homeScore != null && awayScore != null =>

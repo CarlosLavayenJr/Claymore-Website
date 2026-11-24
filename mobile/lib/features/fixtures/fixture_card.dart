@@ -76,6 +76,9 @@ class FixtureMatchup extends StatelessWidget {
         : fixture.home;
     final isUpcoming = fixture.status == 'upcoming';
     final isPlayed = fixture.status == 'played';
+    if (fixture.isClubEvent) {
+      return _ClubEvent(fixture: fixture, logoSize: logoSize);
+    }
     return Row(
       children: [
         Expanded(
@@ -130,6 +133,59 @@ class FixtureMatchup extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A club event the source lists as Claymores vs Claymores (the Highland
+/// Games): one crest and the event's name instead of a matchup.
+class _ClubEvent extends StatelessWidget {
+  const _ClubEvent({required this.fixture, required this.logoSize});
+  final Fixture fixture;
+  final double logoSize;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 2, 12, 2),
+        child: TeamLogo(
+          name: fixture.home,
+          url: fixture.homeLogo,
+          size: logoSize,
+        ),
+      ),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fixture.eventName.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Brand.ink,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 5,
+              runSpacing: 4,
+              children: [
+                FixtureBadge(
+                  label: fixture.status == 'upcoming'
+                      ? 'Upcoming'
+                      : fixture.status == 'played'
+                      ? 'Played'
+                      : fixture.statusLabel,
+                ),
+                const FixtureBadge(label: 'CLUB EVENT', accent: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class FixtureTeam extends StatelessWidget {
