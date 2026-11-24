@@ -272,13 +272,94 @@ public sealed class MobileAuthTests(PostgresDatabase database) : IClassFixture<P
         Assert.NotEqual(first.RefreshToken, second.RefreshToken);
         Assert.Equal("player", second.User.Role);
 
-        // Reusing the rotated token is treated as theft: it fails and the newer token dies with it.
+        // Past the grace window, reusing the rotated token is treated as theft: it fails and the newer
+        // token dies with it.
+        await AgeRotationAsync("sub-rotate", 61);
         Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(first.RefreshToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(second.RefreshToken)).StatusCode);
 
         // A fresh sign-in starts a new family.
         var third = await SignInAsync("sub-rotate", "rotate@example.com");
         Assert.Equal(HttpStatusCode.OK, (await RefreshAsync(third.RefreshToken)).StatusCode);
+    }
+
+    /// <summary>Moves the rotation time of the subject's rotated tokens back by some seconds.</summary>
+    private async Task AgeRotationAsync(string subject, int seconds)
+    {
+        await using var dataSource = database.CreateDataSource();
+        await using var age = dataSource.CreateCommand("""
+            UPDATE mobile_refresh_tokens SET revoked_at = revoked_at - make_interval(secs => @seconds)
+            WHERE google_subject = @subject AND replaced_by IS NOT NULL
+            """);
+        age.Parameters.AddWithValue("subject", subject);
+        age.Parameters.AddWithValue("seconds", (double)seconds);
+        await age.ExecuteNonQueryAsync(Ct);
+    }
+
+    [Fact]
+    public async Task Parallel_refreshes_both_get_the_same_successor()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("parallel@example.com");
+        var first = await SignInAsync("sub-parallel", "parallel@example.com");
+
+        var responses = await Task.WhenAll(RefreshAsync(first.RefreshToken), RefreshAsync(first.RefreshToken));
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        var bodies = await Task.WhenAll(responses.Select(r => r.Content.ReadFromJsonAsync<TokenBody>(Ct)));
+        Assert.Equal(bodies[0]!.RefreshToken, bodies[1]!.RefreshToken);
+        Assert.NotEqual(first.RefreshToken, bodies[0]!.RefreshToken);
+        Assert.All(bodies, body => Assert.False(string.IsNullOrEmpty(body!.AccessToken)));
+        Assert.Equal(HttpStatusCode.OK,
+            (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/me", bodies[1]!.AccessToken), Ct)).StatusCode);
+
+        // One rotation happened; the family is intact and the successor keeps working.
+        await using (var dataSource = database.CreateDataSource())
+        await using (var count = dataSource.CreateCommand(
+            "SELECT count(*) FILTER (WHERE revoked_at IS NULL), count(*) FROM mobile_refresh_tokens WHERE google_subject = 'sub-parallel'"))
+        await using (var reader = await count.ExecuteReaderAsync(Ct))
+        {
+            Assert.True(await reader.ReadAsync(Ct));
+            Assert.Equal((1L, 2L), (reader.GetInt64(0), reader.GetInt64(1)));
+        }
+        Assert.Equal(HttpStatusCode.OK, (await RefreshAsync(bodies[0]!.RefreshToken)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Reuse_after_the_grace_window_revokes_the_family()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("late-reuse@example.com");
+        var first = await SignInAsync("sub-late-reuse", "late-reuse@example.com");
+        var second = (await (await RefreshAsync(first.RefreshToken)).Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+
+        // Within 60 seconds the old token still answers with the current successor.
+        var retry = await RefreshAsync(first.RefreshToken);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(second.RefreshToken, (await retry.Content.ReadFromJsonAsync<TokenBody>(Ct))!.RefreshToken);
+
+        await AgeRotationAsync("sub-late-reuse", 61);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(first.RefreshToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(second.RefreshToken)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Reuse_after_logout_fails_even_within_the_grace_window()
+    {
+        database.SkipIfUnavailable();
+        await InviteAsync("grace-logout@example.com");
+        var first = await SignInAsync("sub-grace-logout", "grace-logout@example.com");
+        var second = (await (await RefreshAsync(first.RefreshToken)).Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().PostAsJsonAsync("/v1/auth/mobile/logout",
+            new { refreshToken = second.RefreshToken }, Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(first.RefreshToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(second.RefreshToken)).StatusCode);
+
+        // After a rotated successor itself rotates, the grandparent no longer gets a session either.
+        var third = await SignInAsync("sub-grace-logout", "grace-logout@example.com");
+        var fourth = (await (await RefreshAsync(third.RefreshToken)).Content.ReadFromJsonAsync<TokenBody>(Ct))!;
+        Assert.Equal(HttpStatusCode.OK, (await RefreshAsync(fourth.RefreshToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await RefreshAsync(third.RefreshToken)).StatusCode);
     }
 
     [Fact]
