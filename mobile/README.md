@@ -29,10 +29,13 @@ lib/
                             club/standings/member repositories, models/
   features/
     home/ fixtures/ standings/ club/ auth/ profile/
-  shared/widgets.dart       SectionHeading, Panel, Eyebrow, StatusPanel, DirectionsButton
+  shared/widgets.dart       SectionHeading, BrandHeader, Panel, Eyebrow, StatusPanel, DirectionsButton
+  shared/team_logo.dart     TeamLogo: Sanity logo -> bundled assets/teams/*.png -> monogram
+  data/teams.dart           TeamDirectory (GET /v1/teams + bundled list) and TeamResolver,
+                            a port of the API's TeamNameResolver (names, aliases, normalized match)
 ```
 
-Routing uses go_router: a `StatefulShellRoute` keeps each tab's state (`/home`, `/fixtures`, `/standings`, `/club`); match details (`/match/:id`), the profile (`/club/profile`) and dues (`/club/profile/dues/:id`) open above the tabs with a back button. State is plain `ChangeNotifier`/`ValueNotifier` handed down by an `InheritedWidget` (`AppScope`): there are only a few shared values (schedule, preview switch, session), so a state-management package would add more than it saves.
+Routing uses go_router: a `StatefulShellRoute` keeps each tab's state (`/home`, `/fixtures`, `/standings`, `/club`); match details (`/match/:id`), request to join (`/club/join`), the profile (`/club/profile`) and dues (`/club/profile/dues/:id`) open above the tabs with a back button. State is plain `ChangeNotifier`/`ValueNotifier` handed down by an `InheritedWidget` (`AppScope`): there are only a few shared values (schedule, current standings table, team directory, preview switch, session), so a state-management package would add more than it saves.
 
 The UI imports `package:material_ui/material_ui.dart`. That is the official Material library decoupled from the SDK; in Flutter 3.50 `package:flutter/material.dart` is deprecated in its favour, and go_router uses it too, so keep it.
 
@@ -43,6 +46,10 @@ The UI imports `package:material_ui/material_ui.dart`. That is the official Mate
 3. `FixtureCard` and `AvailabilityPicker` live in `lib/features/fixtures/`. The picker saves through `AvailabilityStore`, which uses `SharedPreferencesAsync` and notifies every tab.
 4. Follow `ClubRepository.load` in `lib/data/club_repository.dart`. The GROQ query in `assets/club.groq` projects Sanity fields into a small public payload. Match dates use Orlando's calendar day.
 5. `lib/features/club/notifications.dart` asks permission and subscribes to separate public match and practice topics.
+
+## Request to join
+
+When Google or Apple sign-in returns 403 `not_invited`, the app keeps that identity in memory and opens `/club/join`: name (prefilled from the Google token or Apple's first-time name), optional phone and message, sent to `POST /v1/auth/mobile/{google|apple}/request-access`. After a not-invited Google sign-in the app also calls `request-status` so returning applicants see pending, approved (sign in) or declined. Apple needs a fresh nonce per call, so each Apple join call shows the Apple sheet again, and its status check is a button rather than automatic.
 
 ## Styling
 

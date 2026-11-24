@@ -124,17 +124,35 @@ class _SignedInProfileState extends State<_SignedInProfile> {
           if (widget.checkout != null)
             _CheckoutBanner(checkout: widget.checkout!),
           Panel(
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.displayName, style: textTheme.titleLarge),
-                if (user.email != null)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: BrandHeader(
+                        eyebrow: user.role == null
+                            ? 'Claymores RFC'
+                            : 'Claymores RFC · ${user.role}',
+                        title: user.displayName,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Image.asset(
+                      'assets/crest.png',
+                      width: 32,
+                      height: 49,
+                      excludeFromSemantics: true,
+                    ),
+                  ],
+                ),
+                if (user.email != null) ...[
+                  const SizedBox(height: 10),
                   Text(user.email!, style: textTheme.bodySmall),
-                if (user.role != null) ...[
-                  const SizedBox(height: 4),
-                  Eyebrow(user.role!),
                 ],
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 OutlinedButton(
                   onPressed: () async {
                     await auth.signOut();

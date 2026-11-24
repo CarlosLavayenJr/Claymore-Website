@@ -5,7 +5,9 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../app/deep_links.dart';
 import '../../app/services.dart';
 import '../../app/theme.dart';
+import '../../shared/widgets.dart';
 import 'auth_service.dart';
+import 'google_button.dart';
 
 /// Club tab account section: sign in, signed-in summary, not-invited notice.
 class SignInCard extends StatelessWidget {
@@ -29,10 +31,18 @@ class SignInCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.displayName, style: textTheme.titleMedium),
-                if (user.email != null)
+                BrandHeader(
+                  eyebrow: user.role == null
+                      ? 'Signed in'
+                      : 'Signed in · ${user.role}',
+                  title: user.displayName,
+                  titleSize: 22,
+                ),
+                if (user.email != null) ...[
+                  const SizedBox(height: 8),
                   Text(user.email!, style: textTheme.bodySmall),
-                const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
@@ -50,24 +60,32 @@ class SignInCard extends StatelessWidget {
               ],
             );
           case AuthStatus.notInvited:
-            return _NotInvited(auth: auth);
+            return NotInvitedNotice(auth: auth);
           default:
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  auth.canSignInWithApple
-                      ? 'Players sign in with the email address the club invited.'
-                      : 'Players sign in with the Google account the club invited.',
+                BrandHeader(
+                  eyebrow: 'Players',
+                  title: 'Sign in',
+                  body: auth.canSignInWithApple
+                      ? 'Use the email address the club invited.'
+                      : 'Use the Google account the club invited.',
                 ),
                 if (auth.message != null) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(auth.message!, style: textTheme.bodySmall),
                 ],
-                const SizedBox(height: 12),
-                if (auth.canSignIn || auth.canSignInWithApple)
-                  SignInButtons(auth: auth)
-                else
+                const SizedBox(height: 16),
+                if (auth.canSignIn || auth.canSignInWithApple) ...[
+                  SignInButtons(auth: auth),
+                  const SizedBox(height: 12),
+                  Text(
+                    'New to the Claymores? Sign in the same way and you can '
+                    'ask to join.',
+                    style: textTheme.bodySmall,
+                  ),
+                ] else
                   Text(
                     'Sign in from the Claymores iOS or Android app.',
                     style: textTheme.bodySmall,
@@ -80,83 +98,116 @@ class SignInCard extends StatelessWidget {
   }
 }
 
-class _NotInvited extends StatelessWidget {
-  const _NotInvited({required this.auth});
+/// Shown after a sign-in the club didn't recognise.
+class NotInvitedNotice extends StatelessWidget {
+  const NotInvitedNotice({super.key, required this.auth});
   final AuthService auth;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
-    child: Container(
-      decoration: BoxDecoration(
-        color: Brand.pinkTint,
-        border: Border.all(color: Brand.pinkBorder),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.mail_outline, color: Brand.ink),
-              SizedBox(width: 8),
-              Text(
-                'NOT INVITED YET',
-                style: TextStyle(fontFamily: Brand.display, fontSize: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            auth.message ??
-                'This Google account hasn’t been invited to the club app.',
-          ),
-          const SizedBox(height: 12),
-          if (auth.canSignInWithApple)
-            SignInButtons(auth: auth)
-          else if (auth.canSignIn)
-            OutlinedButton(
-              onPressed: auth.signIn,
-              child: const Text('TRY ANOTHER ACCOUNT'),
+  Widget build(BuildContext context) {
+    final pending = auth.joinState == JoinState.pending;
+    final approved = auth.joinState == JoinState.approved;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Brand.pinkTint,
+          border: Border.all(color: Brand.pinkBorder),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BrandHeader(
+              eyebrow: pending
+                  ? 'Request pending'
+                  : approved
+                  ? 'Approved'
+                  : 'Not on the list yet',
+              title: approved ? 'Sign in again' : 'Join the club',
+              titleSize: 22,
+              body: approved
+                  ? 'You’re approved. Sign in to finish.'
+                  : pending
+                  ? 'Your request is with the club. We’ll let you know.'
+                  : auth.message ??
+                        'This account hasn’t been invited to the club app.',
             ),
-        ],
+            const SizedBox(height: 14),
+            if (auth.joinIdentity != null && !approved) ...[
+              FilledButton(
+                onPressed: () => context.push(joinPath),
+                child: Text(pending ? 'VIEW REQUEST' : 'REQUEST TO JOIN'),
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (auth.canSignIn || auth.canSignInWithApple)
+              SignInButtons(auth: auth, googleLabel: 'Use another account'),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-/// Google and (on iOS) Sign in with Apple. Apple's button follows its
-/// guidelines: black, Apple logo, the standard "Sign in with Apple" label.
+/// Google (per Google's branding) and, on iOS, Sign in with Apple (per
+/// Apple's HIG: black, Apple logo, standard label), the same size.
+///
+/// After a not-invited sign-in it opens the join screen, unless
+/// [openJoinOnNotInvited] is false (the join screen itself).
 class SignInButtons extends StatelessWidget {
-  const SignInButtons({super.key, required this.auth});
-  final AuthService auth;
+  const SignInButtons({
+    super.key,
+    required this.auth,
+    this.openJoinOnNotInvited = true,
+    this.googleLabel = 'Sign in with Google',
+  });
 
-  static const _width = 260.0;
+  final AuthService auth;
+  final bool openJoinOnNotInvited;
+  final String googleLabel;
+
+  static const _maxWidth = 320.0;
+
+  Future<void> _run(
+    BuildContext context,
+    Future<void> Function() signIn,
+  ) async {
+    final router = GoRouter.maybeOf(context);
+    await signIn();
+    if (openJoinOnNotInvited &&
+        router != null &&
+        auth.status == AuthStatus.notInvited &&
+        auth.joinIdentity != null) {
+      router.push(joinPath);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (auth.canSignIn)
-        SizedBox(
-          width: _width,
-          height: 44,
-          child: FilledButton.icon(
-            onPressed: auth.signIn,
-            icon: const Icon(Icons.login),
-            label: const Text('SIGN IN WITH GOOGLE'),
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: _maxWidth),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (auth.canSignInWithApple)
+          SizedBox(
+            height: signInButtonHeight,
+            child: SignInWithAppleButton(
+              key: const Key('sign-in-with-apple'),
+              height: signInButtonHeight,
+              borderRadius: const BorderRadius.all(Radius.circular(8)),
+              onPressed: () => _run(context, auth.signInWithApple),
+            ),
           ),
-        ),
-      if (auth.canSignIn && auth.canSignInWithApple) const SizedBox(height: 10),
-      if (auth.canSignInWithApple)
-        SizedBox(
-          width: _width,
-          child: SignInWithAppleButton(
-            key: const Key('sign-in-with-apple'),
-            onPressed: auth.signInWithApple,
+        if (auth.canSignIn && auth.canSignInWithApple)
+          const SizedBox(height: 10),
+        if (auth.canSignIn)
+          GoogleSignInButton(
+            label: googleLabel,
+            onPressed: () => _run(context, auth.signIn),
           ),
-        ),
-    ],
+      ],
+    ),
   );
 }

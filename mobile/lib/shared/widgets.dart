@@ -40,6 +40,42 @@ class Eyebrow extends StatelessWidget {
   );
 }
 
+/// Card header: pink eyebrow, Claymore title, pink accent bar, optional
+/// body copy. Used by sign-in, join and profile.
+class BrandHeader extends StatelessWidget {
+  const BrandHeader({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    this.body,
+    this.titleSize = 26,
+  });
+
+  final String eyebrow, title;
+  final String? body;
+  final double titleSize;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Eyebrow(eyebrow),
+      const SizedBox(height: 6),
+      Text(title.toUpperCase(), style: displayStyle(titleSize)),
+      const SizedBox(height: 8),
+      const SizedBox(
+        width: 32,
+        height: 3,
+        child: ColoredBox(color: Brand.pink),
+      ),
+      if (body != null) ...[
+        const SizedBox(height: 12),
+        Text(body!, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    ],
+  );
+}
+
 /// The website's card: white, 1px #EAEAEA border, 8px radius.
 class Panel extends StatelessWidget {
   const Panel({

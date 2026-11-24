@@ -31,6 +31,29 @@ abstract final class Brand {
   static const display = 'Claymore';
 }
 
+/// Google's "Sign in with Google" button, light theme
+/// (developers.google.com/identity/branding-guidelines): white fill, #747775
+/// 1px stroke, #1F1F1F Roboto Medium 14, the standard four-colour "G".
+/// These are Google's colours, not the club's, and are used only there.
+abstract final class GoogleButtonColors {
+  static const fill = Color(0xffffffff);
+  static const stroke = Color(0xff747775);
+  static const text = Color(0xff1f1f1f);
+  static const pressed = Color(0x141f1f1f);
+}
+
+/// Height shared by the Google and Apple sign-in buttons (Apple HIG minimum
+/// is 44pt; Google's is 40dp).
+const double signInButtonHeight = 44;
+
+/// Brand heading: Claymore display face in ink.
+TextStyle displayStyle(double size, {Color color = Brand.ink}) => TextStyle(
+  fontFamily: Brand.display,
+  fontSize: size,
+  color: color,
+  height: 1.1,
+);
+
 /// White on #77c3ef is about 1.9:1, below WCAG AA. The website uses white, so
 /// the app matches it. Flip this to `true` to use #111111 on CTAs instead
 /// (about 9.6:1) and on outlined buttons.

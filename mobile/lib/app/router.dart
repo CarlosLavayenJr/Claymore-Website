@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../data/club_repository.dart';
+import '../features/auth/join_page.dart';
 import '../features/club/club_page.dart';
 import '../features/fixtures/fixtures_page.dart';
 import '../features/fixtures/match_details_page.dart';
@@ -56,6 +57,11 @@ GoRouter buildRouter() {
                 path: '/club',
                 builder: (_, _) => const ClubPage(),
                 routes: [
+                  GoRoute(
+                    path: 'join',
+                    parentNavigatorKey: rootKey,
+                    builder: (_, _) => const JoinPage(),
+                  ),
                   GoRoute(
                     path: 'profile',
                     parentNavigatorKey: rootKey,

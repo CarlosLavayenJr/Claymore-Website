@@ -15,6 +15,9 @@ enum CheckoutReturn {
 
 const profilePath = '/club/profile';
 
+/// Request to join, after a not-invited sign-in.
+const joinPath = '/club/join';
+
 /// Maps an incoming link to an app location, or null when it isn't ours.
 ///
 /// Accepts the custom-scheme form (`claymores://dues?checkout=returned`,

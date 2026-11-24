@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../app/theme.dart';
 import '../../data/club_repository.dart';
+import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 import 'availability.dart';
 
@@ -64,8 +65,9 @@ class FixtureCard extends StatelessWidget {
 }
 
 class FixtureMatchup extends StatelessWidget {
-  const FixtureMatchup({super.key, required this.fixture});
+  const FixtureMatchup({super.key, required this.fixture, this.logoSize = 40});
   final Fixture fixture;
+  final double logoSize;
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +79,11 @@ class FixtureMatchup extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: FixtureTeam(name: fixture.home, logo: fixture.homeLogo),
+          child: FixtureTeam(
+            name: fixture.home,
+            logo: fixture.homeLogo,
+            logoSize: logoSize,
+          ),
         ),
         Expanded(
           flex: 2,
@@ -115,7 +121,11 @@ class FixtureMatchup extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: FixtureTeam(name: fixture.away, logo: fixture.awayLogo),
+          child: FixtureTeam(
+            name: fixture.away,
+            logo: fixture.awayLogo,
+            logoSize: logoSize,
+          ),
         ),
       ],
     );
@@ -123,18 +133,28 @@ class FixtureMatchup extends StatelessWidget {
 }
 
 class FixtureTeam extends StatelessWidget {
-  const FixtureTeam({super.key, required this.name, required this.logo});
+  const FixtureTeam({
+    super.key,
+    required this.name,
+    required this.logo,
+    this.logoSize = 40,
+  });
   final String name;
   final String? logo;
+  final double logoSize;
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      FixtureLogo(url: logo, club: name),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: TeamLogo(name: name, url: logo, size: logoSize),
+      ),
+      const SizedBox(height: 4),
       Text(
         name,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
       ),
     ],
   );
@@ -164,68 +184,4 @@ class FixtureBadge extends StatelessWidget {
       ),
     ),
   );
-}
-
-class FixtureLogo extends StatelessWidget {
-  const FixtureLogo({
-    super.key,
-    required this.url,
-    required this.club,
-    this.size = 36,
-  });
-  final String? url;
-  final String club;
-  final double size;
-
-  static const bundledLogos = {
-    'brevard': 'brevard.png',
-    'daytona': 'daytona.png',
-    'ft. lauderdale': 'ft-lauderdale.png',
-    'gainesville hogs': 'gainesville-hogs.png',
-    'jacksonville': 'jacksonville.png',
-    'lakeland': 'lakeland.png',
-    'orlando otters': 'orlando-otters.png',
-    'sarasota': 'sarasota.png',
-    'tallahassee': 'tallahassee.png',
-    'tampa': 'tampa.png',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final team = club.trim().toLowerCase();
-    final bundled = bundledLogos[team];
-    final asset = team == 'claymores'
-        ? 'assets/crest.png'
-        : bundled == null
-        ? null
-        : 'assets/teams/$bundled';
-    final fallback = Icon(
-      Icons.shield_outlined,
-      size: size * 0.78,
-      color: Brand.secondary,
-    );
-    return SizedBox.square(
-      dimension: size + 4,
-      child: Center(
-        child: asset != null
-            ? Image.asset(
-                asset,
-                width: size,
-                height: size,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
-              )
-            : url == null
-            ? fallback
-            : Image.network(
-                url!,
-                width: size,
-                height: size,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
-                errorBuilder: (context, error, stackTrace) => fallback,
-              ),
-      ),
-    );
-  }
 }

@@ -5,6 +5,7 @@ import '../../data/club_time.dart';
 import '../../shared/widgets.dart';
 import '../fixtures/club_data_view.dart';
 import '../fixtures/fixture_card.dart';
+import '../standings/standings_preview.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -38,6 +39,7 @@ class HomePage extends StatelessWidget {
                 featured: true,
               ),
             const SizedBox(height: 24),
+            const StandingsPreview(),
             const SectionHeading('PRACTICE'),
             Panel(
               child: Column(

@@ -65,7 +65,10 @@ class _Details extends StatelessWidget {
         children: [
           Eyebrow(localizations.formatFullDate(fixture.date)),
           const SizedBox(height: 12),
-          Panel(featured: true, child: FixtureMatchup(fixture: fixture)),
+          Panel(
+            featured: true,
+            child: FixtureMatchup(fixture: fixture, logoSize: 64),
+          ),
           const SizedBox(height: 24),
           const SectionHeading('GAME INFO'),
           Panel(

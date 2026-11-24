@@ -10,6 +10,7 @@ import '../data/auth_api.dart';
 import '../data/club_repository.dart';
 import '../data/member_repository.dart';
 import '../data/standings_repository.dart';
+import '../data/teams.dart';
 import '../features/auth/auth_platform.dart';
 import '../features/auth/auth_service.dart';
 import '../features/fixtures/availability.dart';
@@ -55,6 +56,7 @@ class ClaymoresApp extends StatefulWidget {
     this.standings,
     this.auth,
     this.members,
+    this.teams,
     this.deepLinks = const Stream.empty(),
   });
 
@@ -68,6 +70,9 @@ class ClaymoresApp extends StatefulWidget {
 
   /// Defaults to an API client authorised by [auth], when an API is set.
   final MemberRepository? members;
+
+  /// Defaults to `/v1/teams` from the configured API plus bundled logos.
+  final TeamDirectory? teams;
 
   /// Incoming `claymores://` links; see [platformDeepLinks].
   final Stream<Uri> deepLinks;
@@ -92,6 +97,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       standings:
           widget.standings ??
           StandingsRepository(apiBaseUrl: AppConfig.apiBaseUrl),
+      teams: widget.teams ?? TeamDirectory(apiBaseUrl: AppConfig.apiBaseUrl),
       auth: auth,
       members:
           widget.members ??
@@ -102,6 +108,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       prefs: prefs,
     );
     unawaited(auth.restore());
+    unawaited(services.teams.load());
     links = widget.deepLinks.listen(
       (uri) {
         final location = locationForDeepLink(uri);
