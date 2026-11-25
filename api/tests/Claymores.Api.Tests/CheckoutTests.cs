@@ -176,6 +176,8 @@ public sealed class CheckoutTests(PostgresDatabase database) : IClassFixture<Pos
         Assert.Equal("claymores-dues", create["metadata[purpose]"]);
         Assert.Equal("test", create["metadata[mode]"]);
         Assert.Equal("Claymores RFC dues (test)", create["line_items[0][price_data][product_data][name]"]);
+        Assert.Equal("card", create["allowed_payment_method_types[0]"]);
+        Assert.DoesNotContain(create.Keys, key => key.StartsWith("payment_method_types", StringComparison.Ordinal));
         var attempt = await AttemptAsync(dues);
         Assert.Equal($"claymores-dues-test-app-{attempt:D}", Assert.Single(_stripe.IdempotencyKeys));
         Assert.Equal("app", await ScalarAsync<string>("SELECT return_to FROM dues_checkouts WHERE id = @id", attempt));
