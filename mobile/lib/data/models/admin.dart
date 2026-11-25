@@ -177,3 +177,146 @@ String uuidV4([Random? random]) {
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
       '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
+
+DateTime? _date(Object? value) =>
+    value is String ? DateTime.tryParse(value)?.toLocal() : null;
+
+/// A shareable invite link (`GET /v1/admin/invite-links`). Anyone who signs
+/// in with Google through it joins as a player.
+class InviteLink {
+  const InviteLink({
+    required this.id,
+    required this.token,
+    required this.expiresAt,
+    this.uses = 0,
+    this.active = true,
+  });
+
+  InviteLink.fromJson(Map<String, dynamic> json)
+    : id = json['id'] as String,
+      token = json['token'] as String? ?? '',
+      expiresAt = _date(json['expiresAt']) ?? DateTime.now(),
+      uses = json['uses'] is num ? (json['uses'] as num).toInt() : 0,
+      active = json['active'] == true;
+
+  final String id, token;
+  final DateTime expiresAt;
+  final int uses;
+  final bool active;
+
+  /// The page people open: `https://www.claymoresrfc.com/invite/{token}`.
+  Uri get url => Uri.parse('https://www.claymoresrfc.com/invite/$token');
+}
+
+/// An invited Google email and its role (`GET /v1/admin/invitations`).
+class ClubInvitation {
+  const ClubInvitation({
+    required this.email,
+    required this.role,
+    this.invitedAt,
+  });
+
+  ClubInvitation.fromJson(Map<String, dynamic> json)
+    : email = json['email'] as String? ?? '',
+      role = json['role'] as String? ?? 'player',
+      invitedAt = _date(json['invitedAt']);
+
+  final String email, role;
+  final DateTime? invitedAt;
+
+  bool get isStaff =>
+      role == 'admin' || role == 'coach' || role == 'superadmin';
+
+  String get roleBadge => switch (role) {
+    'superadmin' => 'SUPER ADMIN',
+    'coach' => 'COACH',
+    'admin' => 'ADMIN',
+    _ => 'PLAYER',
+  };
+}
+
+String? _isoDate(DateTime? date) => date == null
+    ? null
+    : '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+
+/// Dues every player gets when they sign in or open their dues
+/// (`GET/PUT /v1/admin/dues/automatic`). Admins and coaches aren't included.
+class AutomaticDues {
+  const AutomaticDues({
+    required this.enabled,
+    required this.description,
+    required this.amountCents,
+    this.dueDate,
+  });
+
+  AutomaticDues.fromJson(Map<String, dynamic> json)
+    : enabled = json['enabled'] == true,
+      description = json['description'] as String? ?? 'Season dues',
+      amountCents = json['amountCents'] is num
+          ? (json['amountCents'] as num).toInt()
+          : 0,
+      dueDate = json['dueDate'] is String
+          ? DateTime.tryParse(json['dueDate'] as String)
+          : null;
+
+  final bool enabled;
+  final String description;
+  final int amountCents;
+  final DateTime? dueDate;
+
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'description': description,
+    'amountCents': amountCents,
+    'dueDate': _isoDate(dueDate),
+  };
+}
+
+/// What `POST /v1/admin/dues/all-members` did.
+class AssignAllResult {
+  const AssignAllResult({this.created = 0, this.skipped = 0});
+
+  AssignAllResult.fromJson(Map<String, dynamic>? json)
+    : created = json?['created'] is num ? (json!['created'] as num).toInt() : 0,
+      skipped = json?['skipped'] is num ? (json!['skipped'] as num).toInt() : 0;
+
+  final int created, skipped;
+}
+
+/// Dues to assign: to one player ([playerSubject]) or, when it's null, to
+/// every player who has signed in. [id] is the idempotency key: keep it for
+/// retries of the same form.
+class NewDues {
+  const NewDues({
+    required this.id,
+    required this.description,
+    required this.amountCents,
+    this.playerSubject,
+    this.dueDate,
+    this.skipExisting = true,
+  });
+
+  final String id, description;
+  final int amountCents;
+  final String? playerSubject;
+  final DateTime? dueDate;
+  final bool skipExisting;
+
+  Map<String, Object?> toJson() => playerSubject == null
+      ? {
+          'batchId': id,
+          'description': description,
+          'amountCents': amountCents,
+          'dueDate': ?_isoDate(dueDate),
+          'skipExisting': skipExisting,
+        }
+      : {
+          'id': id,
+          'playerSubject': playerSubject,
+          'description': description,
+          'amountCents': amountCents,
+          'dueDate': ?_isoDate(dueDate),
+        };
+}

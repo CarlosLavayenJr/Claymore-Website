@@ -197,6 +197,10 @@ class DirectionsButton extends StatelessWidget {
   }
 }
 
+/// Shows [text] at the bottom. A new message replaces the one on screen, so
+/// quick actions never wait behind an old message.
 void showMessage(BuildContext context, String text) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text)));
 }

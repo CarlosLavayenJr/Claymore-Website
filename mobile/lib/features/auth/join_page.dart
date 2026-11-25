@@ -70,7 +70,7 @@ class JoinPage extends StatelessWidget {
         action: auth.canSignIn || auth.canSignInWithApple
             ? SignInButtons(auth: auth, openJoinOnNotInvited: false)
             : Text(
-                'Requests are sent from the Claymores iOS or Android app.',
+                'Requests need sign-in, which isn’t available in this version.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
       );

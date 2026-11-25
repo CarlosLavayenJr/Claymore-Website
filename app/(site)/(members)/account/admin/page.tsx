@@ -388,6 +388,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                     )}
                 </AdminSection>
 
+                <MembersSection members={members} canSetRoles={canSetRoles} selfEmail={selfEmail} />
+
                 <AdminSection
                     id="invitations"
                     title="Invite people"
@@ -439,8 +441,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         )}
                     </div>
                 </AdminSection>
-
-                <MembersSection members={members} canSetRoles={canSetRoles} selfEmail={selfEmail} />
                 </>}
 
                 {tab === 'dues' && <DuesSection api={api} />}

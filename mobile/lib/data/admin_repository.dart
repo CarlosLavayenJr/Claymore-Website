@@ -42,6 +42,43 @@ class AdminRepository {
   /// `POST /v1/admin/dues/{id}/payments`. Idempotent on [payment]'s id.
   /// Throws [ApiException]: 409 `{error}` when it exceeds the balance,
   /// 400 `{error}` when invalid.
+  /// `POST /v1/admin/dues` (one player) or `/v1/admin/dues/all-members`
+  /// (everyone who has signed in; coaches are left out by the API).
+  Future<AssignAllResult> assignDues(NewDues dues) async {
+    if (dues.playerSubject != null) {
+      await _api.postJson('/v1/admin/dues', dues.toJson(), auth: true);
+      return const AssignAllResult(created: 1);
+    }
+    return AssignAllResult.fromJson(
+      await _api.postJson(
+        '/v1/admin/dues/all-members',
+        dues.toJson(),
+        auth: true,
+      ) as Map<String, dynamic>?,
+    );
+  }
+
+  /// `GET /v1/admin/dues/automatic`.
+  Future<AutomaticDues> automaticDues() async => AutomaticDues.fromJson(
+    await _api.getJson('/v1/admin/dues/automatic', auth: true)
+        as Map<String, dynamic>,
+  );
+
+  /// `PUT /v1/admin/dues/automatic`.
+  Future<void> saveAutomaticDues(AutomaticDues setting) async {
+    await _api.putJson(
+      '/v1/admin/dues/automatic',
+      setting.toJson(),
+      auth: true,
+    );
+  }
+
+  /// `DELETE /v1/admin/dues/{id}`: only for dues with nothing paid and no
+  /// card checkout in progress (409 otherwise).
+  Future<void> removeDues(String id) async {
+    await _api.deleteJson('/v1/admin/dues/${_id(id)}', auth: true);
+  }
+
   Future<void> recordPayment(String assessmentId, NewDuesPayment payment) =>
       _api.postJson(
         '/v1/admin/dues/${_id(assessmentId)}/payments',
@@ -114,6 +151,45 @@ class AdminRepository {
     ),
     AdminJoinRequest.fromJson,
   );
+
+  /// `GET /v1/admin/invite-links`: active and expired or turned-off links.
+  Future<List<InviteLink>> inviteLinks() async => _list(
+    await _api.getJson('/v1/admin/invite-links', auth: true),
+    InviteLink.fromJson,
+  );
+
+  /// `POST /v1/admin/invite-links` with `{expiresInDays}`.
+  Future<InviteLink> createInviteLink(int days) async => InviteLink.fromJson(
+    await _api.postJson('/v1/admin/invite-links', {
+      'expiresInDays': days,
+    }, auth: true) as Map<String, dynamic>,
+  );
+
+  /// `DELETE /v1/admin/invite-links/{id}`: turns the link off. People who
+  /// already joined keep their access.
+  Future<void> revokeInviteLink(String id) async {
+    await _api.deleteJson('/v1/admin/invite-links/${_id(id)}', auth: true);
+  }
+
+  /// `GET /v1/admin/invitations`: every invited email and its role.
+  Future<List<ClubInvitation>> invitations() async => _list(
+    await _api.getJson('/v1/admin/invitations', auth: true),
+    ClubInvitation.fromJson,
+  );
+
+  /// `DELETE /v1/admin/invitations/{email}`. 403 for an admin or coach unless
+  /// you're the super admin; 409 for yourself.
+  Future<void> removeInvitation(String email) async {
+    await _api.deleteJson(
+      '/v1/admin/invitations/${_id(email.toLowerCase())}',
+      auth: true,
+    );
+  }
+
+  /// Invites [email] (or changes an invited email's role): the same call as
+  /// [setMemberRole].
+  Future<void> invite(String email, {String role = 'player'}) =>
+      setMemberRole(email, role);
 
   /// `PUT /v1/admin/invitations/{email}` with `{role}` (`player`, `coach` or
   /// `admin`). Only the super admin may give or take away coach and admin

@@ -95,7 +95,7 @@ class SignInCard extends StatelessWidget {
                   ),
                 ] else
                   Text(
-                    'Sign in from the Claymores iOS or Android app.',
+                    'Sign-in isn’t available in this version.',
                     style: textTheme.bodySmall,
                   ),
               ],

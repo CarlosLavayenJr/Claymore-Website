@@ -9,8 +9,11 @@ import '../../data/api_client.dart';
 import '../../shared/widgets.dart';
 import '../auth/auth_service.dart';
 import '../fixtures/fixture_card.dart' show FixtureBadge, matchLocation;
+import '../fixtures/lineup.dart' show LineupEditorPage;
 import '../profile/payment_amount.dart';
 import 'admin_matches.dart';
+import 'admin_invites.dart';
+import 'dues_forms.dart';
 import 'admin_people.dart';
 import 'dues_summary.dart';
 import 'player_dues_page.dart';
@@ -196,6 +199,29 @@ class _AdminBodyState extends State<_AdminBody>
     );
   }
 
+  Future<void> assignDues() async {
+    final list = await (members ?? widget.admin.members()).then(
+      (v) => v,
+      onError: (Object _) => <ClubMember>[],
+    );
+    if (!mounted) return;
+    final message = await showAssignDuesSheet(
+      context,
+      admin: widget.admin,
+      members: list,
+    );
+    if (message == null || !mounted) return;
+    showMessage(context, message);
+    setState(() {
+      dues = loadDues(members!);
+    });
+  }
+
+  Future<void> automaticDues() async {
+    final message = await showAutomaticDuesSheet(context, admin: widget.admin);
+    if (message != null && mounted) showMessage(context, message);
+  }
+
   /// Pull to refresh: the tiles and every tab, which share the same data.
   Future<void> refresh() async {
     setState(load);
@@ -227,6 +253,19 @@ class _AdminBodyState extends State<_AdminBody>
 
   /// Opens the match page (availability breakdown and lineup editor), then
   /// reloads the matches in case the lineup changed.
+  Future<void> openLineup(AdminMatch match) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            LineupEditorPage(fixture: match.fixture, admin: widget.admin),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      matches = loadMatches();
+    });
+  }
+
   Future<void> openMatch(AdminMatch match) async {
     await context.push(matchLocation(match.fixture), extra: match.fixture);
     if (!mounted) return;
@@ -543,7 +582,13 @@ class _AdminBodyState extends State<_AdminBody>
             onRetry: refresh,
           );
         }
-        return AdminMatchesList(matches: snapshot.data!, onOpen: openMatch);
+        return AdminMatchesList(
+          matches: snapshot.data!,
+          onOpen: openMatch,
+          onLineup: AppScope.of(context).auth.user?.canPickLineups ?? false
+              ? openLineup
+              : null,
+        );
       },
     ),
   ];
@@ -596,6 +641,7 @@ class _AdminBodyState extends State<_AdminBody>
       },
     ),
     const SizedBox(height: 12),
+    const SizedBox(height: 12),
     SectionHeading('MEMBERS', key: membersKey),
     FutureBuilder<List<ClubMember>>(
       future: members,
@@ -616,11 +662,40 @@ class _AdminBodyState extends State<_AdminBody>
         return AdminMembersList(members: snapshot.data!, onEdit: editName);
       },
     ),
-    const SizedBox(height: 24),
-    const InviteOnWebsite(),
+    const SizedBox(height: 12),
+    InvitePanel(
+      admin: widget.admin,
+      canSetRoles: AppScope.of(context).auth.user?.isSuperAdmin ?? false,
+      selfEmail: AppScope.of(context).auth.user?.email,
+      onChanged: () => setState(() {
+        members = widget.admin.members();
+      }),
+    ),
   ];
 
   List<Widget> _duesTab() => [
+    Row(
+      children: [
+        Expanded(
+          child: FilledButton.icon(
+            key: const Key('assign-dues'),
+            onPressed: assignDues,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('ASSIGN DUES'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            key: const Key('automatic-dues'),
+            onPressed: automaticDues,
+            icon: const Icon(Icons.autorenew, size: 18),
+            label: const Text('AUTOMATIC'),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 16),
     FutureBuilder<_DuesBoard>(
       future: dues,
       builder: (context, snapshot) {
@@ -644,7 +719,7 @@ class _AdminBodyState extends State<_AdminBody>
         if (board.groups.isEmpty) {
           return const StatusPanel(
             message: 'No dues assigned yet.',
-            detail: 'Dues assigned on the website show up here.',
+            detail: 'Tap Assign dues to give them to one player or everyone.',
           );
         }
         return Column(

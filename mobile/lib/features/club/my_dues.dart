@@ -31,7 +31,12 @@ class DuesLoadError extends StatelessWidget {
   Widget build(BuildContext context) {
     final error = this.error;
     if (error is ApiException && error.statusCode == 404) {
-      return const StatusPanel(message: 'Dues aren’t available yet.');
+      return const StatusPanel(
+        message: 'Dues are coming soon',
+        detail:
+            'Online dues aren’t set up for the club yet. Pay the club '
+            'treasurer at practice for now.',
+      );
     }
     return StatusPanel(
       message: 'Couldn’t load your dues.',
@@ -123,7 +128,7 @@ class DuesTile extends StatelessWidget {
                         ),
                         if (settled)
                           Text(
-                            'PAID',
+                            'PAID IN FULL',
                             style: textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),

@@ -141,10 +141,18 @@ class LineupChip extends StatelessWidget {
 /// lineup chip. Opens the match page, where the breakdown and the lineup
 /// editor live.
 class AdminMatchRow extends StatelessWidget {
-  const AdminMatchRow({super.key, required this.match, required this.onOpen});
+  const AdminMatchRow({
+    super.key,
+    required this.match,
+    required this.onOpen,
+    this.onLineup,
+  });
 
   final AdminMatch match;
   final VoidCallback onOpen;
+
+  /// Coaches: straight to the lineup editor, skipping the match page.
+  final VoidCallback? onLineup;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +178,7 @@ class AdminMatchRow extends StatelessWidget {
         if (lineup != null) LineupChip.label(lineup.status),
       ].join('. '),
       onTapHint: 'open the match',
-      excludeSemantics: true,
+      excludeSemantics: onLineup == null,
       child: InkWell(
         onTap: onOpen,
         child: Padding(
@@ -192,6 +200,18 @@ class AdminMatchRow extends StatelessWidget {
                         fontFeatures: tabularFigures,
                       ),
                     ),
+                    if (onLineup != null)
+                      TextButton.icon(
+                        key: Key('edit-lineup-${fixture.id}'),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: onLineup,
+                        icon: const Icon(Icons.edit_note, size: 18),
+                        label: const Text('EDIT LINEUP'),
+                      ),
                   ],
                 ),
               ),
@@ -212,10 +232,14 @@ class AdminMatchesList extends StatelessWidget {
     super.key,
     required this.matches,
     required this.onOpen,
+    this.onLineup,
   });
 
   final List<AdminMatch> matches;
   final void Function(AdminMatch match) onOpen;
+
+  /// Set for coaches and the super admin, who pick lineups.
+  final void Function(AdminMatch match)? onLineup;
 
   @override
   Widget build(BuildContext context) {
@@ -237,8 +261,11 @@ class AdminMatchesList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Members answer in the app or on the website until match day. '
-          'Open a match to see who can play and build the lineup.',
+          onLineup != null
+              ? 'Players answer until match day. Tap Edit lineup to pick '
+                    'from who can play, or open a match for the details.'
+              : 'Players answer until match day. Open a match to see who can '
+                    'play. The coach picks the lineup.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -253,6 +280,7 @@ class AdminMatchesList extends StatelessWidget {
                   key: ValueKey('admin-match-${match.fixture.id}'),
                   match: match,
                   onOpen: () => onOpen(match),
+                  onLineup: onLineup == null ? null : () => onLineup!(match),
                 ),
               ],
             ],

@@ -256,7 +256,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
 
                     <MemberCard aria-labelledby="dues-heading">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <CardHeading id="dues-heading">Dues</CardHeading>
+                            <CardHeading id="dues-heading">Your dues</CardHeading>
                             {dues.ok && dues.data.length > 0 && (
                                 <p className="text-sm text-[#555555]">
                                     Total balance <span className="font-claymore text-xl text-[#111111]">{formatCents(totalBalance)}</span>
@@ -281,7 +281,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
                                 </Notice>
                             ) : dues.data.length === 0 ? (
                                 <p className="text-[#555555]">
-                                    No dues assigned to you. Questions? <Link href="/contact" className={linkClass}>Contact the club</Link>.
+                                    No dues assigned to you. Questions? Ask a club admin or <Link href="/contact" className={linkClass}>contact the club</Link>.
                                 </p>
                             ) : (
                                 dues.data.map((d, i) => <DuesItem key={d.id} dues={d} detail={details[i] ?? null} />)
