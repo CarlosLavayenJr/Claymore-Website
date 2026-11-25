@@ -189,3 +189,62 @@ export async function removeDues(_previous: RemoveDuesState, formData: FormData)
     revalidatePath(ADMIN)
     done('dues_removed')
 }
+
+// --- Payment corrections ---
+// Plain redirects with a page notice: the history re-renders with the change.
+
+function paymentIds(formData: FormData) {
+    const assessmentId = String(formData.get('assessmentId') ?? '').trim()
+    const paymentId = String(formData.get('paymentId') ?? '').trim()
+    return isUuid(assessmentId) && isUuid(paymentId) ? { assessmentId, paymentId } : null
+}
+
+function paymentFailed(result: ApiResult<unknown>): never {
+    if (!result.ok && result.status === 401) redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
+    const code = result.ok ? 'unavailable'
+        : result.status === 400 ? 'payment_invalid'
+        : result.status === 409 ? 'payment_undone'
+        : result.status === 404 ? 'not_found'
+        : result.status === 403 ? 'forbidden'
+        : 'unavailable'
+    redirect(`${ADMIN}?error=${code}#all-dues`)
+}
+
+export async function undoDuesPayment(formData: FormData) {
+    const ids = paymentIds(formData)
+    const reason = String(formData.get('reason') ?? '').trim()
+    if (!ids || !reason || reason.length > 500) redirect(`${ADMIN}?error=undo_reason#all-dues`)
+    const result = await (await admin()).voidDuesPayment(ids.assessmentId, ids.paymentId, reason)
+    if (!result.ok) paymentFailed(result)
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=${formData.get('method') === 'stripe' ? 'payment_undone_card' : 'payment_undone'}#all-dues`)
+}
+
+export async function editDuesPaymentNote(formData: FormData) {
+    const ids = paymentIds(formData)
+    const note = String(formData.get('note') ?? '').trim()
+    if (!ids || note.length > 500) redirect(`${ADMIN}?error=payment_invalid#all-dues`)
+    const result = await (await admin()).editDuesPaymentNote(ids.assessmentId, ids.paymentId, note || null)
+    if (!result.ok) paymentFailed(result)
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=note_saved#all-dues`)
+}
+
+// --- Invite links ---
+
+export async function createInviteLink(formData: FormData) {
+    const days = Number(formData.get('days') ?? 30)
+    if (!Number.isInteger(days) || days < 1 || days > 90) redirect(`${ADMIN}?error=invalid#invitations`)
+    const result = await (await admin()).createInviteLink(days)
+    if (!result.ok) failed(result, 'link_created')
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=link_created#invitations`)
+}
+
+export async function revokeInviteLink(id: string) {
+    if (!isUuid(id)) redirect(`${ADMIN}?error=invalid#invitations`)
+    const result = await (await admin()).revokeInviteLink(id)
+    if (!result.ok) failed(result, 'link_revoked')
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=link_revoked#invitations`)
+}

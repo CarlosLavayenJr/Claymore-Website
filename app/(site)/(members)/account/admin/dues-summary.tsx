@@ -121,9 +121,8 @@ export function DuesSummary({ groups }: { groups: DuesSummaryGroup[] }) {
     const totals = duesSummaryTotals(groups)
 
     return (
-        <section aria-labelledby="dues-summary-heading" className="mt-8">
-            <h3 id="dues-summary-heading" className="text-lg font-semibold text-[#111111]">Who has paid</h3>
-            <p className="mt-1 text-sm text-[#555555]">
+        <section aria-label="Who has paid, per dues item">
+            <p className="text-sm text-[#555555]">
                 Club total: <MoneyLine totals={totals} />
             </p>
             <ul className="mt-3 space-y-3">

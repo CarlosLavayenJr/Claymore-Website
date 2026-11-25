@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+
 import 'api_client.dart';
 import 'models/account.dart';
 import 'models/admin.dart';
@@ -44,6 +46,44 @@ class AdminRepository {
         payment.toJson(),
         auth: true,
       );
+
+  /// `PATCH /v1/admin/dues/{id}/payments/{paymentId}` with `{note}` (204).
+  /// Throws [ApiException]: 400 when the note is too long or a volunteer or
+  /// waived credit would be left without one, 409 when the payment was
+  /// undone.
+  Future<void> editPaymentNote(
+    String assessmentId,
+    String paymentId,
+    String note,
+  ) => _expectSuccess(
+    _api.send(
+      'PATCH',
+      '/v1/admin/dues/${_id(assessmentId)}/payments/${_id(paymentId)}',
+      body: {'note': note},
+      auth: true,
+    ),
+  );
+
+  /// `POST /v1/admin/dues/{id}/payments/{paymentId}/void` with `{reason}`
+  /// (204). The payment stays in the history, crossed out, and the balance
+  /// goes back up. Card payments still need a refund in Stripe. Throws
+  /// [ApiException]: 400 without a reason, 409 when already undone.
+  Future<void> voidPayment(
+    String assessmentId,
+    String paymentId,
+    String reason,
+  ) => _api.postJson(
+    '/v1/admin/dues/${_id(assessmentId)}/payments/${_id(paymentId)}/void',
+    {'reason': reason},
+    auth: true,
+  );
+
+  static Future<void> _expectSuccess(Future<http.Response> request) async {
+    final response = await request;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException.fromResponse(response);
+    }
+  }
 
   /// `GET /v1/admin/members`: members who have signed in at least once.
   Future<List<ClubMember>> members() async => _list(

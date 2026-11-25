@@ -13,7 +13,17 @@ enum CheckoutReturn {
   };
 }
 
+/// The Club tab: the member's dues live here, so Stripe returns here.
+const clubPath = '/club';
+
+/// The Club tab after Stripe Checkout, showing how it ended.
+String clubCheckoutLocation(CheckoutReturn? checkout) =>
+    checkout == null ? clubPath : '$clubPath?checkout=${checkout.name}';
+
+/// Account settings (opened from the Club tab's gear). The path predates
+/// the rename and is kept so dues and admin links under it still work.
 const profilePath = '/club/profile';
+const accountPath = profilePath;
 
 /// Request to join, after a not-invited sign-in.
 const joinPath = '/club/join';
@@ -33,10 +43,9 @@ String? locationForDeepLink(Uri uri) {
     target = null;
   }
   if (target != 'dues') return null;
-  final checkout = CheckoutReturn.parse(uri.queryParameters['checkout']);
-  return checkout == null
-      ? profilePath
-      : '$profilePath?checkout=${checkout.name}';
+  return clubCheckoutLocation(
+    CheckoutReturn.parse(uri.queryParameters['checkout']),
+  );
 }
 
 /// Links delivered to the running app (and the one that launched it).

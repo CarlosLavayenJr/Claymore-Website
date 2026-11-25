@@ -23,7 +23,7 @@ import {
     notePlaceholder,
     noteRequiredMessage,
 } from '@/lib/claymores/admin-dues'
-import type { AutomaticDues } from '@/lib/claymores/api-client'
+import { formatCents, type AutomaticDues } from '@/lib/claymores/api-client'
 
 const selectClass = `${inputClass} pr-8`
 
@@ -75,62 +75,107 @@ function Outcome({ state }: { state: { status: string; message: string | null } 
 export type MemberOption = { subject: string; label: string }
 
 /**
- * Assign dues to one member. `initialId` is a fresh UUID from the page render; the
- * action hands back the id for the next submit so retries reuse it and successes
- * don't (see DuesFormState in ./actions).
+ * Assign dues to one player or to everyone who has signed in. `initialId` is a fresh UUID from
+ * the page render; the action hands back the id for the next submit so retries reuse it and
+ * successes don't (see DuesFormState in ./actions).
  */
 export function AssignDuesForm({ members, initialId }: { members: MemberOption[]; initialId: string }) {
     const [state, action] = useActionState<AssignDuesState, FormData>(assignDues, { status: 'idle', message: null, nextId: null })
     const id = useId()
     const values = state.status === 'error' ? state.values : undefined
     const disabled = members.length === 0
+    const [everyone, setEveryone] = useState(values?.playerSubject === ALL_MEMBERS)
+    const [description, setDescription] = useState(values?.description ?? DEFAULT_DUES_DESCRIPTION)
+    const [amount, setAmount] = useState(values?.amount ?? '')
+    const dollars = Number(amount.replaceAll('$', '').replaceAll(',', '').trim())
+    const summary = Number.isFinite(dollars) && dollars > 0 ? formatCents(Math.round(dollars * 100)) : null
+
+    const tab = (on: boolean) =>
+        on
+            ? 'rounded-md bg-white px-4 py-2 text-sm font-semibold text-[#111111] shadow-sm'
+            : 'rounded-md px-4 py-2 text-sm font-semibold text-[#555555] hover:text-[#111111] disabled:opacity-60'
 
     return (
         <form action={action} className="space-y-4 rounded-lg bg-[#fafafa] p-4">
             <input type="hidden" name="id" value={state.nextId ?? initialId} />
+            <div role="radiogroup" aria-label="Who gets these dues" className="inline-flex rounded-lg bg-[#EAEAEA] p-1">
+                <button type="button" role="radio" aria-checked={!everyone} className={tab(!everyone)} onClick={() => setEveryone(false)}>
+                    One player
+                </button>
+                <button
+                    type="button"
+                    role="radio"
+                    aria-checked={everyone}
+                    disabled={disabled}
+                    className={tab(everyone)}
+                    onClick={() => setEveryone(true)}
+                >
+                    Everyone ({members.length})
+                </button>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
+                {everyone ? (
+                    <div className="sm:col-span-2">
+                        <input type="hidden" name="playerSubject" value={ALL_MEMBERS} />
+                        <label className="flex items-start gap-2 text-sm text-[#111111]">
+                            <input
+                                type="checkbox"
+                                name="skipExisting"
+                                defaultChecked={values?.skipExisting ?? true}
+                                className="mt-0.5 accent-[#77c3ef]"
+                            />
+                            <span>Skip players who already have “{description.trim() || DEFAULT_DUES_DESCRIPTION}”</span>
+                        </label>
+                    </div>
+                ) : (
+                    <div className="sm:col-span-2">
+                        <label htmlFor={`${id}-player`} className={labelClass}>Player</label>
+                        <select
+                            id={`${id}-player`}
+                            name="playerSubject"
+                            required
+                            disabled={disabled}
+                            defaultValue={values?.playerSubject && values.playerSubject !== ALL_MEMBERS ? values.playerSubject : ''}
+                            className={`${selectClass} mt-1`}
+                        >
+                            <option value="" disabled>{disabled ? 'No members have signed in yet' : 'Choose a player…'}</option>
+                            {members.map(m => <option key={m.subject} value={m.subject}>{m.label}</option>)}
+                        </select>
+                    </div>
+                )}
                 <div className="sm:col-span-2">
-                    <label htmlFor={`${id}-player`} className={labelClass}>Player</label>
-                    <select
-                        id={`${id}-player`}
-                        name="playerSubject"
-                        required
-                        disabled={disabled}
-                        defaultValue={values?.playerSubject ?? ''}
-                        className={`${selectClass} mt-1`}
-                    >
-                        <option value="" disabled>{disabled ? 'No members have signed in yet' : 'Choose a player…'}</option>
-                        {!disabled && (
-                            <option value={ALL_MEMBERS}>
-                                Everyone who has signed in ({members.length} member{members.length === 1 ? '' : 's'})
-                            </option>
-                        )}
-                        {members.map(m => <option key={m.subject} value={m.subject}>{m.label}</option>)}
-                    </select>
-                    <label className="mt-2 flex items-start gap-2 text-sm text-[#555555]">
-                        <input
-                            type="checkbox"
-                            name="skipExisting"
-                            defaultChecked={values?.skipExisting ?? true}
-                            className="mt-0.5 accent-[#77c3ef]"
-                        />
-                        <span>When assigning to everyone, skip anyone who already has dues with this description.</span>
-                    </label>
-                </div>
-                <div className="sm:col-span-2">
-                    <label htmlFor={`${id}-description`} className={labelClass}>Description</label>
+                    <label htmlFor={`${id}-description`} className={labelClass}>What it’s for</label>
                     <input
                         id={`${id}-description`}
                         name="description"
                         required
                         maxLength={DUES_LIMITS.description}
-                        defaultValue={values?.description ?? DEFAULT_DUES_DESCRIPTION}
+                        value={description}
+                        onChange={event => setDescription(event.target.value)}
+                        aria-describedby={`${id}-description-help`}
                         className={`${inputClass} mt-1`}
                     />
+                    <p id={`${id}-description-help`} className="mt-1 text-xs text-[#555555]">
+                        Include the season, like “2026–27 season dues”, so it reads clearly in the summary later.
+                    </p>
                 </div>
                 <div>
                     <label htmlFor={`${id}-amount`} className={labelClass}>Amount (USD)</label>
-                    <DollarInput id={`${id}-amount`} defaultValue={values?.amount ?? ''} />
+                    <div className="relative mt-1">
+                        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#555555]">$</span>
+                        <input
+                            id={`${id}-amount`}
+                            name="amount"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            required
+                            maxLength={20}
+                            value={amount}
+                            onChange={event => setAmount(event.target.value)}
+                            className={`${inputClass} pl-7`}
+                        />
+                    </div>
                 </div>
                 <div>
                     <label htmlFor={`${id}-due`} className={labelClass}>
@@ -145,7 +190,13 @@ export function AssignDuesForm({ members, initialId }: { members: MemberOption[]
                     />
                 </div>
             </div>
-            <SubmitButton label="Assign dues" busy="Assigning…" disabled={disabled} />
+            <SubmitButton
+                label={everyone
+                    ? `Assign${summary ? ` ${summary}` : ''} to ${members.length} player${members.length === 1 ? '' : 's'}`
+                    : `Assign${summary ? ` ${summary}` : ' dues'}`}
+                busy="Assigning…"
+                disabled={disabled}
+            />
             <Outcome state={state} />
         </form>
     )

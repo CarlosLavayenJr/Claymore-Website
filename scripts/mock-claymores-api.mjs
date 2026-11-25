@@ -47,8 +47,8 @@ const joinRequests = [
     },
 ]
 const dues = [
-    { id: 'c5538aa3-989d-439b-b3e8-f21d85369f06', player: 'player@example.com', description: '2026–27 season dues', amountCents: 15000, dueDate: '2027-01-31', payments: [{ id: randomUUID(), amountCents: 5000, recordedAt: '2026-10-15T22:30:00Z' }], pendingCheckoutCents: 0 },
-    { id: '7a0d2f8e-4a4c-4d6b-9a55-0f7e7c1b2d11', player: 'player@example.com', description: 'Tour kit order', amountCents: 6500, dueDate: null, payments: [{ id: randomUUID(), amountCents: 6500, recordedAt: '2026-09-03T18:00:00Z' }], pendingCheckoutCents: 0 },
+    { id: 'c5538aa3-989d-439b-b3e8-f21d85369f06', player: 'player@example.com', description: '2026–27 season dues', amountCents: 15000, dueDate: '2027-01-31', payments: [{ id: randomUUID(), amountCents: 5000, recordedAt: '2026-10-15T22:30:00Z', method: 'cash', note: 'Paid at Tuesday practice' }], pendingCheckoutCents: 0 },
+    { id: '7a0d2f8e-4a4c-4d6b-9a55-0f7e7c1b2d11', player: 'player@example.com', description: 'Tour kit order', amountCents: 6500, dueDate: null, payments: [{ id: randomUUID(), amountCents: 6500, recordedAt: '2026-09-03T18:00:00Z', method: 'stripe' }], pendingCheckoutCents: 0 },
     { id: '3f1e6c55-2b8f-4d7e-8f21-9c2b7d4e6a10', player: 'admin@example.com', description: '2026–27 season dues', amountCents: 15000, dueDate: '2027-01-31', payments: [], pendingCheckoutCents: 2500 },
 ]
 
@@ -85,12 +85,19 @@ function bearer(req) {
 }
 
 function assessment(d) {
-    const paid = d.payments.reduce((s, p) => s + p.amountCents, 0)
+    const live = d.payments.filter(p => !p.voidedAt)
+    const paid = live.reduce((s, p) => s + p.amountCents, 0)
+    const credited = live.filter(p => p.method === 'volunteer' || p.method === 'waived').reduce((s, p) => s + p.amountCents, 0)
     return {
         id: d.id, playerSubject: subjectOf(d.player), description: d.description, amountCents: d.amountCents,
         dueDate: d.dueDate, paidCents: paid, balanceCents: d.amountCents - paid, pendingCheckoutCents: d.pendingCheckoutCents,
+        creditedCents: credited,
     }
 }
+
+const inviteLinks = [] // { id, token, createdBy, createdAt, expiresAt, revokedAt, uses }
+const linkShape = l => ({ ...l, active: !l.revokedAt && new Date(l.expiresAt) > new Date() })
+let automatic = { enabled: false, description: '', amountCents: 0, dueDate: null }
 
 async function readJson(req) {
     let raw = ''
@@ -116,7 +123,7 @@ const server = createServer(async (req, res) => {
     if (method === 'GET' && (path.startsWith('/v1/fixtures/') || path.startsWith('/v1/players/') || path === '/v1/standings' || path === '/v1/practices/schedule')) return send(res, 404, { error: 'not_found' })
     if (path === '/health') return send(res, 200, { status: 'ok' })
 
-    const body = method === 'POST' || method === 'PUT' ? await readJson(req) : {}
+    const body = method === 'POST' || method === 'PUT' || method === 'PATCH' ? await readJson(req) : {}
     if (body === null) return send(res, 400, { error: 'invalid_request' })
 
     // --- Mobile auth ---
@@ -153,6 +160,16 @@ const server = createServer(async (req, res) => {
         if (!existing) joinRequests.push({ id: randomUUID(), email, name: body.name.trim(), phone: body.phone ?? null, message: body.message ?? null, status: 'pending', createdAt: new Date().toISOString() })
         return send(res, 202, { status: 'pending', email })
     }
+    if (method === 'POST' && path === '/v1/auth/mobile/google/redeem-invite') {
+        const email = emailFromIdToken(body.idToken)
+        if (!email) return send(res, 401, { error: 'invalid_token' })
+        const link = inviteLinks.find(l => l.token === body.inviteToken && linkShape(l).active)
+        if (!link) return send(res, 410, { error: 'invite_link_invalid' })
+        if (invitations.has(email)) return send(res, 200, { status: 'already_member', email })
+        invitations.set(email, { role: 'player', invitedBy: 'invite link', invitedAt: new Date().toISOString() })
+        link.uses++
+        return send(res, 200, { status: 'joined', email })
+    }
     if (method === 'POST' && path === '/v1/auth/mobile/google/request-status') {
         const email = emailFromIdToken(body.idToken)
         if (!email) return send(res, 401, { error: 'invalid_token' })
@@ -182,7 +199,7 @@ const server = createServer(async (req, res) => {
     let m = path.match(/^\/v1\/dues\/mine\/([^/]+)$/)
     if (method === 'GET' && m) {
         const d = dues.find(x => x.id === m[1] && x.player === user.email)
-        return d ? send(res, 200, { assessment: assessment(d), payments: d.payments }) : send(res, 404, { error: 'not_found' })
+        return d ? send(res, 200, { assessment: assessment(d), payments: d.payments.filter(p => !p.voidedAt).map(({ id, amountCents, recordedAt, method }) => ({ id, amountCents, recordedAt, method })) }) : send(res, 404, { error: 'not_found' })
     }
     m = path.match(/^\/v1\/dues\/([^/]+)\/checkout-session$/)
     if (method === 'POST' && m) {
@@ -220,6 +237,86 @@ const server = createServer(async (req, res) => {
             r.reason = body.reason ?? null
         }
         return send(res, 200, r)
+    }
+    if (method === 'GET' && path === '/v1/admin/members') {
+        return send(res, 200, [...invitations.keys()].map(email => ({ subject: subjectOf(email), email, name: nameOf(email) })))
+    }
+    const playerOf = subject => [...invitations.keys()].find(e => subjectOf(e) === subject)
+    if (method === 'GET' && path === '/v1/admin/dues') return send(res, 200, dues.filter(d => !d.removed).map(assessment))
+    if (method === 'GET' && path === '/v1/admin/dues/automatic') return send(res, 200, automatic)
+    if (method === 'PUT' && path === '/v1/admin/dues/automatic') {
+        automatic = { enabled: Boolean(body.enabled), description: body.description, amountCents: body.amountCents, dueDate: body.dueDate ?? null }
+        return send(res, 200, automatic)
+    }
+    if (method === 'POST' && path === '/v1/admin/dues') {
+        const player = playerOf(body.playerSubject)
+        if (!player || !(body.amountCents > 0)) return send(res, 400, { error: 'Provide a player and a positive amount.' })
+        dues.push({ id: body.id, player, description: body.description, amountCents: body.amountCents, dueDate: body.dueDate ?? null, payments: [], pendingCheckoutCents: 0 })
+        return send(res, 201, { id: body.id })
+    }
+    if (method === 'POST' && path === '/v1/admin/dues/all-members') {
+        let created = 0, skipped = 0
+        for (const player of invitations.keys()) {
+            if (body.skipExisting !== false && dues.some(d => d.player === player && d.description.toLowerCase() === body.description.toLowerCase())) { skipped++; continue }
+            dues.push({ id: randomUUID(), player, description: body.description, amountCents: body.amountCents, dueDate: body.dueDate ?? null, payments: [], pendingCheckoutCents: 0 })
+            created++
+        }
+        return send(res, 200, { created, skipped, members: invitations.size })
+    }
+    m = path.match(/^\/v1\/admin\/dues\/([^/]+)$/)
+    if (m && method === 'GET') {
+        const d = dues.find(x => x.id === m[1] && !x.removed)
+        return d ? send(res, 200, { assessment: assessment(d), payments: d.payments }) : send(res, 404, { error: 'not_found' })
+    }
+    if (m && method === 'DELETE') {
+        const d = dues.find(x => x.id === m[1] && !x.removed)
+        if (!d) return send(res, 404, { error: 'not_found' })
+        if (d.payments.some(p => !p.voidedAt) || d.pendingCheckoutCents > 0) return send(res, 409, { error: 'This item has payments or a card checkout in progress, so it can’t be removed.' })
+        d.removed = true
+        return send(res, 204)
+    }
+    m = path.match(/^\/v1\/admin\/dues\/([^/]+)\/payments$/)
+    if (m && method === 'POST') {
+        const d = dues.find(x => x.id === m[1] && !x.removed)
+        if (!d) return send(res, 404, { error: 'not_found' })
+        if (body.amountCents > assessment(d).balanceCents - d.pendingCheckoutCents) return send(res, 409, { error: 'Payment exceeds the available balance after any pending checkout.' })
+        if ((body.method === 'volunteer' || body.method === 'waived') && !body.note?.trim()) return send(res, 400, { error: 'Volunteer or waived need a note.' })
+        d.payments.push({ id: body.id, amountCents: body.amountCents, recordedAt: new Date().toISOString(), method: body.method ?? 'other', note: body.note?.trim() || null })
+        return send(res, 200, { id: body.id })
+    }
+    m = path.match(/^\/v1\/admin\/dues\/([^/]+)\/payments\/([^/]+)(\/void)?$/)
+    if (m) {
+        const p = dues.find(x => x.id === m[1] && !x.removed)?.payments.find(x => x.id === m[2])
+        if (!p) return send(res, 404, { error: 'not_found' })
+        if (m[3] && method === 'POST') {
+            const reason = body.reason?.trim()
+            if (!reason) return send(res, 400, { error: 'Say why it’s being undone, in at most 500 characters.' })
+            if (p.voidedAt) return p.voidReason === reason ? send(res, 204) : send(res, 409, { error: 'This payment was already undone.' })
+            Object.assign(p, { voidedAt: new Date().toISOString(), voidedBy: user.email, voidReason: reason })
+            return send(res, 204)
+        }
+        if (!m[3] && method === 'PATCH') {
+            if (p.voidedAt) return send(res, 409, { error: 'This payment was undone, so its note can’t change.' })
+            const note = body.note?.trim() || null
+            if (!note && (p.method === 'volunteer' || p.method === 'waived')) return send(res, 400, { error: 'Volunteer or waived credits need a note.' })
+            p.note = note
+            return send(res, 204)
+        }
+    }
+    if (method === 'GET' && path === '/v1/admin/invite-links') return send(res, 200, inviteLinks.map(linkShape).reverse())
+    if (method === 'POST' && path === '/v1/admin/invite-links') {
+        const days = body.expiresInDays ?? 30
+        if (!(days >= 1 && days <= 90)) return send(res, 400, { error: 'A link lasts 1 to 90 days.' })
+        const link = { id: randomUUID(), token: randomBytes(16).toString('base64url'), createdBy: user.email, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + days * 86400000).toISOString(), revokedAt: null, uses: 0 }
+        inviteLinks.push(link)
+        return send(res, 201, linkShape(link))
+    }
+    m = path.match(/^\/v1\/admin\/invite-links\/([^/]+)$/)
+    if (m && method === 'DELETE') {
+        const link = inviteLinks.find(l => l.id === m[1])
+        if (!link) return send(res, 404, { error: 'not_found' })
+        link.revokedAt ??= new Date().toISOString()
+        return send(res, 204)
     }
     if (method === 'GET' && path === '/v1/admin/invitations') {
         return send(res, 200, [...invitations].map(([email, v]) => ({ email, ...v })).sort((a, b) => a.role.localeCompare(b.role) || a.email.localeCompare(b.email)))

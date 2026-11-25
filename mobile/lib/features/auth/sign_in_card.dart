@@ -48,8 +48,8 @@ class SignInCard extends StatelessWidget {
                   runSpacing: 10,
                   children: [
                     FilledButton(
-                      onPressed: () => context.push(profilePath),
-                      child: const Text('MY PROFILE'),
+                      onPressed: () => context.push(accountPath),
+                      child: const Text('ACCOUNT'),
                     ),
                     OutlinedButton(
                       onPressed: auth.signOut,

@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { approveJoinRequest, denyJoinRequest, removeInvitation, saveInvitation } from './actions'
+import { approveJoinRequest, createInviteLink, denyJoinRequest, removeInvitation, revokeInviteLink, saveInvitation } from './actions'
+import { CopyLink } from './copy-link'
 import { DuesSection } from './dues-section'
+import { AdminSection } from '@/components/members/admin-section'
 import { ConfirmSubmit } from '@/components/members/confirm-submit'
 import {
-    CardHeading,
     ComingSoon,
     ctaClass,
     formatDate,
@@ -18,9 +20,10 @@ import {
     RoleBadge,
     secondaryCtaClass,
 } from '@/components/members/member-ui'
-import type { ClubInvitation, JoinRequest } from '@/lib/claymores/api-client'
+import type { ApiResult, ClubInvitation, InviteLink, JoinRequest } from '@/lib/claymores/api-client'
 import { memberAuthEnabled } from '@/lib/claymores/auth-env'
 import { memberApi } from '@/lib/claymores/member'
+import { SITE_URL } from '@/lib/seo'
 
 export const metadata: Metadata = {
     title: 'Club admin',
@@ -34,6 +37,11 @@ const notices: Record<string, string> = {
     invited: 'Invitation saved.',
     removed: 'Invitation removed.',
     dues_removed: 'Dues removed. They won’t be assigned to that player again automatically.',
+    payment_undone: 'Payment undone. It’s crossed out in the history and the balance is back up.',
+    payment_undone_card: 'Payment undone in the club’s records. Refund the card payment in the Stripe dashboard to give the money back.',
+    note_saved: 'Note saved.',
+    link_created: 'New invite link ready. Copy it below and post it in the group chat.',
+    link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
 }
 
 const errors: Record<string, string> = {
@@ -43,6 +51,9 @@ const errors: Record<string, string> = {
     not_pending: 'This request was already decided. Refresh to see its current status.',
     conflict: 'That change isn’t allowed. Admins can’t remove or demote themselves.',
     unavailable: 'The club server didn’t respond. Try again in a minute.',
+    undo_reason: 'Say why the payment is being undone.',
+    payment_invalid: 'Notes are at most 500 characters, and volunteer or waived credits need one.',
+    payment_undone: 'That payment was already undone, so it can’t change.',
 }
 
 const selectClass = `${inputClass} pr-8`
@@ -135,6 +146,63 @@ function InvitationRow({ invitation, self }: { invitation: ClubInvitation; self:
     )
 }
 
+/** The site this page was served from, so a dev preview hands out links to itself. */
+async function siteOrigin() {
+    const h = await headers()
+    const host = h.get('x-forwarded-host') ?? h.get('host')
+    if (!host) return SITE_URL
+    return `${h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')}://${host}`
+}
+
+function InviteLinkPanel({ links, origin }: { links: ApiResult<InviteLink[]>; origin: string }) {
+    if (!links.ok) {
+        return links.status === 404 ? null : (
+            <Notice tone="error" title="Invite links couldn’t load">The club server didn’t respond. Refresh in a minute.</Notice>
+        )
+    }
+    const active = links.data.filter(l => l.active)
+    return (
+        <div className="space-y-4 rounded-lg border border-[#77c3ef]/50 bg-[#77c3ef]/5 p-4">
+            <div>
+                <h3 className="text-lg font-semibold text-[#111111]">Invite link</h3>
+                <p className="mt-1 text-sm text-[#555555]">
+                    Anyone with the link who signs in with Google joins as a player, no approval needed. Post it in the team
+                    group chat. Turn it off any time.
+                </p>
+            </div>
+            {active.map(link => (
+                <div key={link.id} className="space-y-2">
+                    <CopyLink url={`${origin}/invite/${link.token}`} />
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[#555555]">
+                        <span>
+                            {link.uses} joined · works until {formatDate(link.expiresAt)}
+                        </span>
+                        <form action={revokeInviteLink.bind(null, link.id)}>
+                            <ConfirmSubmit
+                                message="Turn this link off? People who already joined keep their access."
+                                className="text-sm font-semibold text-[#b02a64] underline-offset-4 hover:underline"
+                            >
+                                Turn off
+                            </ConfirmSubmit>
+                        </form>
+                    </div>
+                </div>
+            ))}
+            <form action={createInviteLink} className="flex flex-wrap items-end gap-2">
+                <div>
+                    <label htmlFor="invite-link-days" className={labelClass}>{active.length ? 'Make another link' : 'Link works for'}</label>
+                    <select id="invite-link-days" name="days" defaultValue="30" className={`${selectClass} mt-1 w-40`}>
+                        <option value="7">7 days</option>
+                        <option value="30">30 days</option>
+                        <option value="90">90 days</option>
+                    </select>
+                </div>
+                <button type="submit" className={`${secondaryCtaClass} py-2.5`}>{active.length ? 'Make new link' : 'Make invite link'}</button>
+            </form>
+        </div>
+    )
+}
+
 export default async function AdminPage({ searchParams }: { searchParams: SearchParams }) {
     if (!memberAuthEnabled()) {
         return (
@@ -171,7 +239,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     const error = typeof params.error === 'string' ? errors[params.error] ?? errors.unavailable : undefined
     const selfEmail = (me.ok ? me.data.email : session.token.api.user.email)?.toLowerCase()
 
-    const [requests, invitations] = await Promise.all([api.joinRequests('pending'), api.invitations()])
+    const [requests, invitations, links] = await Promise.all([
+        api.joinRequests('pending'), api.invitations(), api.inviteLinks(),
+    ])
+    const waiting = requests.ok ? requests.data.length : 0
+    const activeLinks = links.ok ? links.data.filter(l => l.active) : []
 
     return (
         <>
@@ -179,36 +251,44 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 Review requests to join, manage who can sign in, and keep track of dues. <Link href="/account" className={linkClass}>Back to my account</Link>
             </MemberHeader>
 
-            <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-5xl space-y-4 px-4 py-10 sm:px-6 lg:px-8">
                 {notice && <Notice tone="success" title={notice} />}
                 {error && <Notice tone="error" title={error} />}
 
-                <MemberCard aria-labelledby="requests-heading">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <CardHeading id="requests-heading">Join requests</CardHeading>
-                        {requests.ok && <p className="text-sm text-[#555555]">{requests.data.length} pending</p>}
-                    </div>
-                    <div className="mt-5">
-                        {!requests.ok ? (
-                            <Notice tone="error" title="Join requests couldn't load">
-                                {requests.status === 404
-                                    ? 'Join requests aren’t switched on for the club server yet.'
-                                    : 'The club server didn’t respond. Refresh in a minute.'}
-                            </Notice>
-                        ) : requests.data.length === 0 ? (
-                            <p className="text-[#555555]">No requests waiting. Nice work.</p>
-                        ) : (
-                            <ul className="space-y-4">
-                                {requests.data.map(r => <JoinRequestRow key={r.id} request={r} />)}
-                            </ul>
-                        )}
-                    </div>
-                </MemberCard>
+                <AdminSection
+                    id="join-requests"
+                    title="Join requests"
+                    needsAction={waiting > 0}
+                    status={!requests.ok ? 'Couldn’t load' : waiting === 0 ? 'None waiting' : <span className="font-semibold text-[#b02a64]">{waiting} waiting</span>}
+                >
+                    {!requests.ok ? (
+                        <Notice tone="error" title="Join requests couldn't load">
+                            {requests.status === 404
+                                ? 'Join requests aren’t switched on for the club server yet.'
+                                : 'The club server didn’t respond. Refresh in a minute.'}
+                        </Notice>
+                    ) : requests.data.length === 0 ? (
+                        <p className="text-[#555555]">No requests waiting. Nice work.</p>
+                    ) : (
+                        <ul className="space-y-4">
+                            {requests.data.map(r => <JoinRequestRow key={r.id} request={r} />)}
+                        </ul>
+                    )}
+                </AdminSection>
 
-                <MemberCard aria-labelledby="invites-heading">
-                    <CardHeading id="invites-heading">Invitations</CardHeading>
-                    <p className="mt-2 text-sm text-[#555555]">
-                        Invited Google emails can sign in. Role changes take effect within 30 seconds.
+                <AdminSection
+                    id="invitations"
+                    title="Invite people"
+                    status={<>
+                        {activeLinks.length > 0 ? 'Invite link on' : 'No invite link'}
+                        {invitations.ok && <> · {invitations.data.length} member{invitations.data.length === 1 ? '' : 's'} invited</>}
+                    </>}
+                >
+                    <InviteLinkPanel links={links} origin={await siteOrigin()} />
+
+                    <h3 className="mt-6 text-lg font-semibold text-[#111111]">Invite by email</h3>
+                    <p className="mt-1 text-sm text-[#555555]">
+                        For one person, or to make someone an admin. Role changes take effect within 30 seconds.
                     </p>
 
                     <form action={saveInvitation} className="mt-5 grid gap-3 rounded-lg bg-[#fafafa] p-4 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
@@ -240,7 +320,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                             </ul>
                         )}
                     </div>
-                </MemberCard>
+                </AdminSection>
 
                 <DuesSection api={api} />
             </div>
