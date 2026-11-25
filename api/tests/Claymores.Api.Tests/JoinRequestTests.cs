@@ -620,6 +620,107 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Anyone_with_an_invite_link_joins_as_a_player()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("linkadmin@example.com");
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/invite-links", admin,
+            new { expiresInDays = 365 }), Ct)).StatusCode);
+        var created = await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/invite-links", admin, new { }), Ct);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var link = JsonDocument.Parse(await created.Content.ReadAsStringAsync(Ct));
+        var token = link.RootElement.GetProperty("token").GetString()!;
+        var id = link.RootElement.GetProperty("id").GetString()!;
+        Assert.True(link.RootElement.GetProperty("active").GetBoolean());
+
+        // Not invited yet, so sign-in is refused.
+        var idToken = FakeGoogleValidator.Token("sub-linkplayer", "linkplayer@example.com", name: "Link Player");
+        Assert.NotEqual(HttpStatusCode.OK, (await Client().PostAsJsonAsync("/v1/auth/mobile/google", new { idToken }, Ct)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Gone, (await Client().PostAsJsonAsync("/v1/auth/mobile/google/redeem-invite",
+            new { idToken, inviteToken = "not-a-real-link-token" }, Ct)).StatusCode);
+        var joined = await Client().PostAsJsonAsync("/v1/auth/mobile/google/redeem-invite", new { idToken, inviteToken = token }, Ct);
+        Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
+        Assert.Contains("\"joined\"", await joined.Content.ReadAsStringAsync(Ct));
+        var again = await Client().PostAsJsonAsync("/v1/auth/mobile/google/redeem-invite", new { idToken, inviteToken = token }, Ct);
+        Assert.Contains("\"already_member\"", await again.Content.ReadAsStringAsync(Ct));
+
+        var signIn = await Client().PostAsJsonAsync("/v1/auth/mobile/google", new { idToken }, Ct);
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+        Assert.Contains("\"role\":\"player\"", await signIn.Content.ReadAsStringAsync(Ct));
+        var list = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/invite-links", admin), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"uses\":1", list);
+
+        // Turned off, it stops working.
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/invite-links/{id}", admin), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, (await Client().PostAsJsonAsync("/v1/auth/mobile/google/redeem-invite",
+            new { idToken = FakeGoogleValidator.Token("sub-late", "late@example.com"), inviteToken = token }, Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_undo_a_payment_and_edit_its_note()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("undo-admin@example.com");
+        await InviteAsync("undoplayer@example.com", "player");
+        var signIn = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+            new { idToken = FakeGoogleValidator.Token("sub-undoplayer", "undoplayer@example.com", name: "Undo Player") }, Ct);
+        using var tokens = JsonDocument.Parse(await signIn.Content.ReadAsStringAsync(Ct));
+        var player = tokens.RootElement.GetProperty("accessToken").GetString()!;
+
+        var dues = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.Created, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues", admin,
+            new { id = dues, playerSubject = "sub-undoplayer", description = "Season dues", amountCents = 10000 }), Ct)).StatusCode);
+        var cash = Guid.NewGuid();
+        var credit = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin,
+            new { id = cash, amountCents = 10000, method = "cash", note = "Wrong player" }), Ct)).StatusCode);
+
+        // Undo needs a reason.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{cash}/void", admin, new { reason = "  " }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{cash}/void", player, new { reason = "Mine" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{cash}/void", admin, new { reason = "Recorded on the wrong player" }), Ct)).StatusCode);
+        // A retry is fine; a different reason is a conflict.
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{cash}/void", admin, new { reason = "Recorded on the wrong player" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{cash}/void", admin, new { reason = "Other" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/dues/{dues}/payments/{Guid.NewGuid()}/void", admin, new { reason = "Nope" }), Ct)).StatusCode);
+
+        var detail = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/dues/{dues}", admin), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"balanceCents\":10000", detail);
+        Assert.Contains("\"voidReason\":\"Recorded on the wrong player\"", detail);
+        Assert.Contains("\"voidedBy\":\"undo-admin@example.com\"", detail);
+        // The player no longer sees the undone payment.
+        var mine = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/dues/mine/{dues}", player), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"balanceCents\":10000", mine);
+        Assert.DoesNotContain(cash.ToString(), mine);
+        Assert.DoesNotContain("wrong player", mine);
+
+        // The full amount can be recorded again, and an undone payment's note is frozen.
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin,
+            new { id = credit, amountCents = 10000, method = "volunteer", note = "Reffed" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Patch,
+            $"/v1/admin/dues/{dues}/payments/{cash}", admin, new { note = "Edit" }), Ct)).StatusCode);
+
+        // Notes can change; a credit can't lose its note.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Patch,
+            $"/v1/admin/dues/{dues}/payments/{credit}", admin, new { note = " " }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Bearer(HttpMethod.Patch,
+            $"/v1/admin/dues/{dues}/payments/{credit}", admin, new { note = "Reffed two U12 games" }), Ct)).StatusCode);
+        detail = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/dues/{dues}", admin), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("Reffed two U12 games", detail);
+        Assert.Contains("\"balanceCents\":0", detail);
+    }
+
+    [Fact]
     public async Task Dues_can_be_assigned_to_every_member_once()
     {
         database.SkipIfUnavailable();

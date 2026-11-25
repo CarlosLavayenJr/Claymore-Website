@@ -43,7 +43,7 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         }
 
         await using var sum = new NpgsqlCommand(
-            "SELECT COALESCE(sum(amount_cents), 0) FROM dues_payments WHERE assessment_id = @id", connection, tx);
+            "SELECT COALESCE(sum(amount_cents), 0) FROM dues_payments WHERE assessment_id = @id AND voided_at IS NULL", connection, tx);
         sum.Parameters.AddWithValue("id", assessmentId);
         var paid = (long)(await sum.ExecuteScalarAsync(ct))!;
         if (requested > assessmentAmount - paid)
