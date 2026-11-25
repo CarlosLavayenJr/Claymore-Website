@@ -821,7 +821,10 @@ void main() {
       final date = const DefaultMaterialLocalizations()
           .formatMediumDate(next)
           .replaceFirst(', ', ' ');
-      expect(tileText(tester, 'next-match'), '$date · 14 available');
+      final nextTile = tester.widget<AdminTile>(find.byKey(const Key('tile-next-match')));
+      expect(nextTile.label, 'Next match · $date');
+      expect(nextTile.value, 'at Jacksonville RFC');
+      expect(nextTile.detail, startsWith('14 can play'));
       expect(tileText(tester, 'join-requests'), '2 waiting');
       expect(
         tester
@@ -838,8 +841,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      // Matches is the default tab.
-      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+      // Matches is the default tab (the row, plus the Next match tile).
+      expect(find.text('at Jacksonville RFC'), findsNWidgets(2));
 
       await tap(tester, find.byKey(const Key('tile-join-requests')));
       expect(
@@ -847,7 +850,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Sam Flanker'), findsOneWidget);
-      expect(find.text('at Jacksonville RFC'), findsNothing);
+      expect(find.text('at Jacksonville RFC'), findsOneWidget); // only the tile
 
       await tap(tester, find.byKey(const Key('tile-dues-outstanding')));
       expect(
@@ -868,7 +871,7 @@ void main() {
       expect(find.text('MEMBERS'), findsOneWidget);
 
       await tap(tester, find.byKey(const Key('tile-next-match')));
-      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+      expect(find.text('at Jacksonville RFC'), findsNWidgets(2));
       await finish(tester, services);
     });
 
@@ -933,8 +936,8 @@ void main() {
       expect(find.text('GAME INFO'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      // Back on Matches, reloaded in case the lineup changed.
-      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+      // Back on Matches (row and tile), reloaded in case the lineup changed.
+      expect(find.text('at Jacksonville RFC'), findsNWidgets(2));
       expect(lineupLoads(), greaterThan(before + 1));
       await finish(tester, services);
     });

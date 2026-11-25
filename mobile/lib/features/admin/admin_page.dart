@@ -354,23 +354,34 @@ class _AdminBodyState extends State<_AdminBody>
     return Column(
       children: [
         row(
-          _tile<List<AdminMatch>>(
-            key: const Key('tile-next-match'),
-            label: 'Next match',
+          FutureBuilder<List<AdminMatch>>(
             future: matches,
-            describe: (list) {
-              if (list.isEmpty) return ('None scheduled', false);
-              final next = list.first;
-              final date = shortMatchDate(context, next.fixture.date);
-              final counts = next.availability?.counts;
-              return (
-                counts == null
-                    ? '$date · ${next.title}'
-                    : '$date · ${counts.available} available',
-                false,
+            builder: (context, snapshot) {
+              final list = snapshot.data;
+              final next = list == null || list.isEmpty ? null : list.first;
+              final counts = next?.availability?.counts;
+              return AdminTile(
+                key: const Key('tile-next-match'),
+                label: next == null
+                    ? 'Next match'
+                    : 'Next match · ${shortMatchDate(context, next.fixture.date)}',
+                value: snapshot.hasError
+                    ? '—'
+                    : list == null
+                    ? '…'
+                    : next == null
+                    ? 'None scheduled'
+                    : next.title,
+                detail: counts == null
+                    ? null
+                    : [
+                        '${counts.available} can play',
+                        if (counts.maybe > 0) '${counts.maybe} maybe',
+                        '${counts.noReply} no reply',
+                      ].join(' · '),
+                onTap: () => go(AdminTab.matches),
               );
             },
-            onTap: () => go(AdminTab.matches),
           ),
           _tile<List<AdminJoinRequest>>(
             key: const Key('tile-join-requests'),
@@ -662,9 +673,12 @@ class AdminTile extends StatelessWidget {
     required this.value,
     required this.onTap,
     this.alert = false,
+    this.detail,
   });
 
   final String label, value;
+  /// A smaller line under the value, e.g. "1 can play · 27 no reply".
+  final String? detail;
   final bool alert;
   final VoidCallback onTap;
 
@@ -673,7 +687,7 @@ class AdminTile extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return Semantics(
       button: true,
-      label: '$label: $value',
+      label: detail == null ? '$label: $value' : '$label: $value, $detail',
       excludeSemantics: true,
       child: Material(
         color: alert ? Brand.pinkTint : Brand.background,
@@ -700,6 +714,15 @@ class AdminTile extends StatelessWidget {
                     fontFeatures: tabularFigures,
                   ),
                 ),
+                if (detail != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    detail!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
