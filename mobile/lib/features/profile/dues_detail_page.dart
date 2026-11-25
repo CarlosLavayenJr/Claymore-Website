@@ -257,7 +257,7 @@ class _PayDuesFormState extends State<PayDuesForm> {
           const SizedBox(height: 12),
           FilledButton(
             onPressed: busy ? null : () => pay(dues.pendingCheckoutCents),
-            child: const Text('RESUME CHECKOUT'),
+            child: const Text('RESUME PAYMENT'),
           ),
         ],
       );

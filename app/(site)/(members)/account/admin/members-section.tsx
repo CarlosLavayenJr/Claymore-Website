@@ -71,7 +71,7 @@ function MemberRow({ member, canSetRole }: { member: ClubMember; canSetRole: boo
                     {missing && (
                         <span className="shrink-0 rounded-full bg-[#fd80b5]/15 px-2.5 py-0.5 text-xs font-semibold text-[#b02a64]">No last name</span>
                     )}
-                    {role !== 'player' && <span className="shrink-0"><RoleBadge role={role} /></span>}
+                    <span className="shrink-0"><RoleBadge role={role} /></span>
                     <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-[#fd80b5]">
                         <span className="group-open/member:hidden">Edit</span>
                         <span className="hidden group-open/member:inline">Close</span>

@@ -81,6 +81,9 @@ class ApiClient {
     bool auth = false,
   }) async => _decode(await send('PUT', path, body: body, auth: auth));
 
+  Future<Object?> deleteJson(String path, {bool auth = false}) async =>
+      _decode(await send('DELETE', path, auth: auth));
+
   Future<http.Response> send(
     String method,
     String path, {

@@ -90,6 +90,59 @@ class _PlayerDuesPageState extends State<PlayerDuesPage> {
     changed('Recorded ${formatCents(cents)} for ${widget.memberLabel}.');
   }
 
+  Future<void> remove(DuesAssessment dues) async {
+    final yes =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Remove these dues for ${widget.memberLabel}?'),
+            content: Text(
+              '${widget.description} · ${formatCents(dues.amountCents)}. '
+              'Nothing has been paid. Automatic and “everyone” dues won’t '
+              'add it back.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('CANCEL'),
+              ),
+              TextButton(
+                key: const Key('confirm-remove-dues'),
+                style: TextButton.styleFrom(foregroundColor: Brand.danger),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('REMOVE'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!yes || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    String message;
+    var removed = false;
+    try {
+      await widget.admin.removeDues(dues.id);
+      removed = true;
+      message = 'Removed ${widget.description} for ${widget.memberLabel}.';
+    } on ApiException catch (e) {
+      message = e.statusCode == 409
+          ? (e.error ?? 'Something was paid, so these dues can’t be removed.')
+          : 'Couldn’t remove these dues. Try again.';
+    } on Exception {
+      message = 'Couldn’t reach the club server. Try again.';
+    }
+    if (removed) {
+      widget.onChanged?.call();
+      navigator.pop();
+    } else if (mounted) {
+      setState(load);
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> editNote(DuesPayment payment) async {
     final message = await showDialog<String>(
       context: context,
@@ -137,6 +190,13 @@ class _PlayerDuesPageState extends State<PlayerDuesPage> {
                     description: widget.description,
                     onRecord: dues.balanceCents > 0 && !loading
                         ? () => record(dues)
+                        : null,
+                    // As on the website: only dues with nothing paid.
+                    onRemove:
+                        !loading &&
+                            dues.paidCents == 0 &&
+                            !dues.hasPendingCheckout
+                        ? () => remove(dues)
                         : null,
                   ),
                   const SizedBox(height: 24),
@@ -189,11 +249,13 @@ class _Summary extends StatelessWidget {
     required this.memberLabel,
     required this.description,
     required this.onRecord,
+    this.onRemove,
   });
 
   final DuesAssessment dues;
   final String memberLabel, description;
   final VoidCallback? onRecord;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -241,6 +303,16 @@ class _Summary extends StatelessWidget {
               child: const Text('RECORD A PAYMENT'),
             ),
           ],
+          if (onRemove != null)
+            TextButton(
+              key: const Key('remove-dues'),
+              style: TextButton.styleFrom(
+                foregroundColor: Brand.danger,
+                padding: EdgeInsets.zero,
+              ),
+              onPressed: onRemove,
+              child: const Text('REMOVE THESE DUES'),
+            ),
         ],
       ),
     );

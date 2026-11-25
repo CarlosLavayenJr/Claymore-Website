@@ -1,16 +1,10 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../data/api_client.dart';
 import '../../shared/widgets.dart';
 import '../fixtures/fixture_card.dart' show FixtureBadge;
-
-/// Invite links and invitations by email stay on the website.
-final websiteInviteUrl = Uri.parse(
-  'https://www.claymoresrfc.com/account/admin?tab=people',
-);
 
 /// Members missing a last name first (they need fixing), then everyone else,
 /// each by name.
@@ -387,9 +381,9 @@ class _MemberRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (member.staffLabel case final label?) ...[
+                if (member.roleBadge case final label?) ...[
                   const SizedBox(width: 8),
-                  FixtureBadge(label: label),
+                  FixtureBadge(label: label, accent: member.isStaff),
                 ],
                 if (missing) ...[
                   const SizedBox(width: 8),
@@ -450,35 +444,9 @@ class _EditMemberNameSheet extends StatefulWidget {
 
 class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
   late final TextEditingController first, last;
-  String? firstError, lastError, error, roleError;
+  String? firstError, lastError, error;
   bool busy = false;
   late String role = widget.member.role ?? 'player';
-
-  Future<void> saveRole() async {
-    if (busy) return;
-    final navigator = Navigator.of(context);
-    setState(() => busy = true);
-    String? problem;
-    try {
-      await widget.admin.setMemberRole(widget.member.email, role);
-      navigator.pop(MemberNameResult.roleSaved);
-      return;
-    } on ApiException catch (e) {
-      problem = switch (e.statusCode) {
-        403 => 'Only the super admin can change roles.',
-        409 => e.error ?? 'That role can’t be changed.',
-        401 => 'Your session ended. Sign in again.',
-        _ => 'The club server had a problem. Try again in a minute.',
-      };
-    } on Exception {
-      problem = 'Couldn’t reach the club server. Try again.';
-    }
-    if (!mounted) return;
-    setState(() {
-      busy = false;
-      roleError = problem;
-    });
-  }
 
   @override
   void initState() {
@@ -508,11 +476,26 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
     final name = joined.name;
     if (name == null) return;
     final navigator = Navigator.of(context);
+    final nameChanged = name != widget.member.name;
+    final roleChanged =
+        widget.canSetRole && role != (widget.member.role ?? 'player');
+    if (!nameChanged && !roleChanged) {
+      navigator.pop();
+      return;
+    }
     setState(() => busy = true);
     String? problem;
     try {
-      await widget.admin.setMemberName(widget.member.subject, name);
-      navigator.pop(MemberNameResult.saved);
+      // One Save for both, as on the website: only what changed is sent.
+      if (nameChanged) {
+        await widget.admin.setMemberName(widget.member.subject, name);
+      }
+      if (roleChanged) {
+        await widget.admin.setMemberRole(widget.member.email, role);
+      }
+      navigator.pop(
+        roleChanged ? MemberNameResult.roleSaved : MemberNameResult.saved,
+      );
       return;
     } on ApiException catch (e) {
       if (e.statusCode == 404) {
@@ -521,7 +504,8 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
       }
       problem = switch (e.statusCode) {
         400 => e.error ?? 'Enter both a first and a last name.',
-        403 => 'Only club admins can do that.',
+        403 => 'Only the super admin can change roles.',
+        409 => e.error ?? 'That role can’t be changed.',
         401 => 'Your session ended. Sign in again.',
         _ => 'The club server had a problem. Try again in a minute.',
       };
@@ -597,24 +581,7 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
                 style: textTheme.bodySmall?.copyWith(color: Brand.danger),
               ),
             ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                FilledButton(
-                  key: const Key('save-member-name'),
-                  onPressed: busy ? null : save,
-                  child: Text(busy ? 'SAVING…' : 'SAVE'),
-                ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: busy ? null : () => Navigator.of(context).pop(),
-                  child: const Text('CANCEL'),
-                ),
-              ],
-            ),
             if (widget.canSetRole) ...[
-              const SizedBox(height: 24),
-              const Divider(height: 1),
               const SizedBox(height: 16),
               Text('Role', style: textTheme.labelMedium),
               const SizedBox(height: 6),
@@ -646,26 +613,22 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
                       'pick lineups.',
                 _ => 'Players answer availability and get club dues.',
               }, style: textTheme.bodySmall),
-              if (roleError != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  roleError!,
-                  key: const Key('member-role-error'),
-                  style: textTheme.bodySmall?.copyWith(color: Brand.danger),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                FilledButton(
+                  key: const Key('save-member-name'),
+                  onPressed: busy ? null : save,
+                  child: Text(busy ? 'SAVING…' : 'SAVE'),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: busy ? null : () => Navigator.of(context).pop(),
+                  child: const Text('CANCEL'),
                 ),
               ],
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(
-                  key: const Key('save-member-role'),
-                  onPressed: busy || role == (widget.member.role ?? 'player')
-                      ? null
-                      : saveRole,
-                  child: const Text('SAVE ROLE'),
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),
@@ -678,48 +641,4 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
     required bool isFocused,
     required int? maxLength,
   }) => null;
-}
-
-/// Invite links and invitations by email are on the website only.
-class InviteOnWebsite extends StatelessWidget {
-  const InviteOnWebsite({super.key});
-
-  Future<void> open(BuildContext context) async {
-    try {
-      if (await launchUrl(
-        websiteInviteUrl,
-        mode: LaunchMode.externalApplication,
-      )) {
-        return;
-      }
-    } on Exception {
-      // Same message as a missing browser.
-    }
-    if (context.mounted) showMessage(context, 'Couldn’t open the website.');
-  }
-
-  @override
-  Widget build(BuildContext context) => Panel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Invite people on the website',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Invite links for the group chat and invitations by email are on '
-          'the website’s Club Admin page.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton(
-          key: const Key('invite-on-website'),
-          onPressed: () => open(context),
-          child: const Text('OPEN WEBSITE'),
-        ),
-      ],
-    ),
-  );
 }

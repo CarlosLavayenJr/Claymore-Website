@@ -196,6 +196,12 @@ void main() {
       findsOneWidget,
     );
     expect(duesLoads, loads + 1);
+    // The Club tab lists upcoming matches above your dues.
+    await tester.scrollUntilVisible(
+      find.text('ALL PAID UP'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('ALL PAID UP'), findsOneWidget);
     expect(find.text('SIGN OUT'), findsNothing);
 
@@ -292,7 +298,7 @@ void main() {
       final field = tester.widget<TextField>(find.byType(TextField));
       expect(field.enabled, isFalse);
       expect(find.textContaining(r'checkout for $25.00'), findsOneWidget);
-      await tester.tap(find.text('RESUME CHECKOUT'));
+      await tester.tap(find.text('RESUME PAYMENT'));
       await tester.pumpAndSettle();
       expect(posted.single['amountCents'], 2500);
     });
