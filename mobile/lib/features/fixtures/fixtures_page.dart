@@ -1,8 +1,10 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/services.dart';
 import '../../data/club_time.dart';
 import '../../shared/widgets.dart';
+import 'availability.dart';
 import 'club_data_view.dart';
 import 'fixture_card.dart';
 
@@ -61,6 +63,10 @@ class _FixturesPageState extends State<FixturesPage> {
                 onChanged: (value) =>
                     setState(() => season = value == 0 ? null : value),
               ),
+            if (!history) ...[
+              const AddToCalendarButton(),
+              const SizedBox(height: 10),
+            ],
             if (visible.isEmpty)
               Panel(
                 child: Text(
@@ -78,7 +84,7 @@ class _FixturesPageState extends State<FixturesPage> {
                   availability:
                       showAvailability &&
                       !history &&
-                      fixture.status == 'upcoming',
+                      takesAvailability(fixture),
                 ),
               ),
           ];
@@ -86,4 +92,33 @@ class _FixturesPageState extends State<FixturesPage> {
       ),
     );
   }
+}
+
+/// Subscribes the phone's calendar to every Claymores fixture
+/// (webcal://www.claymoresrfc.com/calendar.ics). Kickoffs and venues update
+/// on their own.
+class AddToCalendarButton extends StatelessWidget {
+  const AddToCalendarButton({super.key});
+
+  static final calendar = Uri.parse(
+    'webcal://www.claymoresrfc.com/calendar.ics',
+  );
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    key: const Key('add-to-calendar'),
+    onPressed: () async {
+      var opened = false;
+      try {
+        opened = await launchUrl(calendar, mode: LaunchMode.externalApplication);
+      } on Exception {
+        opened = false;
+      }
+      if (!opened && context.mounted) {
+        showMessage(context, 'Couldn’t open your calendar.');
+      }
+    },
+    icon: const Icon(Icons.event_outlined),
+    label: const Text('ADD ALL MATCHES TO CALENDAR'),
+  );
 }

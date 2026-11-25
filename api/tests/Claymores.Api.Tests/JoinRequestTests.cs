@@ -619,6 +619,193 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         Assert.Contains("\"creditedCents\":7500", list);
     }
 
+    private sealed class RecordingPushSender : IPushSender
+    {
+        public List<PushMessage> Sent { get; } = [];
+        public bool Enabled => true;
+        public Task<PushOutcome> SendAsync(PushMessage message, CancellationToken ct)
+        {
+            Sent.Add(message);
+            return Task.FromResult(message.Token == "dead-token" ? PushOutcome.Unregistered : PushOutcome.Sent);
+        }
+    }
+
+    [Fact]
+    public async Task Match_reminders_go_out_once_and_skip_players_who_are_out()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("remind-admin@example.com");
+        var fixture = "remind-" + Guid.NewGuid().ToString("N")[..8];
+        var services = _factory!.Services;
+        var data = services.GetRequiredService<Npgsql.NpgsqlDataSource>();
+        // Two weeks out, in Orlando time.
+        var today = MatchAvailability.TodayInOrlando();
+        await using (var seed = data.CreateCommand($$"""
+            DELETE FROM push_devices;
+            INSERT INTO teams (name) SELECT n FROM (VALUES ('Central Florida Claymores'), ('Lakeland Lancers')) v(n)
+              WHERE NOT EXISTS (SELECT 1 FROM teams WHERE name = n);
+            INSERT INTO fixtures (sanity_id, fixture_date, season, home_team, away_team, payload) VALUES
+              ('{{fixture}}', @date, 2027, 'Central Florida Claymores', 'Lakeland Lancers',
+               jsonb_build_object('id', '{{fixture}}', 'date', @text::text, 'homeTeam', 'Central Florida Claymores',
+                                  'awayTeam', 'Lakeland Lancers', 'kickoffTime', '1:00 PM'));
+            """))
+        {
+            seed.Parameters.AddWithValue("date", today.AddDays(14));
+            seed.Parameters.AddWithValue("text", today.AddDays(14).ToString("yyyy-MM-dd"));
+            await seed.ExecuteNonQueryAsync(Ct);
+        }
+
+        // Three players sign in and register a device: one answers Out, one Available, one doesn't answer.
+        var tokens = new Dictionary<string, string>();
+        foreach (var name in new[] { "remindout", "remindin", "remindquiet" })
+        {
+            await InviteAsync($"{name}@example.com", "player");
+            var signIn = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+                new { idToken = FakeGoogleValidator.Token($"sub-{name}", $"{name}@example.com", name: name) }, Ct);
+            using var json = JsonDocument.Parse(await signIn.Content.ReadAsStringAsync(Ct));
+            tokens[name] = json.RootElement.GetProperty("accessToken").GetString()!;
+            Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/devices", tokens[name],
+                new { token = $"device-{name}", platform = "ios" }), Ct)).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/me/devices", tokens["remindin"],
+            new { token = "x", platform = "windows" }), Ct)).StatusCode);
+        await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/fixtures/{fixture}/availability", tokens["remindout"], new { status = "unavailable" }), Ct);
+        await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/fixtures/{fixture}/availability", tokens["remindin"], new { status = "available" }), Ct);
+
+        var sender = new RecordingPushSender();
+        var reminders = new MatchReminders(data, services.GetRequiredService<FixtureDatabase>(),
+            services.GetRequiredService<MatchAvailability>(), services.GetRequiredService<PushDevices>(), sender,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<MatchReminders>.Instance);
+
+        // Before 10 AM in Orlando nothing goes out.
+        var orlando = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        DateTimeOffset At(int hour)
+        {
+            var local = today.ToDateTime(new TimeOnly(hour, 0));
+            return new DateTimeOffset(local, orlando.GetUtcOffset(local));
+        }
+        Assert.Equal(0, await reminders.RunAsync(At(8), Ct));
+
+        Assert.Equal(2, await reminders.RunAsync(At(11), Ct));
+        Assert.DoesNotContain(sender.Sent, m => m.Token == "device-remindout");
+        var quiet = Assert.Single(sender.Sent, m => m.Token == "device-remindquiet");
+        Assert.Contains("Can you play?", quiet.Body);
+        Assert.Contains("in 2 weeks", quiet.Body);
+        var going = Assert.Single(sender.Sent, m => m.Token == "device-remindin");
+        Assert.DoesNotContain("Can you play?", going.Body);
+        Assert.Equal(fixture, going.Data["fixtureId"]);
+
+        // Each reminder goes out once.
+        Assert.Equal(0, await reminders.RunAsync(At(12), Ct));
+
+        // A score for yesterday's match goes to every member's devices and the public topic, once.
+        var played = "result-" + Guid.NewGuid().ToString("N")[..8];
+        await using (var seed = data.CreateCommand($$"""
+            INSERT INTO fixtures (sanity_id, fixture_date, season, home_team, away_team, payload) VALUES
+              ('{{played}}', @date, 2027, 'Lakeland Lancers', 'Central Florida Claymores',
+               jsonb_build_object('id', '{{played}}', 'date', @text::text, 'homeTeam', 'Lakeland Lancers',
+                                  'awayTeam', 'Central Florida Claymores', 'homeScore', 12, 'awayScore', 82, 'status', 'played'));
+            """))
+        {
+            seed.Parameters.AddWithValue("date", today.AddDays(-1));
+            seed.Parameters.AddWithValue("text", today.AddDays(-1).ToString("yyyy-MM-dd"));
+            await seed.ExecuteNonQueryAsync(Ct);
+        }
+        sender.Sent.Clear();
+        Assert.Equal(4, await reminders.RunAsync(At(13), Ct));
+        Assert.All(sender.Sent, m => Assert.Equal("Final: Claymores 82–12 Lakeland Lancers. Up the Claymores!", m.Body));
+        Assert.Contains(sender.Sent, m => m.Topic == MatchReminders.MatchesTopic);
+        Assert.Equal(0, await reminders.RunAsync(At(14), Ct));
+
+        // Publishing a lineup tells the players in it.
+        sender.Sent.Clear();
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{fixture}/lineup", admin,
+            new { slots = new[] { new { number = 10, subject = "sub-remindin" } }, publish = true }), Ct)).StatusCode);
+        // (The API itself has push switched off in tests, so the endpoint sent nothing and claimed nothing.)
+        Assert.Equal(1, await reminders.LineupPublishedAsync(fixture, Ct));
+        Assert.Contains("starting at 10 (Fly-half)", Assert.Single(sender.Sent).Body);
+        Assert.Equal(0, await reminders.LineupPublishedAsync(fixture, Ct));
+    }
+
+    [Fact]
+    public async Task Players_answer_availability_and_admins_publish_a_lineup()
+    {
+        database.SkipIfUnavailable();
+        var upcoming = "avail-" + Guid.NewGuid().ToString("N")[..8];
+        var played = "avail-" + Guid.NewGuid().ToString("N")[..8];
+
+        var admin = await AdminTokenAsync("lineup-admin@example.com");
+        await using (var data = database.CreateDataSource())
+        await using (var seed = data.CreateCommand($$"""
+            INSERT INTO teams (name) SELECT n FROM (VALUES ('Claymores'), ('Lakeland Lancers')) v(n) WHERE NOT EXISTS (SELECT 1 FROM teams WHERE name = n);
+            INSERT INTO fixtures (sanity_id, fixture_date, season, home_team, away_team, payload) VALUES
+              ('{{upcoming}}', current_date + 30, 2027, 'Claymores', 'Lakeland Lancers', '{"id":"{{upcoming}}"}'),
+              ('{{played}}', current_date - 30, 2026, 'Claymores', 'Lakeland Lancers', '{"id":"{{played}}"}');
+            """))
+            await seed.ExecuteNonQueryAsync(Ct);
+        await InviteAsync("availplayer@example.com", "player");
+        var signIn = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
+            new { idToken = FakeGoogleValidator.Token("sub-availplayer", "availplayer@example.com", name: "Avail Player") }, Ct);
+        using var tokens = JsonDocument.Parse(await signIn.Content.ReadAsStringAsync(Ct));
+        var player = tokens.RootElement.GetProperty("accessToken").GetString()!;
+
+        // No answer yet.
+        var mine = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/fixtures/{upcoming}/availability", player), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"status\":null", mine);
+        Assert.Contains("\"open\":true", mine);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            $"/v1/fixtures/{upcoming}/availability", player, new { status = "probably" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            "/v1/fixtures/no-such-match/availability", player, new { status = "available" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            $"/v1/fixtures/{played}/availability", player, new { status = "available" }), Ct)).StatusCode);
+
+        var saved = await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/fixtures/{upcoming}/availability", player,
+            new { status = "Available", note = "  First half only " }), Ct);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var savedText = await saved.Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"status\":\"available\"", savedText);
+        Assert.Contains("\"note\":\"First half only\"", savedText);
+        Assert.Contains("\"available\":1", savedText);
+        Assert.DoesNotContain("availplayer@example.com", savedText); // members see counts, not names
+
+        var myList = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/availability/mine", player), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains(upcoming, myList);
+
+        // Admins see names; players can't.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Get,
+            $"/v1/admin/fixtures/{upcoming}/availability", player), Ct)).StatusCode);
+        var roster = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/fixtures/{upcoming}/availability", admin), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"email\":\"availplayer@example.com\"", roster);
+        Assert.Contains("First half only", roster);
+
+        // Lineup: invalid ones are refused; a draft is hidden from members until published.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 24, subject = "sub-availplayer" } }, publish = false }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 9, subject = "sub-availplayer" }, new { number = 10, subject = "sub-availplayer" } }, publish = false }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 9, subject = "sub-stranger" } }, publish = false }), Ct)).StatusCode);
+
+        var draft = await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 9, subject = "sub-availplayer" } }, publish = false }), Ct);
+        Assert.Equal(HttpStatusCode.OK, draft.StatusCode);
+        Assert.Contains("\"position\":\"Scrum-half\"", await draft.Content.ReadAsStringAsync(Ct));
+        var hidden = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/fixtures/{upcoming}/lineup", player), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"status\":\"none\"", hidden);
+        Assert.DoesNotContain("sub-availplayer", hidden);
+
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 9, subject = "sub-availplayer" } }, publish = true }), Ct)).StatusCode);
+        var published = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/fixtures/{upcoming}/lineup", player), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"status\":\"published\"", published);
+        Assert.Contains("\"name\":\"Avail Player\"", published);
+        Assert.Contains("\"number\":9", published);
+    }
+
     [Fact]
     public async Task Anyone_with_an_invite_link_joins_as_a_player()
     {

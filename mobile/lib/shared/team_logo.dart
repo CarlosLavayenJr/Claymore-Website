@@ -4,6 +4,13 @@ import '../app/services.dart';
 import '../app/theme.dart';
 import '../data/teams.dart';
 
+final _fallbackDirectory = TeamDirectory.bundled();
+
+/// The app's [TeamDirectory], or the bundled list outside the app (a widget
+/// pumped alone in a test).
+TeamDirectory teamDirectoryOf(BuildContext context) =>
+    AppScope.maybeOf(context)?.teams ?? _fallbackDirectory;
+
 /// A club's logo for a raw fixture or standings name ("Jacksonville D3",
 /// "Orlando Griffins RFC (D3)").
 ///
@@ -17,11 +24,9 @@ class TeamLogo extends StatelessWidget {
   final String? url;
   final double size;
 
-  static final _fallbackDirectory = TeamDirectory.bundled();
-
   @override
   Widget build(BuildContext context) {
-    final directory = AppScope.maybeOf(context)?.teams ?? _fallbackDirectory;
+    final directory = teamDirectoryOf(context);
     return ListenableBuilder(
       listenable: directory,
       builder: (context, _) => _build(directory.resolve(name)),
@@ -130,8 +135,7 @@ class TeamName extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final directory =
-        AppScope.maybeOf(context)?.teams ?? TeamLogo._fallbackDirectory;
+    final directory = teamDirectoryOf(context);
     return ListenableBuilder(
       listenable: directory,
       builder: (context, _) => Text(

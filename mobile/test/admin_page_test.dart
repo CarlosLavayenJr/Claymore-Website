@@ -14,7 +14,6 @@ import 'package:claymores/data/teams.dart';
 import 'package:claymores/features/admin/admin_page.dart';
 import 'package:claymores/features/auth/auth_platform.dart';
 import 'package:claymores/features/auth/auth_service.dart';
-import 'package:claymores/features/fixtures/availability.dart';
 import 'package:claymores/features/club/my_dues.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -120,7 +119,6 @@ void main() {
       auth: auth,
       members: MemberRepository(api),
       admin: AdminRepository(api),
-      availability: AvailabilityStore(prefs),
       prefs: prefs,
     );
     await auth.signIn();
@@ -172,7 +170,6 @@ void main() {
       auth: auth,
       members: MemberRepository(api),
       admin: AdminRepository(api),
-      availability: AvailabilityStore(prefs),
       prefs: prefs,
       duesEnabled: duesEnabled,
     );

@@ -101,15 +101,17 @@ Data collected, all **linked to the user**, **not used for tracking**, purpose *
 - Contact info → **Name**, **Email address** (only for members who sign in)
 - **Purchases** (dues payment history; card details are handled by Stripe and never reach the app)
 - Identifiers → **User ID** (the sign-in account ID)
+- User content → **Other user content** (match availability answers and their notes)
+- Identifiers → **Device ID**: only once push reminders ship (the device's push token, used to send match reminders)
 
-Nothing else (no analytics, no ads, no location).
+Nothing else (no analytics, no ads, no location). Push reminders are off until the member turns on "Match updates", and iOS asks permission then.
 
 ## 7. Submit for review
 
 1. Under the version, pick the TestFlight build.
 2. **App Review Information → Sign-in required: yes.** Membership is invite-only, so create a spare Google account for Apple (e.g. `claymores.review@gmail.com`), invite it as a **player** in Club Admin, and give Apple its email and password here.
 3. **Notes for the reviewer:**
-   > Claymores RFC is the app of an amateur rugby club in Orlando, FL. Fixtures, results, standings and practice times are public and need no account. Sign-in (Apple or Google) is for invited club members and shows their club dues, which are paid by card through Stripe Checkout; dues are a membership fee for a real-world sports club, not digital content. Use the Google account below (Club tab → Sign in with Google) to see the member area. Accounts can be deleted in the app under Club → Profile → Delete my account.
+   > Claymores RFC is the app of an amateur rugby club in Orlando, FL. Fixtures, results, standings and practice times are public and need no account. Sign-in (Apple or Google) is for invited club members and shows their club dues, which are paid by card through Stripe Checkout; dues are a membership fee for a real-world sports club, not digital content. Use the Google account below (Club tab → Sign in with Google) to see the member area. Accounts can be deleted in the app: Club tab → gear (Account settings) → Delete account. Push notifications are optional match reminders the member turns on; they never carry advertising.
 4. **Submit for Review.** Usually 1–3 days.
 
-Card payments need the Stripe account verified first; until then the Pay button shows an error, so either finish Stripe before submitting or turn dues off for the first release (`"ENABLE_DUES": "false"` in `dart_defines/production.json`, rebuild with a new build number).
+Stripe is in **test mode** until the account is verified: the Pay button opens a Stripe test checkout, so no real money moves. Before going public, either switch Stripe to live keys (api/README.md, "Going live with Stripe") or turn dues off for the first release (`"ENABLE_DUES": "false"` in `dart_defines/production.json`, then a new build), so members don't "pay" with test cards.

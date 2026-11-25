@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { signOutMember } from '../actions'
 import { DeleteAccountForm } from './delete-account-form'
 import { PayForm } from './pay-form'
+import { UpcomingMatches } from './upcoming-matches'
 import {
     CardHeading,
     ComingSoon,
@@ -180,7 +181,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
     return (
         <>
             <MemberHeader eyebrow="Claymores RFC · Members" title={`Welcome${user.name ? `, ${user.name.split(' ')[0]}` : ''}`}>
-                Your Claymores dues and payments in one place.
+                Your matches, dues and payments in one place.
             </MemberHeader>
 
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
@@ -203,6 +204,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
                         The club server didn&apos;t respond. Showing what we have from your sign-in.
                     </Notice>
                 )}
+
+                <UpcomingMatches
+                    api={api}
+                    subject={user.subject}
+                    outcome={typeof params.availability === 'string' ? params.availability : undefined}
+                />
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
                     <MemberCard aria-labelledby="profile-heading" className="h-fit">

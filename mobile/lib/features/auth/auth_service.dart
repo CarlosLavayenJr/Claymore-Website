@@ -449,7 +449,29 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     _set(AuthStatus.failed);
   }
 
+  final _signOutHooks = <Future<void> Function()>[];
+
+  /// Runs [hook] when the member signs out, before the session ends, so it
+  /// can still make authenticated calls (e.g. removing this device's push
+  /// token). Each hook gets a few seconds; failures don't stop the sign-out.
+  void addSignOutHook(Future<void> Function() hook) => _signOutHooks.add(hook);
+
+  void removeSignOutHook(Future<void> Function() hook) =>
+      _signOutHooks.remove(hook);
+
+  /// How long a sign-out hook may delay signing out.
+  static const signOutHookTimeout = Duration(seconds: 5);
+
   Future<void> signOut() async {
+    if (signedIn) {
+      for (final hook in List.of(_signOutHooks)) {
+        try {
+          await hook().timeout(signOutHookTimeout);
+        } on Object catch (error) {
+          debugPrint('Sign-out step failed: $error');
+        }
+      }
+    }
     final api = _api;
     final current = _session?.refreshToken;
     _endSession();

@@ -112,10 +112,19 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     builder.Services.AddTransient<ScrapeService>();
     builder.Services.AddOptions<KeyManagementOptions>()
         .Configure<NpgsqlDataSource>((options, dataSource) => options.XmlRepository = new PostgresKeyRepository(dataSource));
+    // Members, availability and push need only the database, so the reminder cron has them too.
+    builder.Services.AddSingleton<ClubMemberDirectory>();
+    builder.Services.AddSingleton<MatchAvailability>();
+    builder.Services.AddSingleton<PushDevices>();
+    builder.Services.AddSingleton<MatchReminders>();
+    if (builder.Configuration["Push:FirebaseServiceAccount"] is { Length: > 0 } serviceAccount)
+        builder.Services.AddHttpClient<IPushSender, FirebasePushSender>((http, services) =>
+            new FirebasePushSender(http, serviceAccount, services.GetRequiredService<ILogger<FirebasePushSender>>()));
+    else
+        builder.Services.AddSingleton<IPushSender, DisabledPushSender>();
     if (googleEnabled)
     {
         builder.Services.AddSingleton<ClubInvitations>();
-        builder.Services.AddSingleton<ClubMemberDirectory>();
         builder.Services.AddSingleton<JoinRequestStore>();
         builder.Services.AddSingleton<InviteLinks>();
         builder.Services.AddSingleton<AccountDeletion>();
@@ -150,7 +159,7 @@ var migrator = app.Services.GetService<DatabaseMigrator>();
 var scraperCommand = ScraperCommand.IsScraperCommand(args)
     ? ScraperCommand.Parse(args, app.Configuration.GetValue("Scraper:DefaultSeasonId", FixtureScrapeRequest.DefaultSeasonId))
     : null;
-if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] || scraperCommand is not null)
+if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] or ["--send-reminders"] || scraperCommand is not null)
 {
     if (migrator is null)
         throw new InvalidOperationException("Set ConnectionStrings:Claymores or DATABASE_URL first.");
@@ -173,6 +182,11 @@ if (args is ["--migrate"] or ["--import-fixtures"] or ["--invite", _, _] || scra
             throw new ArgumentException("Usage: --invite <email> <player|admin>");
         await invitations.UpsertAsync(email, role, "command line", CancellationToken.None);
         Console.WriteLine($"Invited {email} as {role}.");
+    }
+    else if (args is ["--send-reminders"])
+    {
+        var sent = await app.Services.GetRequiredService<MatchReminders>().RunAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+        Console.WriteLine($"Sent {sent} match reminders.");
     }
     else if (scraperCommand is not null)
         Environment.ExitCode = await ScraperCli.RunAsync(scraperCommand, app.Services, CancellationToken.None);
@@ -210,11 +224,15 @@ app.UseRateLimiter();
 GoogleSignIn.Map(app, googleEnabled);
 if (mobileAuthEnabled)
     MobileAuth.Map(app);
+if (app.Services.GetService<FixtureDatabase>() is not null)
+    MatchCalendar.Map(app);
 if (googleEnabled && migrator is not null)
 {
     InvitationEndpoints.Map(app);
     JoinRequestEndpoints.Map(app, mobileAuthEnabled);
     InviteLinkEndpoints.Map(app, mobileAuthEnabled);
+    MatchAvailabilityEndpoints.Map(app);
+    PushEndpoints.Map(app);
     AccountDeletion.Map(app);
 }
 if (duesEnabled)

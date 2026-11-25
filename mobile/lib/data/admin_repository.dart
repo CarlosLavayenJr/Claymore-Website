@@ -3,9 +3,11 @@ import 'package:http/http.dart' as http;
 import 'api_client.dart';
 import 'models/account.dart';
 import 'models/admin.dart';
+import 'models/availability.dart';
 
 export 'models/account.dart';
 export 'models/admin.dart';
+export 'models/availability.dart';
 
 /// Club admin calls: every member's dues, recording payments by hand, and
 /// join requests. All need an admin's bearer token (403 otherwise).
@@ -117,5 +119,43 @@ class AdminRepository {
     return _api.postJson('/v1/admin/join-requests/${_id(id)}/deny', {
       if (text.isNotEmpty) 'reason': text,
     }, auth: true);
+  }
+
+  /// `GET /v1/admin/fixtures/{id}/availability`: every member's answer.
+  Future<AdminAvailability> matchAvailability(String fixtureId) async =>
+      AdminAvailability.fromJson(
+        await _api.getJson(
+          '/v1/admin/fixtures/${_id(fixtureId)}/availability',
+          auth: true,
+        ) as Map<String, dynamic>,
+      );
+
+  /// `GET /v1/admin/fixtures/{id}/lineup`: the draft or published lineup.
+  Future<Lineup> lineup(String fixtureId) async => Lineup.fromJson(
+    await _api.getJson(
+      '/v1/admin/fixtures/${_id(fixtureId)}/lineup',
+      auth: true,
+    ) as Map<String, dynamic>,
+  );
+
+  /// `PUT /v1/admin/fixtures/{id}/lineup`: replaces the lineup with [slots]
+  /// (number → member subject) as a draft, or publishes it (the selected
+  /// players get a notification the first time). Throws [ApiException] 400
+  /// `{error}` for duplicates or non-members.
+  Future<Lineup> saveLineup(
+    String fixtureId,
+    Map<int, String> slots, {
+    required bool publish,
+  }) async {
+    final numbers = slots.keys.toList()..sort();
+    return Lineup.fromJson(
+      await _api.putJson('/v1/admin/fixtures/${_id(fixtureId)}/lineup', {
+        'slots': [
+          for (final number in numbers)
+            {'number': number, 'subject': slots[number]},
+        ],
+        'publish': publish,
+      }, auth: true) as Map<String, dynamic>,
+    );
   }
 }
