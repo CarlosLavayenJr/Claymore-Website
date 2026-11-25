@@ -205,8 +205,10 @@ internal static class InvitationEndpoints
             return await next(context);
         });
 
-        admin.MapGet("/", async (ClubInvitations invitations, CancellationToken ct) =>
-                Results.Ok(await invitations.ListAsync(ct)))
+        // A configured super admin may also have an invitation row; the configured role wins at sign-in.
+        admin.MapGet("/", async (ClubInvitations invitations, IConfiguration configuration, CancellationToken ct) =>
+                Results.Ok((await invitations.ListAsync(ct)).Select(i =>
+                    ClubRoles.IsSuperAdmin(configuration, i.Email) ? i with { Role = ClubRoles.SuperAdmin } : i)))
             .WithSummary("List invited members and their roles")
             .Produces<List<ClubInvitation>>().Produces(401).Produces(403);
 

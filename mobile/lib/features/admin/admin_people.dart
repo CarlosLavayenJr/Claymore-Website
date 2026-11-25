@@ -317,7 +317,7 @@ Future<bool> confirmApproveAdmin(
     false;
 
 /// Everyone who has signed in, missing last names first. Tapping a member
-/// edits their name.
+/// edits their name (and, for the super admin, their role).
 class AdminMembersList extends StatelessWidget {
   const AdminMembersList({
     super.key,
@@ -387,6 +387,10 @@ class _MemberRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (member.staffLabel case final label?) ...[
+                  const SizedBox(width: 8),
+                  FixtureBadge(label: label),
+                ],
                 if (missing) ...[
                   const SizedBox(width: 8),
                   const FixtureBadge(label: 'NO LAST NAME', accent: true),
@@ -404,27 +408,41 @@ class _MemberRow extends StatelessWidget {
 }
 
 /// What the edit-name sheet ended with.
-enum MemberNameResult { saved, gone }
+enum MemberNameResult { saved, roleSaved, gone }
 
 /// Edits [member]'s name with `PUT /v1/admin/members/{subject}/name`.
 /// Returns [MemberNameResult.saved], [MemberNameResult.gone] (404), or null
 /// when the admin closes it.
+///
+/// With [canSetRole] (the super admin, on someone else), it also changes
+/// their role with `PUT /v1/admin/invitations/{email}`.
 Future<MemberNameResult?> showEditMemberName(
   BuildContext context, {
   required AdminRepository admin,
   required ClubMember member,
+  bool canSetRole = false,
 }) => showModalBottomSheet<MemberNameResult>(
   context: context,
   isScrollControlled: true,
   showDragHandle: true,
   backgroundColor: Brand.background,
-  builder: (_) => _EditMemberNameSheet(admin: admin, member: member),
+  builder: (_) => _EditMemberNameSheet(
+    admin: admin,
+    member: member,
+    canSetRole:
+        canSetRole && member.role != 'superadmin' && member.email.isNotEmpty,
+  ),
 );
 
 class _EditMemberNameSheet extends StatefulWidget {
-  const _EditMemberNameSheet({required this.admin, required this.member});
+  const _EditMemberNameSheet({
+    required this.admin,
+    required this.member,
+    required this.canSetRole,
+  });
   final AdminRepository admin;
   final ClubMember member;
+  final bool canSetRole;
 
   @override
   State<_EditMemberNameSheet> createState() => _EditMemberNameSheetState();
@@ -432,8 +450,35 @@ class _EditMemberNameSheet extends StatefulWidget {
 
 class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
   late final TextEditingController first, last;
-  String? firstError, lastError, error;
+  String? firstError, lastError, error, roleError;
   bool busy = false;
+  late String role = widget.member.role ?? 'player';
+
+  Future<void> saveRole() async {
+    if (busy) return;
+    final navigator = Navigator.of(context);
+    setState(() => busy = true);
+    String? problem;
+    try {
+      await widget.admin.setMemberRole(widget.member.email, role);
+      navigator.pop(MemberNameResult.roleSaved);
+      return;
+    } on ApiException catch (e) {
+      problem = switch (e.statusCode) {
+        403 => 'Only the super admin can change roles.',
+        409 => e.error ?? 'That role can’t be changed.',
+        401 => 'Your session ended. Sign in again.',
+        _ => 'The club server had a problem. Try again in a minute.',
+      };
+    } on Exception {
+      problem = 'Couldn’t reach the club server. Try again.';
+    }
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      roleError = problem;
+    });
+  }
 
   @override
   void initState() {
@@ -508,7 +553,7 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
           children: [
             BrandHeader(
               eyebrow: 'Club admin',
-              title: 'Edit name',
+              title: widget.canSetRole ? 'Edit member' : 'Edit name',
               titleSize: 22,
               body: member.email.isEmpty
                   ? 'As the club shows it on lineups and dues.'
@@ -567,6 +612,60 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
                 ),
               ],
             ),
+            if (widget.canSetRole) ...[
+              const SizedBox(height: 24),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              Text('Role', style: textTheme.labelMedium),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (value, label) in [
+                    ('player', 'Player'),
+                    ('coach', 'Coach'),
+                    ('admin', 'Admin'),
+                  ])
+                    ChoiceChip(
+                      key: Key('member-role-$value'),
+                      label: Text(label),
+                      selected: role == value,
+                      onSelected: busy
+                          ? null
+                          : (_) => setState(() => role = value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(switch (role) {
+                'coach' =>
+                  'Coaches run the club and pick lineups. They aren’t asked '
+                      'whether they can play.',
+                'admin' =>
+                  'Admins run the club (dues, members, matches) but don’t '
+                      'pick lineups.',
+                _ => 'Players answer availability and get club dues.',
+              }, style: textTheme.bodySmall),
+              if (roleError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  roleError!,
+                  key: const Key('member-role-error'),
+                  style: textTheme.bodySmall?.copyWith(color: Brand.danger),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  key: const Key('save-member-role'),
+                  onPressed: busy || role == (widget.member.role ?? 'player')
+                      ? null
+                      : saveRole,
+                  child: const Text('SAVE ROLE'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

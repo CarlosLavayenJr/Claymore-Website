@@ -115,7 +115,16 @@ class AdminRepository {
     AdminJoinRequest.fromJson,
   );
 
-  /// Invites the request's email with [role] (`player` or `admin`). Throws
+  /// `PUT /v1/admin/invitations/{email}` with `{role}` (`player`, `coach` or
+  /// `admin`). Only the super admin may give or take away coach and admin
+  /// (403 otherwise); 409 for your own role or the super admin's.
+  Future<void> setMemberRole(String email, String role) async {
+    await _api.putJson('/v1/admin/invitations/${_id(email.toLowerCase())}', {
+      'role': role,
+    }, auth: true);
+  }
+
+  /// Invites the request's email with [role] (`player`, `coach` or `admin`). Throws
   /// [ApiException] 409 `not_pending` when it was already decided.
   Future<void> approveJoinRequest(String id, {String role = 'player'}) =>
       _api.postJson('/v1/admin/join-requests/${_id(id)}/approve', {

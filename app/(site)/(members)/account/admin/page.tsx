@@ -51,6 +51,7 @@ const notices: Record<string, string> = {
     link_created: 'New invite link ready. Copy it below and post it in the group chat.',
     link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
     name_saved: 'Name saved.',
+    role_saved: 'Role saved. It takes effect within 30 seconds.',
     lineup_saved: 'Lineup saved as a draft. Only admins can see it.',
     lineup_published: 'Lineup published. Members can see it, and the players in it get a notification.',
 }
@@ -141,8 +142,9 @@ function JoinRequestRow({ request, canSetRoles }: { request: JoinRequest; canSet
 }
 
 function InvitationRow({ invitation, self, canSetRoles }: { invitation: ClubInvitation; self: boolean; canSetRoles: boolean }) {
-    // Admins and coaches manage players; admin and coach invitations are the super admin's.
-    const editable = !self && (canSetRoles || !isStaffRole(invitation.role))
+    // Admins and coaches remove players; admin, coach and super admin invitations are the super admin's.
+    // Roles change on the Members list.
+    const editable = !self && invitation.role !== 'superadmin' && (canSetRoles || !isStaffRole(invitation.role))
     return (
         <li className="flex flex-col gap-3 border-b border-[#EAEAEA] py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -158,14 +160,6 @@ function InvitationRow({ invitation, self, canSetRoles }: { invitation: ClubInvi
             </div>
             {editable && (
                 <div className="flex flex-wrap items-end gap-2">
-                    {canSetRoles && (
-                        <form action={saveInvitation} className="flex items-end gap-2">
-                            <input type="hidden" name="email" value={invitation.email} />
-                            <label htmlFor={`role-${invitation.email}`} className="sr-only">Role for {invitation.email}</label>
-                            <div className="w-32"><RoleSelect id={`role-${invitation.email}`} defaultValue={invitation.role} /></div>
-                            <button type="submit" className={`${secondaryCtaClass} py-2 text-sm`}>Save</button>
-                        </form>
-                    )}
                     <form action={removeInvitation.bind(null, invitation.email)}>
                         <ConfirmSubmit
                             message={`Remove ${invitation.email}? They will lose access within 30 seconds.`}
@@ -243,7 +237,7 @@ const TABS: { id: Tab; label: string }[] = [
     { id: 'people', label: 'People' },
     { id: 'dues', label: 'Dues' },
 ]
-const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending']
+const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending', 'role_saved', 'forbidden', 'conflict']
 const DUES_RESULTS = ['dues_removed', 'payment_undone', 'payment_undone_card', 'note_saved', 'undo_reason', 'payment_invalid']
 
 /** Which tab to show: ?tab=, else the tab a save just came back from, else Matches. */
@@ -407,7 +401,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                     <h3 className="mt-6 text-lg font-semibold text-[#111111]">Invite by email</h3>
                     <p className="mt-1 text-sm text-[#555555]">
                         {canSetRoles
-                            ? 'For one person, or to make someone a coach or admin. Role changes take effect within 30 seconds.'
+                            ? 'For one person, as a player, coach or admin. Change someone’s role later on the Members list.'
                             : 'For one person. Only the super admin can make someone a coach or admin.'}
                     </p>
 
@@ -446,7 +440,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                     </div>
                 </AdminSection>
 
-                <MembersSection members={members} />
+                <MembersSection members={members} canSetRoles={canSetRoles} selfEmail={selfEmail} />
                 </>}
 
                 {tab === 'dues' && <DuesSection api={api} />}
