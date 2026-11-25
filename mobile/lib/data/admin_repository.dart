@@ -93,6 +93,15 @@ class AdminRepository {
     ClubMember.fromJson,
   );
 
+  /// `PUT /v1/admin/members/{subject}/name` with `{name}` ("First Last").
+  /// Throws [ApiException]: 400 `{error}` when the name is invalid, 404 when
+  /// the member no longer exists.
+  Future<void> setMemberName(String subject, String name) async {
+    await _api.putJson('/v1/admin/members/${_id(subject)}/name', {
+      'name': name,
+    }, auth: true);
+  }
+
   /// `GET /v1/admin/join-requests?status=`: `pending`, `approved` or
   /// `denied`.
   Future<List<AdminJoinRequest>> joinRequests({

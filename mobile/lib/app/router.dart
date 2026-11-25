@@ -89,7 +89,11 @@ GoRouter buildRouter() {
                       GoRoute(
                         path: 'admin',
                         parentNavigatorKey: rootKey,
-                        builder: (_, _) => const AdminPage(),
+                        builder: (_, state) => AdminPage(
+                          initialTab: AdminTab.parse(
+                            state.uri.queryParameters['tab'],
+                          ),
+                        ),
                       ),
                       GoRoute(
                         path: 'dues/:id',

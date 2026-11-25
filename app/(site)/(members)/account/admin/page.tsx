@@ -246,11 +246,12 @@ function tabFor(params: Record<string, string | string[] | undefined>): Tab {
     return 'matches'
 }
 
-function Tile({ href, label, value, tone }: { href: string; label: string; value: React.ReactNode; tone?: 'alert' }) {
+function Tile({ href, label, value, detail, tone }: { href: string; label: string; value: React.ReactNode; detail?: React.ReactNode; tone?: 'alert' }) {
     return (
         <Link href={href} className="block rounded-lg border border-[#EAEAEA] bg-white px-4 py-3 transition-colors hover:border-[#77c3ef]">
             <span className="block text-xs font-semibold uppercase tracking-widest text-[#555555]">{label}</span>
             <span className={cn('mt-1 block truncate text-lg font-semibold', tone === 'alert' ? 'text-[#b02a64]' : 'text-[#111111]')}>{value}</span>
+            {detail && <span className="mt-0.5 block truncate text-sm text-[#555555]">{detail}</span>}
         </Link>
     )
 }
@@ -318,12 +319,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 {notice && <Notice tone="success" title={notice} />}
                 {error && <Notice tone="error" title={error} />}
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <Tile href="?tab=matches" label={nextMatch ? `Next · ${shortMatchDate(nextMatch.date).replace(/^\w+, /, '')}` : 'Next match'}
-                        value={!nextMatch ? 'None scheduled' : nextAvailability?.ok ? `${nextAvailability.data.counts.available} available` : `${isHomeMatch(nextMatch) ? 'vs' : 'at'} ${opponentOf(nextMatch)}`} />
+                <div className={cn('grid grid-cols-2 gap-3', missingNames > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
+                    <Tile
+                        href="?tab=matches"
+                        label={nextMatch ? `Next match · ${shortMatchDate(nextMatch.date)}` : 'Next match'}
+                        value={!nextMatch ? 'None scheduled' : `${isHomeMatch(nextMatch) ? 'vs' : 'at'} ${opponentOf(nextMatch)}`}
+                        detail={nextAvailability?.ok
+                            ? [
+                                `${nextAvailability.data.counts.available} can play`,
+                                nextAvailability.data.counts.maybe > 0 && `${nextAvailability.data.counts.maybe} maybe`,
+                                `${nextAvailability.data.counts.noReply} no reply`,
+                            ].filter(Boolean).join(' · ')
+                            : undefined}
+                    />
                     <Tile href="?tab=people" label="Join requests" value={waiting === 0 ? 'None waiting' : `${waiting} waiting`} tone={waiting > 0 ? 'alert' : undefined} />
                     <Tile href="?tab=dues" label="Dues outstanding" value={outstanding === null ? '—' : formatCents(outstanding)} />
-                    <Tile href="?tab=people#members" label="Missing last name" value={missingNames} tone={missingNames > 0 ? 'alert' : undefined} />
+                    {missingNames > 0 && (
+                        <Tile href="?tab=people#members" label="Missing last name" value={missingNames} tone="alert" />
+                    )}
                 </div>
 
                 <nav aria-label="Club admin" className="flex gap-1 border-b border-[#EAEAEA]">
