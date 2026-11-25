@@ -231,6 +231,7 @@ if (googleEnabled && migrator is not null)
     InvitationEndpoints.Map(app);
     JoinRequestEndpoints.Map(app, mobileAuthEnabled);
     InviteLinkEndpoints.Map(app, mobileAuthEnabled);
+    MemberNameEndpoints.Map(app);
     MatchAvailabilityEndpoints.Map(app);
     PushEndpoints.Map(app);
     AccountDeletion.Map(app);
@@ -387,11 +388,15 @@ api.MapGet("/players/{slug}", async (string slug, SanityData sanity, Cancellatio
     .ProducesProblem(StatusCodes.Status502BadGateway)
     .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
-app.MapGet("/v1/me", (ClaimsPrincipal user) => Results.Ok(new CurrentIdentityResponse(
-    user.FindFirstValue("sub"),
-    user.FindFirstValue("name") ?? user.Identity?.Name,
-    user.FindFirstValue("email"),
-    user.FindFirstValue(MobileAuth.RoleClaim))))
+app.MapGet("/v1/me", async (ClaimsPrincipal user, IServiceProvider services, CancellationToken ct) =>
+    Results.Ok(new CurrentIdentityResponse(
+        user.FindFirstValue("sub"),
+        // The stored name: a member may have changed it since this token was issued.
+        (user.FindFirstValue("sub") is { } sub && services.GetService<ClubMemberDirectory>() is { } members
+            ? await members.NameAsync(sub, ct) : null)
+            ?? user.FindFirstValue("name") ?? user.Identity?.Name,
+        user.FindFirstValue("email"),
+        user.FindFirstValue(MobileAuth.RoleClaim))))
     .RequireAuthorization()
     .WithTags("Identity")
     .WithSummary("Get the current API identity")

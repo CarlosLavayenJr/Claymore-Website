@@ -127,7 +127,8 @@ internal static class MobileAuth
                 if (role is null)
                     return NotInvited();
 
-                await directory.ObserveSignInAsync(member, ct);
+                // A name the member (or an admin) set wins over the one Google sent.
+                member = member with { Name = await directory.ObserveSignInAsync(member, ct) };
                 await directory.RememberIdentityAsync(signIn.Subject, member.Subject, ct);
                 if (context.RequestServices.GetService<AutomaticDues>() is { } automatic)
                     await automatic.EnsureAsync(member.Subject, role, ct);
