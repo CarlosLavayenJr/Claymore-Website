@@ -247,6 +247,7 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
         <>
             <AdminSection
                 id="who-has-paid"
+                defaultOpen
                 title="Who has paid"
                 status={!dues.ok ? 'Couldn’t load' : list.length === 0
                     ? 'No dues assigned yet'
@@ -258,9 +259,34 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
             </AdminSection>
 
             <AdminSection
+                id="all-dues"
+                defaultOpen
+                title="Payments"
+                status={!dues.ok ? 'Couldn’t load' : list.length === 0
+                    ? 'Nothing yet'
+                    : 'Record cash, see each player’s history, edit notes, undo a payment'}
+            >
+                {!dues.ok ? (
+                    <Notice tone="error" title="Dues couldn’t load">
+                        {dues.status === 403
+                            ? 'Only club admins can see club dues.'
+                            : 'The club server didn’t respond. Refresh in a minute.'}
+                    </Notice>
+                ) : list.length === 0 ? (
+                    <p className="text-[#555555]">No dues assigned yet.</p>
+                ) : (
+                    <ul className="space-y-3">
+                        {list.map((d, i) => (
+                            <AssessmentRow key={d.id} dues={d} player={playerLabel(d.playerSubject)} detail={details[i] ?? null} />
+                        ))}
+                    </ul>
+                )}
+            </AdminSection>
+
+            <AdminSection
                 id="assign-dues"
                 title="Assign dues"
-                status="Bill one player or everyone at once"
+                status="Open to bill one player or everyone at once"
             >
                 <div className="space-y-3">
                     {!members.ok && (
@@ -294,30 +320,6 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
                     )}
                 </AdminSection>
             )}
-
-            <AdminSection
-                id="all-dues"
-                title="Payments"
-                status={!dues.ok ? 'Couldn’t load' : list.length === 0
-                    ? 'Nothing yet'
-                    : 'Record cash, see each player’s history, edit notes, undo a payment'}
-            >
-                {!dues.ok ? (
-                    <Notice tone="error" title="Dues couldn’t load">
-                        {dues.status === 403
-                            ? 'Only club admins can see club dues.'
-                            : 'The club server didn’t respond. Refresh in a minute.'}
-                    </Notice>
-                ) : list.length === 0 ? (
-                    <p className="text-[#555555]">No dues assigned yet.</p>
-                ) : (
-                    <ul className="space-y-3">
-                        {list.map((d, i) => (
-                            <AssessmentRow key={d.id} dues={d} player={playerLabel(d.playerSubject)} detail={details[i] ?? null} />
-                        ))}
-                    </ul>
-                )}
-            </AdminSection>
         </>
     )
 }
