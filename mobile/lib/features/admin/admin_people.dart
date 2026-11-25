@@ -1,16 +1,10 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../data/api_client.dart';
 import '../../shared/widgets.dart';
 import '../fixtures/fixture_card.dart' show FixtureBadge;
-
-/// Invite links and invitations by email stay on the website.
-final websiteInviteUrl = Uri.parse(
-  'https://www.claymoresrfc.com/account/admin?tab=people',
-);
 
 /// Members missing a last name first (they need fixing), then everyone else,
 /// each by name.
@@ -678,48 +672,4 @@ class _EditMemberNameSheetState extends State<_EditMemberNameSheet> {
     required bool isFocused,
     required int? maxLength,
   }) => null;
-}
-
-/// Invite links and invitations by email are on the website only.
-class InviteOnWebsite extends StatelessWidget {
-  const InviteOnWebsite({super.key});
-
-  Future<void> open(BuildContext context) async {
-    try {
-      if (await launchUrl(
-        websiteInviteUrl,
-        mode: LaunchMode.externalApplication,
-      )) {
-        return;
-      }
-    } on Exception {
-      // Same message as a missing browser.
-    }
-    if (context.mounted) showMessage(context, 'Couldn’t open the website.');
-  }
-
-  @override
-  Widget build(BuildContext context) => Panel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Invite people on the website',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Invite links for the group chat and invitations by email are on '
-          'the website’s Club Admin page.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton(
-          key: const Key('invite-on-website'),
-          onPressed: () => open(context),
-          child: const Text('OPEN WEBSITE'),
-        ),
-      ],
-    ),
-  );
 }

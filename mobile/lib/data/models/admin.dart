@@ -177,3 +177,60 @@ String uuidV4([Random? random]) {
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
       '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
+
+DateTime? _date(Object? value) =>
+    value is String ? DateTime.tryParse(value)?.toLocal() : null;
+
+/// A shareable invite link (`GET /v1/admin/invite-links`). Anyone who signs
+/// in with Google through it joins as a player.
+class InviteLink {
+  const InviteLink({
+    required this.id,
+    required this.token,
+    required this.expiresAt,
+    this.uses = 0,
+    this.active = true,
+  });
+
+  InviteLink.fromJson(Map<String, dynamic> json)
+    : id = json['id'] as String,
+      token = json['token'] as String? ?? '',
+      expiresAt = _date(json['expiresAt']) ?? DateTime.now(),
+      uses = json['uses'] is num ? (json['uses'] as num).toInt() : 0,
+      active = json['active'] == true;
+
+  final String id, token;
+  final DateTime expiresAt;
+  final int uses;
+  final bool active;
+
+  /// The page people open: `https://www.claymoresrfc.com/invite/{token}`.
+  Uri get url => Uri.parse('https://www.claymoresrfc.com/invite/$token');
+}
+
+/// An invited Google email and its role (`GET /v1/admin/invitations`).
+class ClubInvitation {
+  const ClubInvitation({
+    required this.email,
+    required this.role,
+    this.invitedAt,
+  });
+
+  ClubInvitation.fromJson(Map<String, dynamic> json)
+    : email = json['email'] as String? ?? '',
+      role = json['role'] as String? ?? 'player',
+      invitedAt = _date(json['invitedAt']);
+
+  final String email, role;
+  final DateTime? invitedAt;
+
+  bool get isStaff =>
+      role == 'admin' || role == 'coach' || role == 'superadmin';
+
+  String get roleBadge => switch (role) {
+    'superadmin' => 'SUPER ADMIN',
+    'coach' => 'COACH',
+    'admin' => 'ADMIN',
+    _ => 'PLAYER',
+  };
+}

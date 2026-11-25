@@ -11,6 +11,7 @@ import '../auth/auth_service.dart';
 import '../fixtures/fixture_card.dart' show FixtureBadge, matchLocation;
 import '../profile/payment_amount.dart';
 import 'admin_matches.dart';
+import 'admin_invites.dart';
 import 'admin_people.dart';
 import 'dues_summary.dart';
 import 'player_dues_page.dart';
@@ -596,6 +597,7 @@ class _AdminBodyState extends State<_AdminBody>
       },
     ),
     const SizedBox(height: 12),
+    const SizedBox(height: 12),
     SectionHeading('MEMBERS', key: membersKey),
     FutureBuilder<List<ClubMember>>(
       future: members,
@@ -616,8 +618,15 @@ class _AdminBodyState extends State<_AdminBody>
         return AdminMembersList(members: snapshot.data!, onEdit: editName);
       },
     ),
-    const SizedBox(height: 24),
-    const InviteOnWebsite(),
+    const SizedBox(height: 12),
+    InvitePanel(
+      admin: widget.admin,
+      canSetRoles: AppScope.of(context).auth.user?.isSuperAdmin ?? false,
+      selfEmail: AppScope.of(context).auth.user?.email,
+      onChanged: () => setState(() {
+        members = widget.admin.members();
+      }),
+    ),
   ];
 
   List<Widget> _duesTab() => [

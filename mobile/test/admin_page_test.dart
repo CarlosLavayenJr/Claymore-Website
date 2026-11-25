@@ -18,6 +18,7 @@ import 'package:claymores/features/auth/auth_service.dart';
 import 'package:claymores/features/club/my_dues.dart';
 import 'package:claymores/shared/team_logo.dart';
 import 'package:claymores/shared/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -800,7 +801,38 @@ void main() {
           club: schedule,
         );
 
+    Future<void> toTop(WidgetTester tester) async {
+      await tester.fling(
+        find.byType(Scrollable).first,
+        const Offset(0, 4000),
+        6000,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// Scrolls [finder] into view (from the top if needed) and returns it.
+    Future<Finder> shown(WidgetTester tester, Finder finder) async {
+      if (finder.evaluate().isEmpty) await toTop(tester);
+      if (finder.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(
+          finder,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+      return finder;
+    }
+
     Future<void> tap(WidgetTester tester, Finder finder) async {
+      // The People tab is long; lazily built rows need a scroll first.
+      if (finder.evaluate().isEmpty) await toTop(tester);
+      if (finder.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(
+          finder,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
       await tester.ensureVisible(finder);
       await tester.pumpAndSettle();
       await tester.tap(finder);
@@ -812,8 +844,11 @@ void main() {
         .controller!
         .text;
 
-    String tileText(WidgetTester tester, String key) =>
-        tester.widget<AdminTile>(find.byKey(Key('tile-$key'))).value;
+    Future<String> tileText(WidgetTester tester, String key) async {
+      final tile = find.byKey(Key('tile-$key'));
+      if (tile.evaluate().isEmpty) await toTop(tester);
+      return tester.widget<AdminTile>(tile).value;
+    }
 
     testWidgets('tiles show the numbers and switch tabs', (tester) async {
       final services = await openAdmin(tester);
@@ -827,15 +862,15 @@ void main() {
       expect(nextTile.label, 'Next match · $date');
       expect(nextTile.value, 'at Jacksonville RFC');
       expect(nextTile.detail, startsWith('14 can play'));
-      expect(tileText(tester, 'join-requests'), '2 waiting');
+      expect(await tileText(tester, 'join-requests'), '2 waiting');
       expect(
         tester
             .widget<AdminTile>(find.byKey(const Key('tile-join-requests')))
             .alert,
         isTrue,
       );
-      expect(tileText(tester, 'dues-outstanding'), '\$200.00');
-      expect(tileText(tester, 'missing-last-name'), '2');
+      expect(await tileText(tester, 'dues-outstanding'), '\$200.00');
+      expect(await tileText(tester, 'missing-last-name'), '2');
       expect(
         find.descendant(
           of: find.byKey(const Key('people-badge')),
@@ -883,7 +918,7 @@ void main() {
       pending = [];
       final services = await openAdmin(tester, tab: 'dues');
       expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
-      expect(tileText(tester, 'join-requests'), 'None waiting');
+      expect(await tileText(tester, 'join-requests'), 'None waiting');
       expect(
         tester
             .widget<AdminTile>(find.byKey(const Key('tile-join-requests')))
@@ -968,7 +1003,7 @@ void main() {
         find.text('Approved Sam Flanker. They can sign in now.'),
         findsOneWidget,
       );
-      expect(tileText(tester, 'join-requests'), '1 waiting');
+      expect(await tileText(tester, 'join-requests'), '1 waiting');
 
       await tap(tester, find.byKey(const Key('more-options-r2')));
       await tap(tester, find.byKey(const Key('role-admin-r2')));
@@ -984,7 +1019,10 @@ void main() {
         find.text('Approved Jo Hooker as an admin. They can sign in now.'),
         findsOneWidget,
       );
-      expect(find.text('No requests waiting.'), findsOneWidget);
+      expect(
+        await shown(tester, find.text('No requests waiting.')),
+        findsOneWidget,
+      );
       await finish(tester, services);
     });
 
@@ -1045,12 +1083,114 @@ void main() {
         ),
         findsNothing,
       );
+      // Invites are in the app now, between join requests and members.
       await tester.scrollUntilVisible(
-        find.byKey(const Key('invite-on-website')),
+        find.text('INVITE PEOPLE'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Invite people on the website'), findsOneWidget);
+      expect(find.text('INVITE PEOPLE'), findsOneWidget);
+      expect(find.byKey(const Key('make-invite-link')), findsOneWidget);
+      expect(find.textContaining('website'), findsNothing);
+      await finish(tester, services);
+    });
+
+    testWidgets('invite link: make, share, copy, turn off; invite by email', (
+      tester,
+    ) async {
+      pending = [];
+      final previous = respond;
+      var links = <Map<String, Object?>>[];
+      var invited = <Map<String, Object?>>[
+        {'email': 'pat@example.com', 'role': 'player'},
+        {'email': 'sam@example.com', 'role': 'coach'},
+      ];
+      respond = (request) {
+        final path = request.url.path;
+        if (path == '/v1/admin/invite-links' && request.method == 'POST') {
+          expect(jsonDecode(request.body), {'expiresInDays': 7});
+          links = [
+            {
+              'id': 'l1',
+              'token': 'tok123',
+              'expiresAt': '2026-12-02T00:00:00Z',
+              'uses': 2,
+              'active': true,
+            },
+          ];
+          return http.Response(jsonEncode(links.first), 200);
+        }
+        if (path == '/v1/admin/invite-links/l1' && request.method == 'DELETE') {
+          links = [];
+          return http.Response('', 204);
+        }
+        if (path == '/v1/admin/invite-links') {
+          return http.Response(jsonEncode(links), 200);
+        }
+        if (path.startsWith('/v1/admin/invitations/') &&
+            request.method == 'PUT') {
+          invited = [
+            ...invited,
+            {'email': 'new@example.com', 'role': 'player'},
+          ];
+          return http.Response('{}', 200);
+        }
+        if (path == '/v1/admin/invitations') {
+          return http.Response(jsonEncode(invited), 200);
+        }
+        return previous(request);
+      };
+      String? clipboard;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      final services = await openAdmin(tester, tab: 'people');
+
+      // An admin (not the super admin): invites players only, can't remove a coach.
+      await shown(tester, find.byKey(const Key('send-invite')));
+      expect(find.byKey(const Key('invite-role-coach')), findsNothing);
+      expect(
+        await shown(tester, find.byKey(const Key('remove-pat@example.com'))),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('remove-sam@example.com')), findsNothing);
+
+      await tap(tester, find.byKey(const Key('invite-days-7')));
+      await tap(tester, find.byKey(const Key('make-invite-link')));
+      expect(
+        find.text('https://www.claymoresrfc.com/invite/tok123'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('2 joined'), findsOneWidget);
+      expect(find.byKey(const Key('share-invite-link')), findsOneWidget);
+
+      await tap(tester, find.byKey(const Key('copy-invite-link')));
+      expect(find.text('Invite link copied.'), findsOneWidget);
+      expect(clipboard, 'https://www.claymoresrfc.com/invite/tok123');
+
+      await tap(tester, find.byKey(const Key('turn-off-invite-link')));
+      expect(find.text('Turn this link off?'), findsOneWidget);
+      await tap(tester, find.byKey(const Key('confirm-action')));
+      expect(find.byKey(const Key('make-invite-link')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('invite-email')), 'nope');
+      await tap(tester, find.byKey(const Key('send-invite')));
+      expect(find.text('Enter a Google email.'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('invite-email')),
+        ' New@Example.com ',
+      );
+      await tap(tester, find.byKey(const Key('send-invite')));
+      final put = requests.lastWhere((r) => r.method == 'PUT');
+      expect(put.url.path, '/v1/admin/invitations/new%40example.com');
+      expect(jsonDecode(put.body), {'role': 'player'});
+      expect(await shown(tester, find.text('new@example.com')), findsOneWidget);
       await finish(tester, services);
     });
 
@@ -1096,7 +1236,7 @@ void main() {
       expect(find.text('EDIT NAME'), findsNothing);
       expect(find.text('Name saved.'), findsOneWidget);
       expect(find.text('Blake Smith'), findsOneWidget);
-      expect(tileText(tester, 'missing-last-name'), '1');
+      expect(await tileText(tester, 'missing-last-name'), '1');
       await finish(tester, services);
     });
 

@@ -115,6 +115,45 @@ class AdminRepository {
     AdminJoinRequest.fromJson,
   );
 
+  /// `GET /v1/admin/invite-links`: active and expired or turned-off links.
+  Future<List<InviteLink>> inviteLinks() async => _list(
+    await _api.getJson('/v1/admin/invite-links', auth: true),
+    InviteLink.fromJson,
+  );
+
+  /// `POST /v1/admin/invite-links` with `{expiresInDays}`.
+  Future<InviteLink> createInviteLink(int days) async => InviteLink.fromJson(
+    await _api.postJson('/v1/admin/invite-links', {
+      'expiresInDays': days,
+    }, auth: true) as Map<String, dynamic>,
+  );
+
+  /// `DELETE /v1/admin/invite-links/{id}`: turns the link off. People who
+  /// already joined keep their access.
+  Future<void> revokeInviteLink(String id) async {
+    await _api.deleteJson('/v1/admin/invite-links/${_id(id)}', auth: true);
+  }
+
+  /// `GET /v1/admin/invitations`: every invited email and its role.
+  Future<List<ClubInvitation>> invitations() async => _list(
+    await _api.getJson('/v1/admin/invitations', auth: true),
+    ClubInvitation.fromJson,
+  );
+
+  /// `DELETE /v1/admin/invitations/{email}`. 403 for an admin or coach unless
+  /// you're the super admin; 409 for yourself.
+  Future<void> removeInvitation(String email) async {
+    await _api.deleteJson(
+      '/v1/admin/invitations/${_id(email.toLowerCase())}',
+      auth: true,
+    );
+  }
+
+  /// Invites [email] (or changes an invited email's role): the same call as
+  /// [setMemberRole].
+  Future<void> invite(String email, {String role = 'player'}) =>
+      setMemberRole(email, role);
+
   /// `PUT /v1/admin/invitations/{email}` with `{role}` (`player`, `coach` or
   /// `admin`). Only the super admin may give or take away coach and admin
   /// (403 otherwise); 409 for your own role or the super admin's.
