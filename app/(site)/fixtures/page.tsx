@@ -37,10 +37,6 @@ export default async function Fixtures() {
                 >
                     Add all matches to your calendar
                 </a>
-                <p className="mt-2 text-xs text-[#555555]">
-                    Kickoffs and venues update on their own. Google Calendar: add by URL{' '}
-                    <span className="select-all font-mono">https://www.claymoresrfc.com/calendar.ics</span>
-                </p>
             </div>
 
             <FixturesSchedule matches={matches} teams={teams} practices={practices} />
