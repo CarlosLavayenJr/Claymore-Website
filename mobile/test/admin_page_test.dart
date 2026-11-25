@@ -380,6 +380,128 @@ void main() {
     await finish(tester, services);
   });
 
+  testWidgets('assign dues to everyone, automatic dues, remove unpaid dues', (
+    tester,
+  ) async {
+    var all = [assessment('d1', 'alex'), assessment('d2', 'blake', paid: 5000)];
+    respond = (request) => switch ((request.method, request.url.path)) {
+      ('GET', '/v1/admin/dues') => http.Response(jsonEncode(all), 200),
+      ('GET', '/v1/admin/members') => http.Response(
+        jsonEncode([
+          {
+            'subject': 'alex',
+            'email': 'alex@example.com',
+            'name': 'Alex Rossi',
+          },
+          {
+            'subject': 'blake',
+            'email': 'blake@example.com',
+            'name': 'Blake Smith',
+          },
+          {
+            'subject': 'cj',
+            'email': 'cj@example.com',
+            'name': 'Coach J',
+            'role': 'coach',
+          },
+        ]),
+        200,
+      ),
+      ('POST', '/v1/admin/dues/all-members') => http.Response(
+        jsonEncode({'created': 1, 'skipped': 1, 'members': 2}),
+        200,
+      ),
+      ('GET', '/v1/admin/dues/automatic') => http.Response(
+        jsonEncode({
+          'enabled': false,
+          'description': 'Season dues',
+          'amountCents': 0,
+          'dueDate': null,
+        }),
+        200,
+      ),
+      ('PUT', '/v1/admin/dues/automatic') => http.Response('{}', 200),
+      ('GET', '/v1/admin/dues/d1') => http.Response(
+        detail(assessment('d1', 'alex')),
+        200,
+      ),
+      ('DELETE', '/v1/admin/dues/d1') => () {
+        all = [assessment('d2', 'blake', paid: 5000)];
+        return http.Response('', 204);
+      }(),
+      _ => http.Response('[]', 200),
+    };
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
+
+    // Assign to everyone: coaches aren't counted.
+    await tester.tap(find.byKey(const Key('assign-dues')));
+    await tester.pumpAndSettle();
+    expect(find.text('ASSIGN DUES'), findsWidgets);
+    await tester.tap(find.text('EVERYONE (2)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('save-assign-dues')));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter an amount, like 125.00.'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('assign-amount')), '125');
+    await tester.tap(find.byKey(const Key('save-assign-dues')));
+    await tester.pumpAndSettle();
+    final post = requests.lastWhere((r) => r.method == 'POST');
+    expect(post.url.path, '/v1/admin/dues/all-members');
+    final body = jsonDecode(post.body) as Map<String, dynamic>;
+    expect(body['amountCents'], 12500);
+    expect(body['description'], 'Season dues');
+    expect(body['skipExisting'], true);
+    expect(body['batchId'], isNotEmpty);
+    expect(
+      find.text('Assigned \$125.00 to 1 player (1 already had it).'),
+      findsOneWidget,
+    );
+
+    // Automatic dues: turn on with an amount.
+    await tester.tap(find.byKey(const Key('automatic-dues')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('automatic-enabled')));
+    await tester.enterText(find.byKey(const Key('automatic-amount')), '125');
+    await tester.tap(find.byKey(const Key('save-automatic-dues')));
+    await tester.pumpAndSettle();
+    final put = requests.lastWhere((r) => r.method == 'PUT');
+    expect(jsonDecode(put.body), {
+      'enabled': true,
+      'description': 'Season dues',
+      'amountCents': 12500,
+      'dueDate': null,
+    });
+    expect(
+      find.text('Automatic dues on: \$125.00 for new players.'),
+      findsOneWidget,
+    );
+
+    // Remove Alex's unpaid dues from the player page.
+    await tester.tap(find.text('2026-27 Season dues · \$125 each'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alex Rossi'));
+    await tester.pumpAndSettle();
+    expect(find.text('PLAYER DUES'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('remove-dues')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-remove-dues')));
+    await tester.pumpAndSettle();
+    expect(requests.last.method, isNot('DELETE'));
+    expect(
+      requests.where((r) => r.method == 'DELETE').single.url.path,
+      '/v1/admin/dues/d1',
+    );
+    expect(find.text('PLAYER DUES'), findsNothing);
+    expect(
+      find.text('Removed 2026-27 Season dues for Alex Rossi.'),
+      findsOneWidget,
+    );
+    await finish(tester, services);
+  });
+
   testWidgets('dues summary, record payment with 409 then success', (
     tester,
   ) async {
@@ -428,6 +550,8 @@ void main() {
     expect(find.text('blake@example.com'), findsOneWidget);
     expect(find.text('Former member'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('blake@example.com'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('blake@example.com'));
     await tester.pumpAndSettle();
     expect(find.text('PLAYER DUES'), findsOneWidget);
@@ -929,6 +1053,23 @@ void main() {
       await finish(tester, services);
     });
 
+    testWidgets('coaches get Edit lineup on each match; admins don’t', (
+      tester,
+    ) async {
+      var services = await openAdmin(tester, tab: 'matches');
+      expect(find.byKey(const Key('edit-lineup-m2')), findsNothing);
+      expect(find.textContaining('The coach picks the lineup'), findsOneWidget);
+      await finish(tester, services);
+
+      role = 'coach';
+      services = await openAdmin(tester, tab: 'matches');
+      await tap(tester, find.byKey(const Key('edit-lineup-m2')));
+      // Straight to the editor, no match page in between.
+      expect(find.widgetWithText(AppBar, 'EDIT LINEUP'), findsOneWidget);
+      expect(find.text('GAME INFO'), findsNothing);
+      await finish(tester, services);
+    });
+
     testWidgets('match rows show counts and the lineup chip, and open', (
       tester,
     ) async {
@@ -1254,7 +1395,9 @@ void main() {
       expect(find.text('EDIT MEMBER'), findsOneWidget);
       await tap(tester, find.byKey(const Key('member-role-coach')));
       expect(find.textContaining('pick lineups'), findsOneWidget);
-      await tap(tester, find.byKey(const Key('save-member-role')));
+      await tap(tester, find.byKey(const Key('save-member-name')));
+      // One Save: the name didn't change, so only the role is sent.
+      expect(requests.where((r) => r.method == 'PUT'), hasLength(1));
       final put = requests.lastWhere((r) => r.method == 'PUT');
       expect(put.url.path, startsWith('/v1/admin/invitations/'));
       expect(jsonDecode(put.body), {'role': 'coach'});
@@ -1272,6 +1415,7 @@ void main() {
       await tap(tester, find.text('Dana Lee'));
       expect(field(tester, 'first'), 'Dana');
       expect(field(tester, 'last'), 'Lee');
+      await tester.enterText(find.byKey(const Key('member-last-name')), 'Li');
       await tap(tester, find.byKey(const Key('save-member-name')));
       expect(find.text('EDIT NAME'), findsNothing);
       expect(find.text('That member no longer exists.'), findsOneWidget);

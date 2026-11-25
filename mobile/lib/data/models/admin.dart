@@ -234,3 +234,89 @@ class ClubInvitation {
     _ => 'PLAYER',
   };
 }
+
+String? _isoDate(DateTime? date) => date == null
+    ? null
+    : '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+
+/// Dues every player gets when they sign in or open their dues
+/// (`GET/PUT /v1/admin/dues/automatic`). Admins and coaches aren't included.
+class AutomaticDues {
+  const AutomaticDues({
+    required this.enabled,
+    required this.description,
+    required this.amountCents,
+    this.dueDate,
+  });
+
+  AutomaticDues.fromJson(Map<String, dynamic> json)
+    : enabled = json['enabled'] == true,
+      description = json['description'] as String? ?? 'Season dues',
+      amountCents = json['amountCents'] is num
+          ? (json['amountCents'] as num).toInt()
+          : 0,
+      dueDate = json['dueDate'] is String
+          ? DateTime.tryParse(json['dueDate'] as String)
+          : null;
+
+  final bool enabled;
+  final String description;
+  final int amountCents;
+  final DateTime? dueDate;
+
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'description': description,
+    'amountCents': amountCents,
+    'dueDate': _isoDate(dueDate),
+  };
+}
+
+/// What `POST /v1/admin/dues/all-members` did.
+class AssignAllResult {
+  const AssignAllResult({this.created = 0, this.skipped = 0});
+
+  AssignAllResult.fromJson(Map<String, dynamic>? json)
+    : created = json?['created'] is num ? (json!['created'] as num).toInt() : 0,
+      skipped = json?['skipped'] is num ? (json!['skipped'] as num).toInt() : 0;
+
+  final int created, skipped;
+}
+
+/// Dues to assign: to one player ([playerSubject]) or, when it's null, to
+/// every player who has signed in. [id] is the idempotency key: keep it for
+/// retries of the same form.
+class NewDues {
+  const NewDues({
+    required this.id,
+    required this.description,
+    required this.amountCents,
+    this.playerSubject,
+    this.dueDate,
+    this.skipExisting = true,
+  });
+
+  final String id, description;
+  final int amountCents;
+  final String? playerSubject;
+  final DateTime? dueDate;
+  final bool skipExisting;
+
+  Map<String, Object?> toJson() => playerSubject == null
+      ? {
+          'batchId': id,
+          'description': description,
+          'amountCents': amountCents,
+          'dueDate': ?_isoDate(dueDate),
+          'skipExisting': skipExisting,
+        }
+      : {
+          'id': id,
+          'playerSubject': playerSubject,
+          'description': description,
+          'amountCents': amountCents,
+          'dueDate': ?_isoDate(dueDate),
+        };
+}

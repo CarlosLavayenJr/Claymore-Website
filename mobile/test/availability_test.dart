@@ -14,6 +14,7 @@ import 'package:claymores/data/teams.dart';
 import 'package:claymores/features/auth/auth_platform.dart';
 import 'package:claymores/features/auth/auth_service.dart';
 import 'package:claymores/features/fixtures/fixture_card.dart';
+import 'package:claymores/features/club/upcoming_matches.dart';
 import 'package:claymores/features/fixtures/match_details_page.dart';
 import 'package:claymores/features/home/home_page.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -299,6 +300,51 @@ void main() {
       await pump(tester, MatchDetailsPage(id: 'm1', fixture: played));
       expect(find.text('CAN YOU PLAY?'), findsNothing);
       expect(sent('GET', '/v1/fixtures/m1/availability'), isEmpty);
+    });
+  });
+
+  group('Club tab upcoming matches', () {
+    Widget section({bool plays = true}) => Builder(
+      builder: (context) => ListView(
+        children: [
+          UpcomingMatchesSection(
+            members: AppScope.of(context).members!,
+            plays: plays,
+          ),
+        ],
+      ),
+    );
+
+    testWidgets('players answer right in the row; next unanswered is open', (
+      tester,
+    ) async {
+      routes['PUT /v1/fixtures/m1/availability'] = (_) =>
+          json(mine(status: 'available', available: 15));
+      await pump(tester, section());
+
+      expect(find.text('UPCOMING MATCHES'), findsOneWidget);
+      expect(find.text('vs Daytona'), findsOneWidget);
+      expect(find.text('ANSWER'), findsOneWidget);
+      // Open already: the buttons, without a second "CAN YOU PLAY?" heading.
+      expect(find.text('CAN YOU PLAY?'), findsNothing);
+      expect(find.byKey(const Key('availability-choices')), findsOneWidget);
+
+      await tester.tap(find.text('AVAILABLE').first);
+      await tester.pumpAndSettle();
+      expect(sent('PUT', '/v1/fixtures/m1/availability'), hasLength(1));
+      expect(find.text('ANSWER'), findsNothing);
+
+      // Tapping the row folds it.
+      await tester.tap(find.text('vs Daytona'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('availability-choices')), findsNothing);
+    });
+
+    testWidgets('coaches see how many can play, no buttons', (tester) async {
+      await pump(tester, section(plays: false), role: 'coach');
+      expect(find.text('14 AVAILABLE'), findsOneWidget);
+      expect(find.byKey(const Key('availability-choices')), findsNothing);
+      expect(find.textContaining('pick lineups'), findsOneWidget);
     });
   });
 

@@ -15,9 +15,11 @@ import '../profile/full_name_form.dart';
 import 'alert_settings.dart';
 import 'club_admin_card.dart';
 import 'my_dues.dart';
+import 'upcoming_matches.dart';
 
-/// The Club tab. Signed in: who you are (gear → account settings), your
-/// dues, and for admins a club admin card. Otherwise the sign-in card.
+/// The Club tab. Signed in: who you are (gear → account settings), the next
+/// matches (answer "can you play?" right there), your dues, and for admins
+/// a club admin card. Otherwise the sign-in card.
 /// Stripe returns here via `claymores://dues?checkout=returned|cancelled`.
 class ClubPage extends StatelessWidget {
   const ClubPage({super.key, this.checkout});
@@ -195,6 +197,10 @@ class _SignedInClubState extends State<_SignedInClub> {
               ],
             ),
           ),
+          if (services.showAvailability.value && widget.members != null) ...[
+            const SizedBox(height: 24),
+            UpcomingMatchesSection(members: widget.members!, plays: user.plays),
+          ],
           if (duesEnabled && widget.members != null) ...[
             const SizedBox(height: 24),
             const SectionHeading('YOUR DUES'),
@@ -244,7 +250,10 @@ class _YourDues extends StatelessWidget {
       }
       final items = snapshot.data ?? const <DuesAssessment>[];
       if (items.isEmpty) {
-        return const StatusPanel(message: 'You have no dues assigned.');
+        return const StatusPanel(
+          message: 'No dues assigned to you.',
+          detail: 'Questions? Ask a club admin.',
+        );
       }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

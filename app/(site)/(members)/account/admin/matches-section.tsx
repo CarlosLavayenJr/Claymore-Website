@@ -80,8 +80,8 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false, can
                 <>
                     <p className="mb-4 text-sm text-[#555555]">
                         {canPickLineups
-                            ? 'Members answer on their account page or in the app until match day. Build the lineup from who can play, save it as a draft, then publish it: members see it, and the players in it get a notification.'
-                            : 'Members answer on their account page or in the app until match day. The coach picks the lineup; you can see it here.'}
+                            ? 'Players answer until match day. Build the lineup from who can play, save it as a draft, then publish it: members see it, and the players in it get a notification.'
+                            : 'Players answer until match day. The coach picks the lineup; you can see it here.'}
                     </p>
                     <div className="space-y-3">
                         {states.map(s => <MatchPanel key={s.match._id} state={s} open={s.match._id === openFixture} canPickLineups={canPickLineups} />)}

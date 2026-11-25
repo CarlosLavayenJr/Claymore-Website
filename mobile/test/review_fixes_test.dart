@@ -161,7 +161,7 @@ void main() {
     );
 
     await show(const ApiException(404));
-    expect(find.text('Dues aren’t available yet.'), findsOneWidget);
+    expect(find.text('Dues are coming soon'), findsOneWidget);
     expect(find.text('RETRY'), findsNothing);
 
     await show(const ApiException(500));
@@ -297,7 +297,15 @@ void main() {
       await tester.tap(delete);
       await tester.pumpAndSettle();
       expect(find.text('Delete your account?'), findsOneWidget);
-      expect(find.textContaining('dues and payments'), findsOneWidget);
+      expect(find.textContaining('It can’t be undone'), findsOneWidget);
+      expect(find.textContaining('payment records stay'), findsOneWidget);
+      // DELETE ACCOUNT stays off until DELETE is typed.
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('confirm-delete-account')))
+            .onPressed,
+        isNull,
+      );
 
       // Cancel first: nothing happens.
       await tester.tap(find.text('CANCEL'));
@@ -306,6 +314,11 @@ void main() {
 
       await tester.tap(delete);
       await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('delete-confirm-text')),
+        'delete',
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('confirm-delete-account')));
       await tester.pumpAndSettle();
 
@@ -348,6 +361,11 @@ void main() {
       await tester.scrollUntilVisible(delete, 200);
       await tester.tap(delete);
       await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('delete-confirm-text')),
+        'delete',
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const Key('confirm-delete-account')));
       await tester.pumpAndSettle();
 

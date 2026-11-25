@@ -364,7 +364,7 @@ export function AutomaticDuesForm({ saved }: { saved: AutomaticDues }) {
                 </span>
             </div>
             <p id={`${id}-help`} className="text-sm text-[#555555]">
-                Every player who signs in gets these dues unless you remove them. Admins aren’t included. Existing players
+                Every player who signs in gets these dues unless you remove them. Admins and coaches aren’t included. Existing players
                 get them the next time they sign in or open their dues; use “Everyone who has signed in” to assign them now.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">

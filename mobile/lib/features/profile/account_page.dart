@@ -185,33 +185,64 @@ class DeleteAccountButton extends StatefulWidget {
 class _DeleteAccountButtonState extends State<DeleteAccountButton> {
   bool busy = false;
 
-  Future<bool> confirm(bool apple) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete your account?'),
-          content: Text(
-            'Your access to member features ends and you’re signed out on '
-            'every device. The club keeps its records of your dues and '
-            'payments.'
-            '${apple ? ' Apple will ask you to confirm so the club can '
-                      'disconnect your Apple ID.' : ''}',
+  /// Same as the website: says it can't be undone, and asks for DELETE.
+  Future<bool> confirm(bool apple) async {
+    final typed = TextEditingController();
+    final yes =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Delete your account?'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This ends your member access in the app and on the '
+                      'website, signs you out everywhere, and removes your '
+                      'member record. It can’t be undone: to come back, a '
+                      'club admin has to invite you again.\n\n'
+                      'Dues and payment records stay with the club.'
+                      '${apple ? ' Apple will ask you to confirm so the club '
+                                'can disconnect your Apple ID.' : ''}',
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      key: const Key('delete-confirm-text'),
+                      controller: typed,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Type DELETE to confirm',
+                      ),
+                      onChanged: (_) => setDialogState(() {}),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('CANCEL'),
+                ),
+                TextButton(
+                  key: const Key('confirm-delete-account'),
+                  style: destructiveButtonStyle,
+                  onPressed: typed.text.trim().toUpperCase() == 'DELETE'
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: const Text('DELETE ACCOUNT'),
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('CANCEL'),
-            ),
-            TextButton(
-              key: const Key('confirm-delete-account'),
-              style: destructiveButtonStyle,
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('DELETE ACCOUNT'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+        ) ??
+        false;
+    // Not disposed here: the dialog's closing animation still uses it.
+    return yes;
+  }
 
   Future<void> delete() async {
     final auth = AppScope.of(context).auth;

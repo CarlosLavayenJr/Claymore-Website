@@ -232,10 +232,14 @@ class MatchAvailabilityPanel extends StatefulWidget {
     super.key,
     required this.fixtureId,
     required this.members,
+    this.embedded = false,
   });
 
   final String fixtureId;
   final MemberRepository members;
+
+  /// Inside another card (the Club tab's match rows): no heading, no panel.
+  final bool embedded;
 
   @override
   State<MatchAvailabilityPanel> createState() => _MatchAvailabilityPanelState();
@@ -407,6 +411,7 @@ class _MatchAvailabilityPanelState extends State<MatchAvailabilityPanel> {
         ],
       );
     }
+    if (widget.embedded) return body;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
