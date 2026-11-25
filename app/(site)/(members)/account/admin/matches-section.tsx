@@ -35,7 +35,7 @@ function title(match: SanityMatch) {
  * Club Admin "Matches & lineups": who can play the next matches (Available / Maybe / Out /
  * No reply, with notes) and the lineup editor for each. `openFixture` is the match just saved.
  */
-export async function MatchesSection({ api, openFixture }: { api: ClaymoresApiClient; openFixture?: string }) {
+export async function MatchesSection({ api, openFixture, alwaysOpen = false }: { api: ClaymoresApiClient; openFixture?: string; alwaysOpen?: boolean }) {
     let matches: SanityMatch[]
     try {
         matches = upcomingMatches(await getMatches(), todayInOrlando())
@@ -60,7 +60,7 @@ export async function MatchesSection({ api, openFixture }: { api: ClaymoresApiCl
     const missing = states.length > 0 && states.every(s => !s.availability.ok && s.availability.status === 404)
 
     return (
-        <AdminSection id="matches" title="Matches & lineups" status={status} defaultOpen={Boolean(openFixture)}>
+        <AdminSection id="matches" title="Matches & lineups" status={status} defaultOpen={alwaysOpen || Boolean(openFixture)} needsAction={alwaysOpen}>
             {states.length === 0 ? (
                 <p className="text-[#555555]">
                     No upcoming matches on the <Link href="/fixtures" className={linkClass}>fixtures</Link> list.

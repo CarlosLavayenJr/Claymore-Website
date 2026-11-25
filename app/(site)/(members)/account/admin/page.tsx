@@ -22,9 +22,14 @@ import {
     RoleBadge,
     secondaryCtaClass,
 } from '@/components/members/member-ui'
-import type { ApiResult, ClubInvitation, InviteLink, JoinRequest } from '@/lib/claymores/api-client'
+import { formatCents, type ApiResult, type ClubInvitation, type InviteLink, type JoinRequest } from '@/lib/claymores/api-client'
 import { memberAuthEnabled } from '@/lib/claymores/auth-env'
 import { memberApi } from '@/lib/claymores/member'
+import { shortMatchDate, todayInOrlando, upcomingMatches } from '@/lib/claymores/match-availability'
+import { needsFullName } from '@/lib/claymores/member-name'
+import { getMatches } from '@/lib/claymores-api'
+import { isHomeMatch, opponentOf } from '@/lib/seo'
+import { cn } from '@/lib/utils'
 import { SITE_URL } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -94,24 +99,38 @@ function JoinRequestRow({ request }: { request: JoinRequest }) {
                     {request.message}
                 </blockquote>
             )}
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <form action={approveJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="sm:w-40">
-                        <label htmlFor={`approve-role-${request.id}`} className={labelClass}>Role</label>
-                        <div className="mt-1"><RoleSelect id={`approve-role-${request.id}`} /></div>
-                    </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+                <form action={approveJoinRequest.bind(null, request.id)}>
+                    <input type="hidden" name="role" value="player" />
                     <button type="submit" className={`${ctaClass} py-2 text-base`}>Approve</button>
                 </form>
-                <form action={denyJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="flex-1">
-                        <label htmlFor={`deny-reason-${request.id}`} className={labelClass}>
-                            Reason <span className="font-normal text-[#555555]">(optional)</span>
-                        </label>
-                        <input id={`deny-reason-${request.id}`} name="reason" maxLength={500} className={`${inputClass} mt-1`} />
-                    </div>
+                <form action={denyJoinRequest.bind(null, request.id)}>
                     <ConfirmSubmit message={`Deny the request from ${request.email}?`} className={dangerClass}>Deny</ConfirmSubmit>
                 </form>
             </div>
+            <details className="group mt-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-[#fd80b5] marker:hidden hover:text-[#111111] [&::-webkit-details-marker]:hidden">
+                    More options
+                </summary>
+                <div className="mt-3 grid gap-4 rounded-lg bg-[#fafafa] p-4 md:grid-cols-2">
+                    <form action={approveJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="sm:w-40">
+                            <label htmlFor={`approve-role-${request.id}`} className={labelClass}>Approve as</label>
+                            <div className="mt-1"><RoleSelect id={`approve-role-${request.id}`} /></div>
+                        </div>
+                        <button type="submit" className={`${secondaryCtaClass} py-2`}>Approve</button>
+                    </form>
+                    <form action={denyJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1">
+                            <label htmlFor={`deny-reason-${request.id}`} className={labelClass}>
+                                Deny with a reason <span className="font-normal text-[#555555]">(optional)</span>
+                            </label>
+                            <input id={`deny-reason-${request.id}`} name="reason" maxLength={500} className={`${inputClass} mt-1`} />
+                        </div>
+                        <ConfirmSubmit message={`Deny the request from ${request.email}?`} className={dangerClass}>Deny</ConfirmSubmit>
+                    </form>
+                </div>
+            </details>
         </li>
     )
 }
@@ -209,6 +228,33 @@ function InviteLinkPanel({ links, origin }: { links: ApiResult<InviteLink[]>; or
     )
 }
 
+type Tab = 'matches' | 'people' | 'dues'
+const TABS: { id: Tab; label: string }[] = [
+    { id: 'matches', label: 'Matches' },
+    { id: 'people', label: 'People' },
+    { id: 'dues', label: 'Dues' },
+]
+const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending']
+const DUES_RESULTS = ['dues_removed', 'payment_undone', 'payment_undone_card', 'note_saved', 'undo_reason', 'payment_invalid']
+
+/** Which tab to show: ?tab=, else the tab a save just came back from, else Matches. */
+function tabFor(params: Record<string, string | string[] | undefined>): Tab {
+    if (params.tab === 'matches' || params.tab === 'people' || params.tab === 'dues') return params.tab
+    const result = [params.notice, params.error].find((v): v is string => typeof v === 'string')
+    if (result && PEOPLE_RESULTS.includes(result)) return 'people'
+    if (result && DUES_RESULTS.includes(result)) return 'dues'
+    return 'matches'
+}
+
+function Tile({ href, label, value, tone }: { href: string; label: string; value: React.ReactNode; tone?: 'alert' }) {
+    return (
+        <Link href={href} className="block rounded-lg border border-[#EAEAEA] bg-white px-4 py-3 transition-colors hover:border-[#77c3ef]">
+            <span className="block text-xs font-semibold uppercase tracking-widest text-[#555555]">{label}</span>
+            <span className={cn('mt-1 block truncate text-lg font-semibold', tone === 'alert' ? 'text-[#b02a64]' : 'text-[#111111]')}>{value}</span>
+        </Link>
+    )
+}
+
 export default async function AdminPage({ searchParams }: { searchParams: SearchParams }) {
     if (!memberAuthEnabled()) {
         return (
@@ -245,22 +291,65 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     const error = typeof params.error === 'string' ? errors[params.error] ?? errors.unavailable : undefined
     const selfEmail = (me.ok ? me.data.email : session.token.api.user.email)?.toLowerCase()
 
-    const [requests, invitations, links, members] = await Promise.all([
-        api.joinRequests('pending'), api.invitations(), api.inviteLinks(), api.members(),
+    const tab = tabFor(params)
+    const [requests, invitations, links, members, dues, nextMatch] = await Promise.all([
+        api.joinRequests('pending'), api.invitations(), api.inviteLinks(), api.members(), api.allDues(),
+        getMatches().then(all => upcomingMatches(all, todayInOrlando())[0] ?? null).catch(() => null),
     ])
+    const nextAvailability = nextMatch ? await api.adminFixtureAvailability(nextMatch._id) : null
     const waiting = requests.ok ? requests.data.length : 0
     const activeLinks = links.ok ? links.data.filter(l => l.active) : []
+    const outstanding = dues.ok ? dues.data.reduce((sum, d) => sum + Math.max(0, d.balanceCents), 0) : null
+    const missingNames = members.ok ? members.data.filter(m => needsFullName(m.name)).length : 0
 
     return (
         <>
-            <MemberHeader eyebrow="Claymores RFC · Admin" title="Club admin">
-                Review requests to join, pick match lineups, manage who can sign in, and keep track of dues. <Link href="/account" className={linkClass}>Back to my account</Link>
-            </MemberHeader>
+            <div className="border-b border-[#EAEAEA] bg-white">
+                <div className="mx-auto flex max-w-5xl flex-wrap items-end justify-between gap-2 px-4 pb-4 pt-8 sm:px-6 lg:px-8">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#fd80b5]">Claymores RFC · Admin</p>
+                        <h1 className="mt-1 font-claymore text-3xl text-[#111111] sm:text-4xl">Club admin</h1>
+                    </div>
+                    <Link href="/account" className={`${linkClass} text-sm`}>Back to my account</Link>
+                </div>
+            </div>
 
-            <div className="mx-auto max-w-5xl space-y-4 px-4 py-10 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
                 {notice && <Notice tone="success" title={notice} />}
                 {error && <Notice tone="error" title={error} />}
 
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Tile href="?tab=matches" label={nextMatch ? `Next · ${shortMatchDate(nextMatch.date).replace(/^\w+, /, '')}` : 'Next match'}
+                        value={!nextMatch ? 'None scheduled' : nextAvailability?.ok ? `${nextAvailability.data.counts.available} available` : `${isHomeMatch(nextMatch) ? 'vs' : 'at'} ${opponentOf(nextMatch)}`} />
+                    <Tile href="?tab=people" label="Join requests" value={waiting === 0 ? 'None waiting' : `${waiting} waiting`} tone={waiting > 0 ? 'alert' : undefined} />
+                    <Tile href="?tab=dues" label="Dues outstanding" value={outstanding === null ? '—' : formatCents(outstanding)} />
+                    <Tile href="?tab=people#members" label="Missing last name" value={missingNames} tone={missingNames > 0 ? 'alert' : undefined} />
+                </div>
+
+                <nav aria-label="Club admin" className="flex gap-1 border-b border-[#EAEAEA]">
+                    {TABS.map(t => (
+                        <Link
+                            key={t.id}
+                            href={`?tab=${t.id}`}
+                            aria-current={tab === t.id ? 'page' : undefined}
+                            className={cn(
+                                '-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 font-claymore text-lg transition-colors',
+                                tab === t.id ? 'border-[#fd80b5] text-[#111111]' : 'border-transparent text-[#555555] hover:text-[#111111]',
+                            )}
+                        >
+                            {t.label}
+                            {t.id === 'people' && waiting > 0 && (
+                                <span className="rounded-full bg-[#fd80b5] px-2 font-sans text-xs font-semibold text-white">{waiting}</span>
+                            )}
+                        </Link>
+                    ))}
+                </nav>
+
+                {tab === 'matches' && (
+                    <MatchesSection api={api} alwaysOpen openFixture={typeof params.fixture === 'string' ? params.fixture : undefined} />
+                )}
+
+                {tab === 'people' && <>
                 <AdminSection
                     id="join-requests"
                     title="Join requests"
@@ -281,8 +370,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         </ul>
                     )}
                 </AdminSection>
-
-                <MatchesSection api={api} openFixture={typeof params.fixture === 'string' ? params.fixture : undefined} />
 
                 <AdminSection
                     id="invitations"
@@ -331,8 +418,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 </AdminSection>
 
                 <MembersSection members={members} />
+                </>}
 
-                <DuesSection api={api} />
+                {tab === 'dues' && <DuesSection api={api} />}
             </div>
         </>
     )

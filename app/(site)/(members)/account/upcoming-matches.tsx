@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { answerAvailability } from './actions'
+import { MatchDisclosure } from './match-disclosure'
 import { CardHeading, formatDate, inputClass, linkClass, MemberCard, Notice } from '@/components/members/member-ui'
 import type { ApiResult, ClaymoresApiClient, Lineup, MyAvailability } from '@/lib/claymores/api-client'
 import {
@@ -14,10 +15,11 @@ import {
     todayInOrlando,
     upcomingMatches,
 } from '@/lib/claymores/match-availability'
-import { getMatches } from '@/lib/claymores-api'
+import { getMatches, getTeams } from '@/lib/claymores-api'
+import { findTeamLogo } from '@/lib/team-logo'
 import { isHomeMatch, matchSlug, opponentOf } from '@/lib/seo'
 import { cn } from '@/lib/utils'
-import type { SanityMatch } from '@/sanity/lib/queries'
+import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
 const outcomes: Record<string, { tone: 'success' | 'error'; title: string }> = {
     saved: { tone: 'success', title: 'Thanks, your answer is saved. You can change it until match day.' },
@@ -50,8 +52,10 @@ export async function UpcomingMatches({ api, subject, outcome }: {
     outcome?: string
 }) {
     let matches: SanityMatch[]
+    let teams: SanityTeam[] = []
     try {
         matches = upcomingMatches(await getMatches(), todayInOrlando())
+        teams = await getTeams().catch(() => [])
     } catch {
         matches = []
     }
@@ -64,6 +68,8 @@ export async function UpcomingMatches({ api, subject, outcome }: {
     const allMissing = states.length > 0 && states.every(s => !s.availability.ok && s.availability.status === 404)
     if (allMissing) return null
     const notice = outcome ? outcomes[outcome] : undefined
+    // The next match still waiting for an answer starts open; the rest fold to one line.
+    const firstUnanswered = states.find(s => s.availability.ok && s.availability.data.open && !s.availability.data.status)?.match._id
 
     return (
         <MemberCard aria-labelledby="matches-heading" id="matches" className="scroll-mt-24">
@@ -80,14 +86,17 @@ export async function UpcomingMatches({ api, subject, outcome }: {
                 ) : !anyOpen && states.every(s => !s.availability.ok && s.availability.status !== 404) ? (
                     <Notice tone="error" title="Matches couldn't load">The club server didn’t respond. Refresh in a minute.</Notice>
                 ) : (
-                    states.map(s => <MatchCard key={s.match._id} state={s} subject={subject} />)
+                    states.map(s => (
+                        <MatchCard key={s.match._id} state={s} subject={subject} teams={teams}
+                            open={s.match._id === firstUnanswered} />
+                    ))
                 )}
             </div>
         </MemberCard>
     )
 }
 
-function MatchCard({ state, subject }: { state: MatchState; subject: string }) {
+function MatchCard({ state, subject, teams, open }: { state: MatchState; subject: string; teams: SanityTeam[]; open: boolean }) {
     const { match, availability, lineup } = state
     const home = isHomeMatch(match)
     const opponent = opponentOf(match)
@@ -95,25 +104,37 @@ function MatchCard({ state, subject }: { state: MatchState; subject: string }) {
         .filter(Boolean).join(' · ')
     const mine = availability.ok ? availability.data : null
     const published = lineup.ok && lineup.data.status === 'published' ? lineup.data : null
+    const logo = (home ? match.awayTeamLogo : match.homeTeamLogo) ?? findTeamLogo(opponent, teams)
+    const anchor = matchAnchor(match._id)
 
     return (
-        <article id={matchAnchor(match._id)} className="scroll-mt-24 rounded-lg border border-[#EAEAEA] p-4 sm:p-5" aria-labelledby={`${matchAnchor(match._id)}-title`}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                    <h3 id={`${matchAnchor(match._id)}-title`} className="text-lg font-semibold text-[#111111]">
-                        <Link href={`/fixtures/${matchSlug(match)}`} className="hover:underline">
+        <MatchDisclosure
+            id={anchor}
+            defaultOpen={open}
+            summary={
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                    {logo
+                        ? <img src={logo} alt="" className="h-10 w-10 shrink-0 object-contain" />
+                        : <span aria-hidden className="h-10 w-10 shrink-0 rounded-full bg-[#EAEAEA]" />}
+                    <span className="min-w-0 flex-1">
+                        <span id={`${anchor}-title`} className="block truncate text-base font-semibold text-[#111111]">
                             {home ? 'vs' : 'at'} {opponent}
-                        </Link>
-                    </h3>
-                    <p className="text-sm text-[#555555]">{details}</p>
-                </div>
-                {mine && (
-                    <span className="rounded-full bg-[#fafafa] px-3 py-1 text-xs font-semibold text-[#111111] ring-1 ring-[#EAEAEA]">
-                        You: {availabilityLabel(mine.status)}
+                        </span>
+                        <span className="block truncate text-sm text-[#555555]">{details}</span>
                     </span>
-                )}
-            </div>
-
+                    <span
+                        className={cn(
+                            'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
+                            !mine?.status
+                                ? 'bg-[#fd80b5]/15 text-[#b02a64]'
+                                : 'bg-[#fafafa] text-[#111111] ring-1 ring-[#EAEAEA]',
+                        )}
+                    >
+                        {mine?.status ? availabilityLabel(mine.status) : mine?.open ? 'Answer' : 'No reply'}
+                    </span>
+                </span>
+            }
+        >
             {!availability.ok ? (
                 <p className="mt-3 text-sm text-[#555555]">
                     {availability.status === 404
@@ -172,7 +193,8 @@ function MatchCard({ state, subject }: { state: MatchState; subject: string }) {
             {mine && <p className="mt-3 text-sm text-[#555555]">Club: {countsLine(mine.counts)}</p>}
 
             {published && <LineupDetails lineup={published} subject={subject} />}
-        </article>
+            <Link href={`/fixtures/${matchSlug(match)}`} className={`${linkClass} mt-3 inline-block text-sm`}>Match details</Link>
+        </MatchDisclosure>
     )
 }
 
