@@ -92,7 +92,7 @@ class ClubAdminCardState extends State<ClubAdminCard> {
             counts != null && snapshot.connectionState != ConnectionState.done;
         final data = snapshot.data;
         final lines = [?data?.duesLine, ?data?.requestsLine];
-        if (lines.isEmpty && !loading) lines.add('Dues and join requests');
+        if (lines.isEmpty && !loading) lines.add('Matches, people and dues');
         return Panel(
           key: const Key('club-admin-entry'),
           featured: true,

@@ -78,6 +78,18 @@ class AvailabilityCounts {
   String get summary =>
       '$available available · $maybe maybe · $unavailable out · '
       '$noReply no reply';
+
+  /// [summary] without the zeros, as on the website's Club Admin: "14
+  /// available · 3 maybe · 9 no reply", or "No answers yet".
+  String get compactSummary {
+    final parts = [
+      if (available > 0) '$available available',
+      if (maybe > 0) '$maybe maybe',
+      if (unavailable > 0) '$unavailable out',
+      if (noReply > 0) '$noReply no reply',
+    ];
+    return parts.isEmpty ? 'No answers yet' : parts.join(' · ');
+  }
 }
 
 /// One of the member's own answers (`GET /v1/availability/mine`).

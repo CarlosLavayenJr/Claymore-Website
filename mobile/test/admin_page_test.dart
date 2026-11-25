@@ -12,9 +12,12 @@ import 'package:claymores/data/member_repository.dart';
 import 'package:claymores/data/standings_repository.dart';
 import 'package:claymores/data/teams.dart';
 import 'package:claymores/features/admin/admin_page.dart';
+import 'package:claymores/features/admin/admin_people.dart';
 import 'package:claymores/features/auth/auth_platform.dart';
 import 'package:claymores/features/auth/auth_service.dart';
 import 'package:claymores/features/club/my_dues.dart';
+import 'package:claymores/shared/team_logo.dart';
+import 'package:claymores/shared/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -29,6 +32,19 @@ class EmptyClubRepository extends ClubRepository {
   @override
   Future<ClubData> load() async =>
       ClubData('{"result":{"matches":[],"practice":null}}', isSnapshot: false);
+}
+
+/// A schedule with [fixtures] (`/v1/fixtures` items).
+class FixturesClubRepository extends ClubRepository {
+  const FixturesClubRepository(this.fixtures);
+  final List<Map<String, Object?>> fixtures;
+
+  @override
+  Future<ClubData> load() async => ClubData.parts(
+    fixtures: parseFixtures(fixtures),
+    practice: Practice(null),
+    isSnapshot: false,
+  );
 }
 
 class FakeGoogle implements IdTokenSource {
@@ -145,6 +161,7 @@ void main() {
     WidgetTester tester, {
     String location = '/club',
     bool duesEnabled = true,
+    ClubRepository? club,
   }) async {
     final client = MockClient((request) async {
       requests.add(request);
@@ -164,7 +181,7 @@ void main() {
     final api = ApiClient(base: base, client: client, tokens: auth);
     final prefs = SharedPreferencesAsync();
     final services = AppServices(
-      club: ClubDataController(EmptyClubRepository()),
+      club: ClubDataController(club ?? EmptyClubRepository()),
       standings: StandingsRepository(),
       teams: TeamDirectory.bundled(),
       auth: auth,
@@ -327,6 +344,11 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('club-admin-entry')));
       await tester.pumpAndSettle();
+      // The same numbers on the admin screen's tiles.
+      expect(find.text('2 waiting'), findsOneWidget);
+      expect(find.text('\$200.00'), findsOneWidget);
+      await tester.tap(find.text('DUES'));
+      await tester.pumpAndSettle();
       expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
       await finish(tester, services);
 
@@ -348,7 +370,10 @@ void main() {
     tester,
   ) async {
     role = 'player';
-    final services = await pump(tester, const AdminPage());
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
     expect(find.text('Only club admins can open this page.'), findsOneWidget);
     expect(requests.where((r) => r.url.path.startsWith('/v1/admin')), isEmpty);
     await finish(tester, services);
@@ -384,7 +409,10 @@ void main() {
       ),
       _ => http.Response('[]', 200),
     };
-    final services = await pump(tester, const AdminPage());
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
 
     expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
     expect(
@@ -392,7 +420,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('\$175 collected · \$200 outstanding'), findsOneWidget);
-    expect(find.text('No requests waiting.'), findsOneWidget);
 
     await tester.tap(find.text('2026-27 Season dues · \$125 each'));
     await tester.pumpAndSettle();
@@ -466,7 +493,10 @@ void main() {
         fail ? throw http.ClientException('offline') : http.Response('{}', 200),
       _ => http.Response('[]', 200),
     };
-    final services = await pump(tester, const AdminPage());
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
     await tester.tap(find.text('2026-27 Season dues · \$125 each'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Former member'));
@@ -510,7 +540,10 @@ void main() {
       '/v1/admin/dues/d2/payments' => http.Response('{}', 200),
       _ => http.Response('[]', 200),
     };
-    final services = await pump(tester, const AdminPage());
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
     expect(
       find.text('\$100 collected · \$25 credited · \$125 outstanding'),
       findsOneWidget,
@@ -609,8 +642,13 @@ void main() {
       }(),
       _ => http.Response('[]', 200),
     };
-    final services = await pump(tester, const AdminPage());
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
     expect(find.text('Dues are switched off'), findsOneWidget);
+    await tester.tap(find.text('PEOPLE'));
+    await tester.pumpAndSettle();
     expect(find.text('Sam Flanker'), findsOneWidget);
     expect(find.text('Played in college.'), findsOneWidget);
     expect(
@@ -628,6 +666,461 @@ void main() {
     );
     expect(find.text('No requests waiting.'), findsOneWidget);
     await finish(tester, services);
+  });
+
+  group('club admin overview and tabs', () {
+    String day(int days) {
+      final d = DateTime.now().add(Duration(days: days));
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+    }
+
+    Map<String, Object?> match(
+      String id,
+      int days,
+      String home,
+      String away, {
+      String status = 'upcoming',
+    }) => {
+      'id': id,
+      'date': day(days),
+      'homeTeam': home,
+      'awayTeam': away,
+      'status': status,
+      'kickoffTime': '2pm',
+    };
+
+    const us = 'Central Florida Claymores';
+    final schedule = FixturesClubRepository([
+      match('m1', 10, us, 'Tampa Bay Krewe'),
+      match('m2', 3, 'Jacksonville RFC', us),
+      match('m3', 20, us, 'Orlando Griffins'),
+      match('event', 5, us, us), // the Highland Games: no squad
+      match('past', -3, us, 'Old Opponent'),
+      match('played', 1, us, 'Played Opponent', status: 'played'),
+    ]);
+
+    Map<String, Object?> availability(String id, Map<String, int> counts) => {
+      'fixtureId': id,
+      'counts': counts,
+      'members': <Object>[],
+    };
+
+    late List<Map<String, Object?>> pending;
+    late List<Map<String, Object?>> people;
+    late http.Response Function(http.Request) onName;
+
+    setUp(() {
+      pending = [
+        {
+          'id': 'r1',
+          'email': 'sam@example.com',
+          'name': 'Sam Flanker',
+          'status': 'pending',
+        },
+        {
+          'id': 'r2',
+          'email': 'jo@example.com',
+          'name': 'Jo Hooker',
+          'status': 'pending',
+        },
+      ];
+      people = [
+        {'subject': 'alex', 'email': 'alex@example.com', 'name': 'Alex Rossi'},
+        {'subject': 'blake', 'email': 'blake@example.com', 'name': 'Blake'},
+        {'subject': 'chris', 'email': 'chris@example.com', 'name': null},
+        {'subject': 'dana', 'email': 'dana@example.com', 'name': 'Dana Lee'},
+      ];
+      onName = (_) => http.Response('{}', 200);
+      respond = (request) {
+        final path = request.url.path;
+        return switch (path) {
+          '/v1/admin/dues' => http.Response(
+            jsonEncode([
+              assessment('d1', 'alex', paid: 12500),
+              assessment('d2', 'blake', paid: 5000),
+              assessment('d3', 'chris'),
+            ]),
+            200,
+          ),
+          '/v1/admin/dues/d2' => http.Response(
+            detail(assessment('d2', 'blake', paid: 5000)),
+            200,
+          ),
+          '/v1/admin/members' => http.Response(jsonEncode(people), 200),
+          '/v1/admin/join-requests' => http.Response(jsonEncode(pending), 200),
+          '/v1/admin/fixtures/m2/availability' => http.Response(
+            jsonEncode(
+              availability('m2', {
+                'available': 14,
+                'maybe': 3,
+                'unavailable': 0,
+                'noReply': 9,
+              }),
+            ),
+            200,
+          ),
+          '/v1/admin/fixtures/m1/availability' => http.Response(
+            jsonEncode(availability('m1', {'available': 2, 'unavailable': 1})),
+            200,
+          ),
+          '/v1/admin/fixtures/m3/availability' => http.Response(
+            jsonEncode(availability('m3', {})),
+            200,
+          ),
+          '/v1/admin/fixtures/m2/lineup' => http.Response(
+            jsonEncode({'fixtureId': 'm2', 'status': 'draft', 'slots': []}),
+            200,
+          ),
+          '/v1/admin/fixtures/m1/lineup' => http.Response(
+            jsonEncode({'fixtureId': 'm1', 'status': 'published'}),
+            200,
+          ),
+          '/v1/admin/fixtures/m3/lineup' => http.Response(
+            jsonEncode({'fixtureId': 'm3', 'status': 'none'}),
+            200,
+          ),
+          _ when path.startsWith('/v1/admin/members/') => onName(request),
+          _ when path.startsWith('/v1/admin/join-requests/') => () {
+            final id = path.split('/')[4];
+            pending.removeWhere((r) => r['id'] == id);
+            return http.Response('{}', 200);
+          }(),
+          _ when path.startsWith('/v1/fixtures/') => http.Response('', 404),
+          _ => http.Response('[]', 200),
+        };
+      };
+    });
+
+    Future<AppServices> openAdmin(WidgetTester tester, {String? tab}) =>
+        pumpApp(
+          tester,
+          location: tab == null ? adminPath : '$adminPath?tab=$tab',
+          duesEnabled: false,
+          club: schedule,
+        );
+
+    Future<void> tap(WidgetTester tester, Finder finder) async {
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+
+    String field(WidgetTester tester, String key) => tester
+        .widget<TextField>(find.byKey(Key('member-$key-name')))
+        .controller!
+        .text;
+
+    String tileText(WidgetTester tester, String key) =>
+        tester.widget<AdminTile>(find.byKey(Key('tile-$key'))).value;
+
+    testWidgets('tiles show the numbers and switch tabs', (tester) async {
+      final services = await openAdmin(tester);
+      final next = DateTime.parse(day(3));
+      final date = const DefaultMaterialLocalizations()
+          .formatMediumDate(next)
+          .replaceFirst(', ', ' ');
+      expect(tileText(tester, 'next-match'), '$date · 14 available');
+      expect(tileText(tester, 'join-requests'), '2 waiting');
+      expect(
+        tester
+            .widget<AdminTile>(find.byKey(const Key('tile-join-requests')))
+            .alert,
+        isTrue,
+      );
+      expect(tileText(tester, 'dues-outstanding'), '\$200.00');
+      expect(tileText(tester, 'missing-last-name'), '2');
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('people-badge')),
+          matching: find.text('2'),
+        ),
+        findsOneWidget,
+      );
+      // Matches is the default tab.
+      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+
+      await tap(tester, find.byKey(const Key('tile-join-requests')));
+      expect(
+        find.widgetWithText(SectionHeading, 'JOIN REQUESTS'),
+        findsOneWidget,
+      );
+      expect(find.text('Sam Flanker'), findsOneWidget);
+      expect(find.text('at Jacksonville RFC'), findsNothing);
+
+      await tap(tester, find.byKey(const Key('tile-dues-outstanding')));
+      expect(
+        find.widgetWithText(SectionHeading, 'JOIN REQUESTS'),
+        findsNothing,
+      );
+      expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
+
+      // The Dues tab still opens a player's dues, and comes back to Dues.
+      await tap(tester, find.text('2026-27 Season dues · \$125 each'));
+      await tap(tester, find.text('Blake'));
+      expect(find.text('PLAYER DUES'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
+
+      await tap(tester, find.byKey(const Key('tile-missing-last-name')));
+      expect(find.text('MEMBERS'), findsOneWidget);
+
+      await tap(tester, find.byKey(const Key('tile-next-match')));
+      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+      await finish(tester, services);
+    });
+
+    testWidgets('?tab= opens a tab; no waiting requests is not pink', (
+      tester,
+    ) async {
+      pending = [];
+      final services = await openAdmin(tester, tab: 'dues');
+      expect(find.text('2026-27 Season dues · \$125 each'), findsOneWidget);
+      expect(tileText(tester, 'join-requests'), 'None waiting');
+      expect(
+        tester
+            .widget<AdminTile>(find.byKey(const Key('tile-join-requests')))
+            .alert,
+        isFalse,
+      );
+      expect(find.byKey(const Key('people-badge')), findsNothing);
+      await finish(tester, services);
+    });
+
+    testWidgets('match rows show counts and the lineup chip, and open', (
+      tester,
+    ) async {
+      final services = await openAdmin(tester);
+      Finder row(String id) => find.byKey(ValueKey('admin-match-$id'));
+      Finder inRow(String id, String text) =>
+          find.descendant(of: row(id), matching: find.text(text));
+
+      expect(inRow('m2', 'at Jacksonville RFC'), findsOneWidget);
+      expect(
+        inRow('m2', '14 available · 3 maybe · 9 no reply'),
+        findsOneWidget,
+      );
+      expect(inRow('m2', 'DRAFT'), findsOneWidget);
+      expect(inRow('m1', 'vs Tampa Bay Krewe'), findsOneWidget);
+      expect(inRow('m1', '2 available · 1 out'), findsOneWidget);
+      expect(inRow('m1', 'PUBLISHED'), findsOneWidget);
+      expect(inRow('m3', 'No answers yet'), findsOneWidget);
+      expect(inRow('m3', 'NO LINEUP'), findsOneWidget);
+      expect(
+        find.descendant(of: row('m2'), matching: find.byType(TeamLogo)),
+        findsOneWidget,
+      );
+      // Soonest first; club events, past and played matches left out.
+      expect(
+        tester.getTopLeft(row('m2')).dy,
+        lessThan(tester.getTopLeft(row('m1')).dy),
+      );
+      expect(
+        tester.getTopLeft(row('m1')).dy,
+        lessThan(tester.getTopLeft(row('m3')).dy),
+      );
+      expect(row('event'), findsNothing);
+      expect(row('past'), findsNothing);
+      expect(row('played'), findsNothing);
+
+      int lineupLoads() => requests
+          .where((r) => r.url.path == '/v1/admin/fixtures/m2/lineup')
+          .length;
+      final before = lineupLoads();
+      await tap(tester, row('m2'));
+      expect(find.text('GAME INFO'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      // Back on Matches, reloaded in case the lineup changed.
+      expect(find.text('at Jacksonville RFC'), findsOneWidget);
+      expect(lineupLoads(), greaterThan(before + 1));
+      await finish(tester, services);
+    });
+
+    testWidgets('approve as player, and as admin under More options', (
+      tester,
+    ) async {
+      final services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.byKey(const Key('approve-r1')));
+      final first = requests.lastWhere((r) => r.url.path.endsWith('/approve'));
+      expect(first.url.path, '/v1/admin/join-requests/r1/approve');
+      expect(jsonDecode(first.body), {'role': 'player'});
+      expect(
+        find.text('Approved Sam Flanker. They can sign in now.'),
+        findsOneWidget,
+      );
+      expect(tileText(tester, 'join-requests'), '1 waiting');
+
+      await tap(tester, find.byKey(const Key('more-options-r2')));
+      await tap(tester, find.byKey(const Key('role-admin-r2')));
+      expect(find.text('APPROVE AS ADMIN'), findsOneWidget);
+      await tap(tester, find.byKey(const Key('approve-as-r2')));
+      expect(find.text('Make Jo Hooker an admin?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('confirm-admin')));
+      await tester.pumpAndSettle();
+      final second = requests.lastWhere((r) => r.url.path.endsWith('/approve'));
+      expect(second.url.path, '/v1/admin/join-requests/r2/approve');
+      expect(jsonDecode(second.body), {'role': 'admin'});
+      expect(
+        find.text('Approved Jo Hooker as an admin. They can sign in now.'),
+        findsOneWidget,
+      );
+      expect(find.text('No requests waiting.'), findsOneWidget);
+      await finish(tester, services);
+    });
+
+    testWidgets('deny, and deny with a reason', (tester) async {
+      final services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.byKey(const Key('more-options-r1')));
+      await tester.enterText(
+        find.byKey(const Key('deny-reason-r1')),
+        'Not in Florida',
+      );
+      await tap(tester, find.byKey(const Key('deny-with-reason-r1')));
+      expect(find.text('Deny Sam Flanker?'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('deny-reason')))
+            .controller!
+            .text,
+        'Not in Florida',
+      );
+      await tester.tap(find.byKey(const Key('confirm-deny')));
+      await tester.pumpAndSettle();
+      var deny = requests.lastWhere((r) => r.url.path.endsWith('/deny'));
+      expect(deny.url.path, '/v1/admin/join-requests/r1/deny');
+      expect(jsonDecode(deny.body), {'reason': 'Not in Florida'});
+      expect(find.text('Denied the request from Sam Flanker.'), findsOneWidget);
+
+      await tap(tester, find.byKey(const Key('deny-r2')));
+      await tester.tap(find.byKey(const Key('confirm-deny')));
+      await tester.pumpAndSettle();
+      deny = requests.lastWhere((r) => r.url.path.endsWith('/deny'));
+      expect(deny.url.path, '/v1/admin/join-requests/r2/deny');
+      expect(jsonDecode(deny.body), isEmpty);
+      expect(requests.where((r) => r.url.path.endsWith('/approve')), isEmpty);
+      await finish(tester, services);
+    });
+
+    testWidgets('members: missing last names first, tagged', (tester) async {
+      pending = [];
+      final services = await openAdmin(tester, tab: 'people');
+      final names = ['Blake', 'chris@example.com', 'Alex Rossi', 'Dana Lee'];
+      for (final name in names) {
+        await tester.ensureVisible(find.text(name));
+      }
+      final tops = [for (final n in names) tester.getTopLeft(find.text(n)).dy];
+      expect(tops, [...tops]..sort());
+      expect(find.text('NO LAST NAME'), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('member-blake')),
+          matching: find.text('NO LAST NAME'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('member-alex')),
+          matching: find.text('NO LAST NAME'),
+        ),
+        findsNothing,
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('invite-on-website')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Invite people on the website'), findsOneWidget);
+      await finish(tester, services);
+    });
+
+    testWidgets('editing a member name sends First Last and handles 400', (
+      tester,
+    ) async {
+      pending = [];
+      final services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.text('Blake'));
+      expect(find.text('EDIT NAME'), findsOneWidget);
+      expect(field(tester, 'first'), 'Blake');
+      expect(field(tester, 'last'), '');
+
+      await tap(tester, find.byKey(const Key('save-member-name')));
+      expect(find.text('Enter a last name.'), findsOneWidget);
+      expect(requests.where((r) => r.method == 'PUT'), isEmpty);
+
+      onName = (_) => http.Response(
+        jsonEncode({'error': 'Names are at most 80 characters.'}),
+        400,
+      );
+      await tester.enterText(
+        find.byKey(const Key('member-last-name')),
+        ' Smith ',
+      );
+      await tap(tester, find.byKey(const Key('save-member-name')));
+      expect(find.text('Names are at most 80 characters.'), findsOneWidget);
+      expect(find.text('EDIT NAME'), findsOneWidget);
+
+      onName = (_) {
+        people[1] = {
+          'subject': 'blake',
+          'email': 'blake@example.com',
+          'name': 'Blake Smith',
+        };
+        return http.Response('{}', 200);
+      };
+      await tap(tester, find.byKey(const Key('save-member-name')));
+      final puts = requests.where((r) => r.method == 'PUT').toList();
+      expect(puts, hasLength(2));
+      expect(puts.last.url.path, '/v1/admin/members/blake/name');
+      expect(jsonDecode(puts.last.body), {'name': 'Blake Smith'});
+      expect(find.text('EDIT NAME'), findsNothing);
+      expect(find.text('Name saved.'), findsOneWidget);
+      expect(find.text('Blake Smith'), findsOneWidget);
+      expect(tileText(tester, 'missing-last-name'), '1');
+      await finish(tester, services);
+    });
+
+    testWidgets('editing a member who is gone says so', (tester) async {
+      pending = [];
+      onName = (_) => http.Response('', 404);
+      final services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.text('Dana Lee'));
+      expect(field(tester, 'first'), 'Dana');
+      expect(field(tester, 'last'), 'Lee');
+      await tap(tester, find.byKey(const Key('save-member-name')));
+      expect(find.text('EDIT NAME'), findsNothing);
+      expect(find.text('That member no longer exists.'), findsOneWidget);
+      await finish(tester, services);
+    });
+
+    test('helpers', () {
+      expect(AdminTab.parse('people'), AdminTab.people);
+      expect(AdminTab.parse('nope'), AdminTab.matches);
+      expect(AdminTab.parse(null), AdminTab.matches);
+      expect(
+        const AvailabilityCounts(
+          available: 14,
+          maybe: 3,
+          noReply: 9,
+        ).compactSummary,
+        '14 available · 3 maybe · 9 no reply',
+      );
+      expect(const AvailabilityCounts().compactSummary, 'No answers yet');
+      const a = ClubMember(subject: 'a', email: 'a@x.com', name: 'Ann Bee');
+      const b = ClubMember(subject: 'b', email: 'b@x.com', name: 'bob');
+      const c = ClubMember(subject: 'c', email: 'c@x.com', name: 'c@x.com');
+      const d = ClubMember(subject: 'd', email: 'd@x.com', name: 'Al Zed');
+      expect(membersForAdmin([a, b, c, d]).map((m) => m.subject), [
+        'b',
+        'c',
+        'd',
+        'a',
+      ]);
+      expect(missingLastNames([a, b, c, d]), 2);
+    });
   });
 
   group('player dues history', () {
@@ -692,7 +1185,10 @@ void main() {
     });
 
     Future<AppServices> openAlex(WidgetTester tester) async {
-      final services = await pump(tester, const AdminPage());
+      final services = await pump(
+        tester,
+        const AdminPage(initialTab: AdminTab.dues),
+      );
       await tester.tap(find.text('2026-27 Season dues · \$125 each'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Alex'));
