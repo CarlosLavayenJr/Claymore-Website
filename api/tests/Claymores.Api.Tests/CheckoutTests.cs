@@ -384,6 +384,31 @@ public sealed class CheckoutTests(PostgresDatabase database) : IClassFixture<Pos
         await command.ExecuteNonQueryAsync(Ct);
     }
 
+    [Fact]
+    public async Task A_checkout_stripe_refuses_doesnt_lock_the_member_out()
+    {
+        database.SkipIfUnavailable();
+        var token = await SignInAsync("rejected");
+        var dues = await AssignDuesAsync("sub-rejected", 12500);
+
+        // Stripe refuses (e.g. the account has no business name yet): nothing is left pending.
+        _stripe.RejectCreates = true;
+        Assert.Equal(HttpStatusCode.BadGateway, (await CheckoutAsync(token, dues, new { amountCents = 12500 })).StatusCode);
+        var first = await ScalarAsync<Guid>(
+            "SELECT id FROM dues_checkouts WHERE assessment_id = @id ORDER BY created_at DESC LIMIT 1", dues);
+        Assert.Equal(0L, await ScalarAsync<long>(
+            "SELECT count(*) FROM dues_checkouts WHERE assessment_id = @id AND status = 'pending'", dues));
+        Assert.Equal("expired", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", first));
+        Assert.Equal("stripe-rejected", await ScalarAsync<string>("SELECT released_by FROM dues_checkouts WHERE id = @id", first));
+
+        // Once fixed, the next try is a new attempt with a new idempotency key, and it works.
+        _stripe.RejectCreates = false;
+        var keys = _stripe.IdempotencyKeys.Count;
+        Assert.StartsWith("https://", await UrlAsync(await CheckoutAsync(token, dues, new { amountCents = 12500 })));
+        Assert.NotEqual(first, await AttemptAsync(dues));
+        Assert.Equal(keys + 1, _stripe.IdempotencyKeys.Count);
+    }
+
     /// <summary>A checkout whose create reached Stripe but whose response was lost: pending and unbound.</summary>
     private async Task<Guid> LostCheckoutAsync(string token, Guid dues)
     {
