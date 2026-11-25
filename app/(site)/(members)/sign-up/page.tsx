@@ -134,6 +134,11 @@ export default async function SignUpPage({ searchParams }: { searchParams: Searc
                     <div className="mt-4">
                         <Steps current={step} />
                     </div>
+                    {params.invite === 'expired' && (
+                        <Notice tone="info" title="That invite link has expired or was turned off" className="mt-5">
+                            You can still send a request below and a club admin will review it.
+                        </Notice>
+                    )}
                     {fromSignIn && hasGoogle && status === 'none' && (
                         <Notice tone="info" title="That Google account isn't on the club list yet" className="mt-5">
                             Send a request below and a club admin will review it.
