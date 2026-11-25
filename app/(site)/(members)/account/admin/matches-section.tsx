@@ -15,10 +15,11 @@ import {
     upcomingMatches,
     type PickerGroup,
 } from '@/lib/claymores/match-availability'
-import { getMatches } from '@/lib/claymores-api'
+import { getMatches, getTeams } from '@/lib/claymores-api'
+import { findTeamLogo } from '@/lib/team-logo'
 import { isHomeMatch, matchSlug, opponentOf } from '@/lib/seo'
 import { cn } from '@/lib/utils'
-import type { SanityMatch } from '@/sanity/lib/queries'
+import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
 type MatchAdmin = { match: SanityMatch; availability: ApiResult<FixtureAvailability>; lineup: ApiResult<Lineup> }
 
@@ -44,8 +45,10 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false, can
     canPickLineups?: boolean
 }) {
     let matches: SanityMatch[]
+    let teams: SanityTeam[] = []
     try {
         matches = upcomingMatches(await getMatches(), todayInOrlando())
+        teams = await getTeams().catch(() => [])
     } catch {
         matches = []
     }
@@ -84,7 +87,7 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false, can
                             : 'Players answer until match day. The coach picks the lineup; you can see it here.'}
                     </p>
                     <div className="space-y-3">
-                        {states.map(s => <MatchPanel key={s.match._id} state={s} open={s.match._id === openFixture} canPickLineups={canPickLineups} />)}
+                        {states.map(s => <MatchPanel key={s.match._id} state={s} teams={teams} open={s.match._id === openFixture} canPickLineups={canPickLineups} />)}
                     </div>
                 </>
             )}
@@ -92,18 +95,25 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false, can
     )
 }
 
-function MatchPanel({ state, open, canPickLineups }: { state: MatchAdmin; open: boolean; canPickLineups: boolean }) {
+function MatchPanel({ state, teams, open, canPickLineups }: { state: MatchAdmin; teams: SanityTeam[]; open: boolean; canPickLineups: boolean }) {
     const { match, availability, lineup } = state
+    const home = isHomeMatch(match)
+    const logo = (home ? match.awayTeamLogo : match.homeTeamLogo) ?? findTeamLogo(opponentOf(match), teams)
     const anchor = matchAnchor(match._id)
     const chip = lineup.ok ? lineupChip[lineup.data.status] ?? lineupChip.none : null
     return (
         <details id={anchor} open={open} className="group/match scroll-mt-24 rounded-lg border border-[#EAEAEA]">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                    {logo
+                        ? <img src={logo} alt="" className="h-10 w-10 shrink-0 object-contain" />
+                        : <span aria-hidden className="h-10 w-10 shrink-0 rounded-full bg-[#EAEAEA]" />}
+                    <span className="min-w-0">
                     <span className="block text-lg font-semibold text-[#111111]">{title(match)}</span>
                     <span className="block text-sm text-[#555555]">
                         {shortMatchDate(match.date)}{match.kickoffTime ? ` · ${match.kickoffTime}` : ''}
                         {availability.ok && <> · {countsLine(availability.data.counts)}</>}
+                    </span>
                     </span>
                 </span>
                 {chip && <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', chip.className)}>{chip.label}</span>}
