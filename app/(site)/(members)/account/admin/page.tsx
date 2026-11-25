@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { approveJoinRequest, createInviteLink, denyJoinRequest, removeInvitation, revokeInviteLink, saveInvitation } from './actions'
 import { CopyLink } from './copy-link'
+import { MembersSection } from './members-section'
 import { DuesSection } from './dues-section'
 import { MatchesSection } from './matches-section'
 import { AdminSection } from '@/components/members/admin-section'
@@ -43,6 +44,7 @@ const notices: Record<string, string> = {
     note_saved: 'Note saved.',
     link_created: 'New invite link ready. Copy it below and post it in the group chat.',
     link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
+    name_saved: 'Name saved.',
     lineup_saved: 'Lineup saved as a draft. Only admins can see it.',
     lineup_published: 'Lineup published. Members can see it, and the players in it get a notification.',
 }
@@ -57,6 +59,7 @@ const errors: Record<string, string> = {
     undo_reason: 'Say why the payment is being undone.',
     payment_invalid: 'Notes are at most 500 characters, and volunteer or waived credits need one.',
     payment_undone: 'That payment was already undone, so it can’t change.',
+    name_invalid: 'Enter both a first and a last name (80 characters at most).',
 }
 
 const selectClass = `${inputClass} pr-8`
@@ -242,8 +245,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     const error = typeof params.error === 'string' ? errors[params.error] ?? errors.unavailable : undefined
     const selfEmail = (me.ok ? me.data.email : session.token.api.user.email)?.toLowerCase()
 
-    const [requests, invitations, links] = await Promise.all([
-        api.joinRequests('pending'), api.invitations(), api.inviteLinks(),
+    const [requests, invitations, links, members] = await Promise.all([
+        api.joinRequests('pending'), api.invitations(), api.inviteLinks(), api.members(),
     ])
     const waiting = requests.ok ? requests.data.length : 0
     const activeLinks = links.ok ? links.data.filter(l => l.active) : []
@@ -326,6 +329,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         )}
                     </div>
                 </AdminSection>
+
+                <MembersSection members={members} />
 
                 <DuesSection api={api} />
             </div>

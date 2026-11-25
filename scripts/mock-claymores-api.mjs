@@ -63,7 +63,8 @@ const dues = [
     { id: '3f1e6c55-2b8f-4d7e-8f21-9c2b7d4e6a10', player: 'admin@example.com', description: '2026–27 season dues', amountCents: 15000, dueDate: '2027-01-31', payments: [], pendingCheckoutCents: 2500 },
 ]
 
-const nameOf = email => email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+const setNames = new Map() // email -> name typed in /account or Club Admin
+const nameOf = email => setNames.get(email) ?? email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const subjectOf = email => `mock-${Buffer.from(email).toString('hex').slice(0, 16)}`
 
 function issue(email, family = randomUUID()) {
@@ -269,6 +270,12 @@ const server = createServer(async (req, res) => {
         for (let i = joinRequests.length - 1; i >= 0; i--) if (joinRequests[i].email === user.email) joinRequests.splice(i, 1)
         return send(res, 204)
     }
+    if (method === 'PUT' && path === '/v1/me/name') {
+        const name = String(body.name ?? '').replace(/\s+/g, ' ').trim()
+        if (!name || name.length > 80) return send(res, 400, { error: 'Enter your name, at most 80 characters.' })
+        setNames.set(user.email, name)
+        return send(res, 200, { name })
+    }
     if (method === 'GET' && path === '/v1/me') {
         return send(res, 200, { subject: subjectOf(user.email), name: nameOf(user.email), email: user.email, role: user.role })
     }
@@ -342,6 +349,15 @@ const server = createServer(async (req, res) => {
             r.reason = body.reason ?? null
         }
         return send(res, 200, r)
+    }
+    let named = path.match(/^\/v1\/admin\/members\/([^/]+)\/name$/)
+    if (method === 'PUT' && named) {
+        const email = [...invitations.keys()].find(e => subjectOf(e) === decodeURIComponent(named[1]))
+        if (!email) return send(res, 404, { error: 'not_found' })
+        const name = String(body.name ?? '').replace(/\s+/g, ' ').trim()
+        if (!name || name.length > 80) return send(res, 400, { error: 'Enter a name, at most 80 characters.' })
+        setNames.set(email, name)
+        return send(res, 200, { subject: named[1], name })
     }
     if (method === 'GET' && path === '/v1/admin/members') {
         return send(res, 200, [...invitations.keys()].map(email => ({ subject: subjectOf(email), email, name: nameOf(email) })))

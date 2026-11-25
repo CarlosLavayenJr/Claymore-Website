@@ -305,6 +305,16 @@ export class ClaymoresApiClient {
         return this.request<ApiUser>('GET', '/v1/me')
     }
 
+    /** Sets the caller's name; sign-in no longer replaces it. 400 when blank or over 80 characters. */
+    setMyName(name: string) {
+        return this.request<{ name: string }>('PUT', '/v1/me/name', { name })
+    }
+
+    /** Admin: sets any member's name. 404 when there's no such member. */
+    setMemberName(subject: string, name: string) {
+        return this.request<{ subject: string; name: string }>('PUT', `/v1/admin/members/${encodeURIComponent(subject)}/name`, { name })
+    }
+
     /** 204 on success; 409 `last_admin` when the caller is the club's only admin. */
     deleteMe() {
         return this.request<null>('DELETE', '/v1/me')
