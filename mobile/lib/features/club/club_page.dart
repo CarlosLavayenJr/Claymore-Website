@@ -11,6 +11,7 @@ import '../../shared/widgets.dart';
 import '../admin/admin_page.dart';
 import '../auth/auth_service.dart';
 import '../auth/sign_in_card.dart';
+import '../profile/full_name_form.dart';
 import 'alert_settings.dart';
 import 'club_admin_card.dart';
 import 'my_dues.dart';
@@ -163,6 +164,10 @@ class _SignedInClubState extends State<_SignedInClub> {
       child: PageList(
         storageKey: 'club',
         children: [
+          if (user.needsFullName && widget.members != null) ...[
+            FullNameCard(user: user, members: widget.members!),
+            const SizedBox(height: 16),
+          ],
           ?widget.banner,
           Panel(
             padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
