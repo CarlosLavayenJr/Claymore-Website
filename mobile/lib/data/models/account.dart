@@ -17,6 +17,55 @@ class AuthUser {
   final String? name, email, role;
 
   String get displayName => name ?? email ?? 'Club member';
+
+  /// This member with [name] in place of the current one.
+  AuthUser withName(String name) =>
+      AuthUser(subject: subject, name: name, email: email, role: role);
+
+  /// Google sometimes sends only a first name and Apple sends it once, so
+  /// the Club tab asks for a full name when this is true.
+  bool get needsFullName => needsFullMemberName(name);
+}
+
+// Member names, as in the website's lib/claymores/member-name.ts: the club
+// stores "First Last", at most [maxMemberNameLength] characters.
+
+const maxMemberNameLength = 80;
+
+String _cleanName(String? value) =>
+    (value ?? '').trim().split(RegExp(r'\s+')).join(' ');
+
+/// True when there's no name, only one word, or an email address.
+bool needsFullMemberName(String? name) {
+  final n = _cleanName(name);
+  return n.isEmpty || !n.contains(' ') || n.contains('@');
+}
+
+/// "Anthony Rossi" → ("Anthony", "Rossi"): the first word, then the rest.
+/// An email address prefills nothing.
+({String first, String last}) splitMemberName(String? name) {
+  final n = _cleanName(name);
+  if (n.isEmpty || n.contains('@')) return (first: '', last: '');
+  final i = n.indexOf(' ');
+  return i < 0
+      ? (first: n, last: '')
+      : (first: n.substring(0, i), last: n.substring(i + 1));
+}
+
+/// Joins the form's parts as "First Last", or returns the problem to show.
+({String? name, String? error}) joinMemberName(String first, String last) {
+  final f = _cleanName(first), l = _cleanName(last);
+  if (f.isEmpty || l.isEmpty) {
+    return (name: null, error: 'Enter both a first and a last name.');
+  }
+  final name = '$f $l';
+  if (name.length > maxMemberNameLength) {
+    return (
+      name: null,
+      error: 'Keep your name to $maxMemberNameLength characters.',
+    );
+  }
+  return (name: name, error: null);
 }
 
 /// Response of `POST /v1/auth/mobile/google` and `/refresh`.
