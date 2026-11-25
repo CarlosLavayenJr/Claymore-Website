@@ -397,7 +397,14 @@ internal static class DuesEndpoints
 
         // Who dues can be assigned to: members who have signed in at least once and are still invited.
         app.MapGet("/v1/admin/members", async (ClubMemberDirectory members, CancellationToken ct) =>
-                Results.Ok((await members.ListAsync(ct)).Select(m => new { subject = m.Subject, email = m.Email, name = m.Name })))
+            {
+                var roles = await members.RolesAsync(ct);
+                return Results.Ok((await members.ListAsync(ct)).Select(m => new
+                {
+                    subject = m.Subject, email = m.Email, name = m.Name,
+                    role = roles.GetValueOrDefault(ClubInvitations.Normalize(m.Email), ClubRoles.Player),
+                }));
+            })
             .WithTags("Members").RequireAuthorization(GoogleSignIn.AdminPolicy).AddEndpointFilter(NoStore)
             .WithSummary("List members who have signed in, for assigning dues").Produces(200).Produces(401).Produces(403);
         admin.MapGet("/", async (DuesLedger ledger, CancellationToken ct) => Results.Ok(await ledger.ListAsync(null, ct)))

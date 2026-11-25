@@ -1100,6 +1100,31 @@ void main() {
       await finish(tester, services);
     });
 
+    testWidgets('only the super admin changes a member’s role', (tester) async {
+      pending = [];
+      var services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.text('Dana Lee'));
+      expect(find.text('EDIT NAME'), findsOneWidget);
+      expect(find.byKey(const Key('member-role-coach')), findsNothing);
+      await finish(tester, services);
+
+      role = 'superadmin';
+      services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.text('Dana Lee'));
+      expect(find.text('EDIT MEMBER'), findsOneWidget);
+      await tap(tester, find.byKey(const Key('member-role-coach')));
+      expect(find.textContaining('pick lineups'), findsOneWidget);
+      await tap(tester, find.byKey(const Key('save-member-role')));
+      final put = requests.lastWhere((r) => r.method == 'PUT');
+      expect(put.url.path, startsWith('/v1/admin/invitations/'));
+      expect(jsonDecode(put.body), {'role': 'coach'});
+      expect(
+        find.text('Role saved. It takes effect within 30 seconds.'),
+        findsOneWidget,
+      );
+      await finish(tester, services);
+    });
+
     testWidgets('editing a member who is gone says so', (tester) async {
       pending = [];
       onName = (_) => http.Response('', 404);

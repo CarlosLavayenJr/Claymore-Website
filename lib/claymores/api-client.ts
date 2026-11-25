@@ -64,7 +64,8 @@ export type AdminDuesAssessment = DuesAssessment & { playerSubject: string }
 export type AdminDuesDetail = { assessment: AdminDuesAssessment; payments: DuesPayment[] }
 
 /** A member who has signed in at least once (GET /v1/admin/members). */
-export type ClubMember = { subject: string; email: string; name: string | null }
+/** `role`: superadmin, coach, admin or player (older APIs leave it out). */
+export type ClubMember = { subject: string; email: string; name: string | null; role?: string | null }
 
 /** Same dues for every member who has signed in. `batchId` makes a retry create nothing new. */
 export type NewDuesForAllMembers = {

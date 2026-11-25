@@ -7,15 +7,32 @@ String? _opt(Object? value) =>
 
 /// A member who has signed in at least once (`GET /v1/admin/members`).
 class ClubMember {
-  const ClubMember({required this.subject, required this.email, this.name});
+  const ClubMember({
+    required this.subject,
+    required this.email,
+    this.name,
+    this.role,
+  });
 
   ClubMember.fromJson(Map<String, dynamic> json)
     : subject = json['subject'] as String,
       email = json['email'] as String? ?? '',
-      name = _opt(json['name']);
+      name = _opt(json['name']),
+      role = _opt(json['role']);
 
   final String subject, email;
   final String? name;
+
+  /// `superadmin`, `coach`, `admin` or `player` (older APIs leave it out).
+  final String? role;
+
+  /// "Coach", "Admin" or "Super admin"; null for players.
+  String? get staffLabel => switch (role) {
+    'superadmin' => 'SUPER ADMIN',
+    'coach' => 'COACH',
+    'admin' => 'ADMIN',
+    _ => null,
+  };
 
   /// "Name", or the email when the member has no name.
   String get label => name ?? (email.isEmpty ? 'Club member' : email);

@@ -251,18 +251,22 @@ class _AdminBodyState extends State<_AdminBody>
   }
 
   Future<void> editName(ClubMember member) async {
+    final me = AppScope.of(context).auth.user;
     final result = await showEditMemberName(
       context,
       admin: widget.admin,
       member: member,
+      canSetRole:
+          (me?.isSuperAdmin ?? false) &&
+          member.email.toLowerCase() != me?.email?.toLowerCase(),
     );
     if (result == null || !mounted) return;
-    showMessage(
-      context,
-      result == MemberNameResult.saved
-          ? 'Name saved.'
-          : 'That member no longer exists.',
-    );
+    showMessage(context, switch (result) {
+      MemberNameResult.saved => 'Name saved.',
+      MemberNameResult.roleSaved =>
+        'Role saved. It takes effect within 30 seconds.',
+      MemberNameResult.gone => 'That member no longer exists.',
+    });
     setState(() {
       members = widget.admin.members();
       dues = loadDues(members!);
