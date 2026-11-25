@@ -1,15 +1,22 @@
-import { saveMemberName, saveMemberRole } from './actions'
+import { ChevronDown } from 'lucide-react'
+import { saveMember } from './actions'
 import { AdminSection } from '@/components/members/admin-section'
-import { inputClass, Notice, RoleBadge } from '@/components/members/member-ui'
+import { inputClass, labelClass, Notice, RoleBadge } from '@/components/members/member-ui'
 import type { ApiResult, ClubMember } from '@/lib/claymores/api-client'
 import { MAX_NAME_LENGTH, needsFullName, splitName } from '@/lib/claymores/member-name'
 
 const saveClass =
-    'inline-flex items-center justify-center rounded-md border border-[#77c3ef] px-3 py-2 text-sm font-semibold text-[#1f6f9c] transition-colors hover:bg-[#77c3ef] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]'
+    'inline-flex h-10 items-center justify-center rounded-md bg-[#77c3ef] px-5 font-claymore text-white transition-colors hover:bg-[#a0d5f5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]'
+
+const roleHelp: Record<string, string> = {
+    player: 'Answers availability and gets club dues.',
+    coach: 'Runs the club and picks lineups. Isn’t asked to play.',
+    admin: 'Runs the club (dues, members, matches). Doesn’t pick lineups.',
+}
 
 /**
- * Everyone who has signed in, with their name editable and their role. Missing last names are
- * listed first. The super admin can change anyone's role here (except their own).
+ * Everyone who has signed in: name, email and role at a glance; Edit opens one form for their
+ * name (and, for the super admin, their role). Missing last names are listed first, already open.
  */
 export function MembersSection({ members, canSetRoles = false, selfEmail }: {
     members: ApiResult<ClubMember[]>
@@ -37,52 +44,70 @@ export function MembersSection({ members, canSetRoles = false, selfEmail }: {
             ) : list.length === 0 ? (
                 <p className="text-[#555555]">Nobody has signed in yet.</p>
             ) : (
-                <>
-                    <p className="mb-3 text-sm text-[#555555]">
-                        Names come from Google, which sometimes only has a first name. Members are asked for their full
-                        name when they sign in; you can fix anyone’s here.
-                        {canSetRoles && ' Change roles here too: coaches pick lineups and aren’t asked to play; admins run the club but don’t pick lineups.'}
-                    </p>
-                    <ul className="divide-y divide-[#EAEAEA]">
-                        {list.map(m => {
-                            const { first, last } = splitName(m.name)
-                            const self = m.email.toLowerCase() === selfEmail
-                            const changeable = canSetRoles && !self && m.role !== 'superadmin'
-                            return (
-                                <li key={m.subject} className="space-y-2 py-3">
-                                    <form action={saveMemberName.bind(null, m.subject)}
-                                        className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
-                                        <span className="min-w-0 break-all text-sm text-[#555555]">
-                                            {m.email}
-                                            {needsFullName(m.name) && <span className="ml-2 rounded-full bg-[#fd80b5]/15 px-2 py-0.5 text-xs font-semibold text-[#b02a64]">No last name</span>}
-                                        </span>
-                                        <label className="sr-only" htmlFor={`first-${m.subject}`}>First name for {m.email}</label>
-                                        <input id={`first-${m.subject}`} name="first" required maxLength={MAX_NAME_LENGTH}
-                                            defaultValue={first} placeholder="First" className={inputClass} />
-                                        <label className="sr-only" htmlFor={`last-${m.subject}`}>Last name for {m.email}</label>
-                                        <input id={`last-${m.subject}`} name="last" required maxLength={MAX_NAME_LENGTH}
-                                            defaultValue={last} placeholder="Last" className={inputClass} />
-                                        <button type="submit" className={saveClass}>Save</button>
-                                    </form>
-                                    {changeable ? (
-                                        <form action={saveMemberRole.bind(null, m.email)} className="flex items-center gap-2">
-                                            <label htmlFor={`role-${m.subject}`} className="text-xs font-semibold uppercase tracking-widest text-[#555555]">Role</label>
-                                            <select id={`role-${m.subject}`} name="role" defaultValue={m.role ?? 'player'} className={`${inputClass} w-36 py-1.5 pr-8 text-sm`}>
-                                                <option value="player">Player</option>
-                                                <option value="coach">Coach</option>
-                                                <option value="admin">Admin</option>
-                                            </select>
-                                            <button type="submit" className={saveClass}>Save role</button>
-                                        </form>
-                                    ) : m.role ? (
-                                        <RoleBadge role={m.role} />
-                                    ) : null}
-                                </li>
-                            )
-                        })}
-                    </ul>
-                </>
+                <ul className="divide-y divide-[#EAEAEA]">
+                    {list.map(m => (
+                        <MemberRow key={m.subject} member={m}
+                            canSetRole={canSetRoles && m.email.toLowerCase() !== selfEmail && m.role !== 'superadmin'} />
+                    ))}
+                </ul>
             )}
         </AdminSection>
+    )
+}
+
+function MemberRow({ member, canSetRole }: { member: ClubMember; canSetRole: boolean }) {
+    const { first, last } = splitName(member.name)
+    const missing = needsFullName(member.name)
+    const role = member.role ?? 'player'
+    const id = member.subject.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return (
+        <li>
+            <details className="group/member" open={missing}>
+                <summary className="flex cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-[#111111]">{member.name ?? member.email}</span>
+                        <span className="block truncate text-sm text-[#555555]">{member.email}</span>
+                    </span>
+                    {missing && (
+                        <span className="shrink-0 rounded-full bg-[#fd80b5]/15 px-2.5 py-0.5 text-xs font-semibold text-[#b02a64]">No last name</span>
+                    )}
+                    {role !== 'player' && <span className="shrink-0"><RoleBadge role={role} /></span>}
+                    <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-[#fd80b5]">
+                        <span className="group-open/member:hidden">Edit</span>
+                        <span className="hidden group-open/member:inline">Close</span>
+                        <ChevronDown aria-hidden className="h-4 w-4 transition-transform group-open/member:rotate-180" />
+                    </span>
+                </summary>
+                <form action={saveMember.bind(null, { subject: member.subject, email: member.email, name: member.name, role: member.role ?? null })}
+                    className="mb-4 grid gap-3 rounded-lg bg-[#fafafa] p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_11rem_auto] lg:items-end">
+                    <div>
+                        <label htmlFor={`first-${id}`} className={labelClass}>First name</label>
+                        <input id={`first-${id}`} name="first" required maxLength={MAX_NAME_LENGTH}
+                            defaultValue={first} className={`${inputClass} mt-1`} />
+                    </div>
+                    <div>
+                        <label htmlFor={`last-${id}`} className={labelClass}>Last name</label>
+                        <input id={`last-${id}`} name="last" required maxLength={MAX_NAME_LENGTH}
+                            defaultValue={last} className={`${inputClass} mt-1`} />
+                    </div>
+                    {canSetRole && (
+                        <div>
+                            <label htmlFor={`role-${id}`} className={labelClass}>Role</label>
+                            <select id={`role-${id}`} name="role" defaultValue={role} className={`${inputClass} mt-1 pr-8`}>
+                                <option value="player">Player</option>
+                                <option value="coach">Coach</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    )}
+                    <button type="submit" className={saveClass}>Save</button>
+                    {canSetRole && (
+                        <p className="text-xs text-[#555555] sm:col-span-2 lg:col-span-4">
+                            Player: {roleHelp.player} Coach: {roleHelp.coach} Admin: {roleHelp.admin}
+                        </p>
+                    )}
+                </form>
+            </details>
+        </li>
     )
 }
