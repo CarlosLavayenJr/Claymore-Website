@@ -26,13 +26,18 @@ class ClubMember {
   /// `superadmin`, `coach`, `admin` or `player` (older APIs leave it out).
   final String? role;
 
-  /// "Coach", "Admin" or "Super admin"; null for players.
-  String? get staffLabel => switch (role) {
+  /// The role badge: SUPER ADMIN, COACH, ADMIN or PLAYER (null when an
+  /// older API leaves the role out).
+  String? get roleBadge => switch (role) {
     'superadmin' => 'SUPER ADMIN',
     'coach' => 'COACH',
     'admin' => 'ADMIN',
+    'player' => 'PLAYER',
     _ => null,
   };
+
+  bool get isStaff =>
+      role == 'superadmin' || role == 'coach' || role == 'admin';
 
   /// "Name", or the email when the member has no name.
   String get label => name ?? (email.isEmpty ? 'Club member' : email);
