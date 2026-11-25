@@ -103,11 +103,20 @@ class DuesPayment {
   DuesPayment.fromJson(Map<String, dynamic> json)
     : id = json['id'] as String,
       amountCents = _cents(json['amountCents']),
-      recordedAt = DateTime.tryParse(json['recordedAt'] as String? ?? '');
+      recordedAt = DateTime.tryParse(json['recordedAt'] as String? ?? ''),
+      method = _opt(json['method']),
+      note = _opt(json['note']);
 
   final String id;
   final int amountCents;
   final DateTime? recordedAt;
+
+  /// `stripe`, `cash`, `venmo`, `zelle`, `check` or `other`; null for
+  /// payments recorded before methods were tracked.
+  final String? method;
+
+  /// Admin-only; always null on the player routes.
+  final String? note;
 }
 
 /// `DuesDetail` = `{assessment, payments}`.
