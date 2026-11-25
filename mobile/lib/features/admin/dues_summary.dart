@@ -35,7 +35,8 @@ class DuesGroup {
         for (final d in items)
           if (DuesStanding.of(d) == DuesStanding.unpaid) d,
       ],
-      collectedCents = items.fold(0, (sum, d) => sum + d.paidCents),
+      collectedCents = items.fold(0, (sum, d) => sum + d.moneyPaidCents),
+      creditedCents = items.fold(0, (sum, d) => sum + d.creditedCents),
       outstandingCents = items.fold(
         0,
         (sum, d) => sum + (d.balanceCents > 0 ? d.balanceCents : 0),
@@ -48,7 +49,13 @@ class DuesGroup {
   final String description;
   final List<DuesAssessment> items;
   final List<DuesAssessment> paid, partial, unpaid;
-  final int collectedCents, outstandingCents;
+
+  /// Money actually paid (volunteer and waived credit left out).
+  final int collectedCents;
+
+  /// Volunteer and waived credit: counts toward the balance, isn't money.
+  final int creditedCents;
+  final int outstandingCents;
 
   int get count => items.length;
 
@@ -76,10 +83,13 @@ class DuesGroup {
     if (unpaid.isNotEmpty) '${unpaid.length} unpaid',
   ].join(' · ');
 
-  /// "$1,950 collected · $800 outstanding".
-  String get moneyLine =>
-      '${formatDollars(collectedCents)} collected · '
-      '${formatDollars(outstandingCents)} outstanding';
+  /// "$1,950 collected · $250 credited · $800 outstanding"; credited is
+  /// left out when there is none.
+  String get moneyLine => [
+    '${formatDollars(collectedCents)} collected',
+    if (creditedCents > 0) '${formatDollars(creditedCents)} credited',
+    '${formatDollars(outstandingCents)} outstanding',
+  ].join(' · ');
 
   /// Latest due date in the group, for ordering.
   DateTime? get latestDueDate => items

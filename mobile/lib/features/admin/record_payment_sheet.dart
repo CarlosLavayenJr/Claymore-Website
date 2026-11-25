@@ -35,8 +35,8 @@ Future<int?> showRecordPaymentSheet(
   ),
 );
 
-/// Records a cash, Venmo, Zelle, check or other payment against one
-/// player's dues. Each new payment gets a fresh id; tapping Save again after
+/// Records a cash, Venmo, Zelle, check or other payment, or a volunteer or
+/// waived credit (which needs a note), against one player's dues. Each new payment gets a fresh id; tapping Save again after
 /// a network error resends the same id and body, so it's recorded once.
 class RecordPaymentSheet extends StatefulWidget {
   const RecordPaymentSheet({
@@ -70,6 +70,9 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
   late final ids = PaymentIdempotency(newId: widget.newId);
   var method = ManualPaymentMethod.cash;
   String? error;
+
+  /// "Say what they did" when a credit has no note; shown on the field.
+  String? noteError;
   bool busy = false;
 
   @override
@@ -93,6 +96,15 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
       return;
     }
     final text = note.text.trim();
+    if (method.requiresNote && text.isEmpty) {
+      setState(() {
+        error = null;
+        noteError = method == ManualPaymentMethod.volunteer
+            ? 'Add a note saying what they did.'
+            : 'Add a note saying why it’s waived.';
+      });
+      return;
+    }
     final payment = ids.payment(
       PaymentDraft(
         amountCents: cents,
@@ -103,6 +115,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
     setState(() {
       busy = true;
       error = null;
+      noteError = null;
     });
     String? failure;
     try {
@@ -141,6 +154,16 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final dues = widget.dues;
+    Widget chip(ManualPaymentMethod m) => ChoiceChip(
+      label: Text(m.label),
+      selected: method == m,
+      onSelected: busy
+          ? null
+          : (_) => setState(() {
+              method = m;
+              noteError = null;
+            }),
+    );
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
@@ -190,14 +213,15 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
             Wrap(
               spacing: 8,
               runSpacing: 4,
-              children: [
-                for (final m in ManualPaymentMethod.values)
-                  ChoiceChip(
-                    label: Text(m.label),
-                    selected: method == m,
-                    onSelected: busy ? null : (_) => setState(() => method = m),
-                  ),
-              ],
+              children: [for (final m in ManualPaymentMethod.money) chip(m)],
+            ),
+            const SizedBox(height: 12),
+            Text('Not money: Volunteered · Waived', style: textTheme.bodySmall),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [for (final m in ManualPaymentMethod.credits) chip(m)],
             ),
             const SizedBox(height: 16),
             TextField(
@@ -207,7 +231,14 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
               maxLength: 500,
               minLines: 1,
               maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
+              onChanged: noteError == null
+                  ? null
+                  : (_) => setState(() => noteError = null),
+              decoration: InputDecoration(
+                labelText: method.requiresNote ? 'Note' : 'Note (optional)',
+                hintText: method.noteHint,
+                errorText: noteError,
+              ),
             ),
             if (error != null)
               Padding(

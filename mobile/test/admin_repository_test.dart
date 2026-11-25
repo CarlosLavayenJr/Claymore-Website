@@ -46,6 +46,7 @@ void main() {
         'amountCents': 12500,
         'dueDate': '2026-09-01',
         'paidCents': 5000,
+        'creditedCents': 2000,
         'balanceCents': 7500,
         'pendingCheckoutCents': 2500,
       },
@@ -57,6 +58,9 @@ void main() {
     expect(d.playerSubject, 'google-1');
     expect(d.balanceCents, 7500);
     expect(d.pendingCheckoutCents, 2500);
+    expect(d.paidCents, 5000);
+    expect(d.creditedCents, 2000);
+    expect(d.moneyPaidCents, 3000);
     expect(d.dueDate, DateTime(2026, 9, 1));
   });
 
@@ -95,6 +99,13 @@ void main() {
           'method': null,
           'note': null,
         },
+        {
+          'id': 'p3',
+          'amountCents': 2500,
+          'recordedAt': '2026-10-03T12:00:00Z',
+          'method': 'volunteer',
+          'note': 'Reffed U12 game',
+        },
       ],
     });
     final detail = await admin.duesDetail('d 1');
@@ -102,7 +113,16 @@ void main() {
     expect(detail.assessment.id, 'd 1');
     expect(detail.payments.first.method, 'venmo');
     expect(detail.payments.first.note, 'Oct');
-    expect(detail.payments.last.method, isNull);
+    // No creditedCents from an older API: 0.
+    expect(detail.assessment.creditedCents, 0);
+    expect(detail.assessment.moneyPaidCents, 5000);
+    expect(detail.payments[0].methodLabel, 'Venmo');
+    expect(detail.payments[0].isCredit, isFalse);
+    expect(detail.payments[1].method, isNull);
+    expect(detail.payments[1].methodLabel, isNull);
+    expect(detail.payments[2].methodLabel, 'Volunteered');
+    expect(detail.payments[2].isCredit, isTrue);
+    expect(detail.payments[2].note, 'Reffed U12 game');
   });
 
   test('recordPayment posts the idempotent body', () async {

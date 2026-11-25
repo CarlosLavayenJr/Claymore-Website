@@ -77,6 +77,25 @@ DateTime? parseHttpDate(String? value) {
   return DateTime.utc(part(3), month, part(1), part(4), part(5), part(6));
 }
 
+/// Methods that credit dues without money changing hands.
+const creditMethods = {'volunteer', 'waived'};
+
+/// The label for a payment method as the API sends it (`stripe`, `cash`,
+/// `volunteer`…). Unknown methods are capitalised; null stays null.
+String? paymentMethodLabel(String? method) => switch (method) {
+  null => null,
+  'stripe' => 'Card',
+  'cash' => 'Cash',
+  'venmo' => 'Venmo',
+  'zelle' => 'Zelle',
+  'check' => 'Check',
+  'other' => 'Other',
+  'volunteer' => 'Volunteered',
+  'waived' => 'Waived',
+  final other when other.isEmpty => null,
+  final other => '${other[0].toUpperCase()}${other.substring(1)}',
+};
+
 /// `DuesAssessment` in api/src/Claymores.Api/DuesLedger.cs.
 class DuesAssessment {
   DuesAssessment.fromJson(Map<String, dynamic> json)
@@ -88,12 +107,22 @@ class DuesAssessment {
           ? DateTime.tryParse(json['dueDate'] as String)
           : null,
       paidCents = _cents(json['paidCents']),
+      creditedCents = _cents(json['creditedCents']),
       balanceCents = _cents(json['balanceCents']),
       pendingCheckoutCents = _cents(json['pendingCheckoutCents']);
 
   final String id, playerSubject, description;
   final int amountCents, paidCents, balanceCents, pendingCheckoutCents;
+
+  /// The part of [paidCents] that is volunteer or waived credit, not money.
+  final int creditedCents;
   final DateTime? dueDate;
+
+  /// What was actually paid in money: [paidCents] less [creditedCents].
+  int get moneyPaidCents {
+    final cents = paidCents - creditedCents;
+    return cents > 0 ? cents : 0;
+  }
 
   bool get hasPendingCheckout => pendingCheckoutCents > 0;
   bool get settled => balanceCents <= 0;
@@ -111,9 +140,15 @@ class DuesPayment {
   final int amountCents;
   final DateTime? recordedAt;
 
-  /// `stripe`, `cash`, `venmo`, `zelle`, `check` or `other`; null for
-  /// payments recorded before methods were tracked.
+  /// `stripe`, `cash`, `venmo`, `zelle`, `check`, `other`, `volunteer` or
+  /// `waived`; null for payments recorded before methods were tracked.
   final String? method;
+
+  /// "Card", "Venmo", "Volunteered"…; null when the method isn't known.
+  String? get methodLabel => paymentMethodLabel(method);
+
+  /// Volunteer or waived credit rather than money.
+  bool get isCredit => creditMethods.contains(method);
 
   /// Admin-only; always null on the player routes.
   final String? note;

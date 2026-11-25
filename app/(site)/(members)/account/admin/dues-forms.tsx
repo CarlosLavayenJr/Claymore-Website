@@ -18,7 +18,10 @@ import {
     centsToDollarsInput,
     DEFAULT_DUES_DESCRIPTION,
     DUES_LIMITS,
+    isCreditMethod,
     MANUAL_PAYMENT_METHODS,
+    notePlaceholder,
+    noteRequiredMessage,
 } from '@/lib/claymores/admin-dues'
 import type { AutomaticDues } from '@/lib/claymores/api-client'
 
@@ -148,10 +151,14 @@ export function AssignDuesForm({ members, initialId }: { members: MemberOption[]
     )
 }
 
+const MONEY_METHODS = MANUAL_PAYMENT_METHODS.filter(m => m.kind === 'money')
+const CREDIT_METHODS = MANUAL_PAYMENT_METHODS.filter(m => m.kind === 'credit')
+
 /**
- * Record a cash/Venmo/Zelle/check/other payment against one assessment.
+ * Record a cash/Venmo/Zelle/check/other payment, or a volunteer/waived credit, against one
+ * assessment. Credits need a note (checked here and by the API).
  * `recordableDollars` is the balance minus any Stripe checkout in progress,
- * which is what "Paid in full" fills in.
+ * which is what "Paid in full" fills in (for credits too).
  */
 export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, context }: {
     assessmentId: string
@@ -163,10 +170,32 @@ export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, 
     const [state, action] = useActionState<RecordPaymentState, FormData>(recordDuesPayment, { status: 'idle', message: null, nextId: null })
     const id = useId()
     const amountRef = useRef<HTMLInputElement>(null)
+    const noteRef = useRef<HTMLInputElement>(null)
     const values = state.status === 'error' ? state.values : undefined
+    const [method, setMethod] = useState(values?.method ?? 'cash')
+    const [noteError, setNoteError] = useState<string | null>(null)
+    // A failed submit re-renders with the values it sent; follow the method it echoes back.
+    const [echoed, setEchoed] = useState(values)
+    if (values !== echoed) {
+        setEchoed(values)
+        if (values?.method) setMethod(values.method)
+    }
+    const credit = isCreditMethod(method)
 
     return (
-        <form action={action} className="space-y-3 rounded-lg bg-[#fafafa] p-4" aria-label={`Record payment for ${context}`}>
+        <form
+            action={action}
+            onSubmit={event => {
+                const message = noteRequiredMessage(method)
+                if (message && !noteRef.current?.value.trim()) {
+                    event.preventDefault()
+                    setNoteError(message)
+                    noteRef.current?.focus()
+                }
+            }}
+            className="space-y-3 rounded-lg bg-[#fafafa] p-4"
+            aria-label={`Record payment for ${context}`}
+        >
             <input type="hidden" name="id" value={state.nextId ?? initialId} />
             <input type="hidden" name="assessmentId" value={assessmentId} />
             <p className="text-sm font-semibold text-[#111111]">Record payment</p>
@@ -194,23 +223,52 @@ export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, 
                 </div>
                 <div>
                     <label htmlFor={`${id}-method`} className={labelClass}>Method</label>
-                    <select id={`${id}-method`} name="method" defaultValue={values?.method ?? 'cash'} className={`${selectClass} mt-1`}>
-                        {MANUAL_PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    <select
+                        id={`${id}-method`}
+                        name="method"
+                        value={method}
+                        onChange={event => {
+                            setMethod(event.target.value)
+                            setNoteError(null)
+                        }}
+                        className={`${selectClass} mt-1`}
+                    >
+                        <optgroup label="Money">
+                            {MONEY_METHODS.map(m => <option key={m.value} value={m.value}>{m.option}</option>)}
+                        </optgroup>
+                        <optgroup label="Credit (not money)">
+                            {CREDIT_METHODS.map(m => <option key={m.value} value={m.value}>{m.option}</option>)}
+                        </optgroup>
                     </select>
                 </div>
                 <div>
                     <label htmlFor={`${id}-note`} className={labelClass}>
-                        Note <span className="font-normal text-[#555555]">(optional)</span>
+                        Note{' '}
+                        <span className={credit ? 'font-normal text-[#b02a64]' : 'font-normal text-[#555555]'}>
+                            {credit ? '(required)' : '(optional)'}
+                        </span>
                     </label>
                     <input
+                        ref={noteRef}
                         id={`${id}-note`}
                         name="note"
                         maxLength={DUES_LIMITS.note}
                         autoComplete="off"
                         defaultValue={values?.note ?? ''}
-                        placeholder="Paid cash at practice 11/20"
+                        placeholder={notePlaceholder(method)}
+                        aria-required={credit}
+                        aria-invalid={noteError ? true : undefined}
+                        aria-describedby={noteError ? `${id}-note-error` : credit ? `${id}-note-help` : undefined}
+                        onChange={() => noteError && setNoteError(null)}
                         className={`${inputClass} mt-1`}
                     />
+                    {noteError ? (
+                        <p id={`${id}-note-error`} role="alert" className="mt-1 text-sm font-semibold text-[#b02a64]">{noteError}</p>
+                    ) : credit && (
+                        <p id={`${id}-note-help`} className="mt-1 text-xs text-[#555555]">
+                            Counts toward their balance but isn’t money, so it’s kept apart from what’s collected.
+                        </p>
+                    )}
                 </div>
             </div>
             <SubmitButton label="Record payment" busy="Recording…" />

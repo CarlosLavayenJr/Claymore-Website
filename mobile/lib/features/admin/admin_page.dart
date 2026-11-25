@@ -451,7 +451,8 @@ class DuesGroupCard extends StatelessWidget {
 }
 
 /// Blue for the share paid in full, light pink for partly paid, grey for
-/// the rest. The counts are read out by the text beneath it.
+/// the rest, by balance (volunteer and waived credit count as paid). The
+/// counts, and money vs credit, are read out by the text beneath it.
 class DuesProgressBar extends StatelessWidget {
   const DuesProgressBar({super.key, required this.group});
   final DuesGroup group;
@@ -508,6 +509,7 @@ class _PlayerDuesRow extends StatelessWidget {
       if (dues.paidCents > 0 && owes)
         'Paid ${formatCents(dues.paidCents)} of '
             '${formatCents(dues.amountCents)}',
+      if (dues.creditedCents > 0) '${formatCents(dues.creditedCents)} credited',
       if (dues.hasPendingCheckout)
         'Card checkout ${formatCents(dues.pendingCheckoutCents)} in progress',
     ].join(' · ');

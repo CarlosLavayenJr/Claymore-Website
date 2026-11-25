@@ -11,6 +11,7 @@ DuesAssessment dues({
   String description = '2026-27 Season dues',
   int amount = 12500,
   int paid = 0,
+  int credited = 0,
   int pending = 0,
   String? subject,
   String? dueDate,
@@ -21,6 +22,7 @@ DuesAssessment dues({
   'amountCents': amount,
   'dueDate': dueDate,
   'paidCents': paid,
+  'creditedCents': credited,
   'balanceCents': amount - paid,
   'pendingCheckoutCents': pending,
 });
@@ -107,6 +109,30 @@ void main() {
       expect(suggestedPaymentCents(dues(paid: 2500)), 10000);
     });
 
+    test('collected is money only; credit is shown apart', () {
+      final groups = summarizeDues([
+        for (var i = 0; i < 14; i++) dues(paid: 12500),
+        // Two volunteered in full, one partly waived.
+        dues(paid: 12500, credited: 12500),
+        dues(paid: 12500, credited: 10000),
+        dues(paid: 5000, credited: 2500),
+        for (var i = 0; i < 2; i++) dues(paid: 4000),
+        for (var i = 0; i < 3; i++) dues(),
+      ]);
+      final g = groups.single;
+      expect(g.collectedCents, 14 * 12500 + 2500 + 2500 + 2 * 4000);
+      expect(g.creditedCents, 25000);
+      expect(
+        g.moneyLine,
+        '\$1,880 collected · \$250 credited · \$620 outstanding',
+      );
+      // Status still follows the balance: credit counts as paid.
+      expect(
+        g.progressLine,
+        '16 of 22 paid in full · 3 partly paid · 3 unpaid',
+      );
+    });
+
     test('nothing in, nothing out', () {
       expect(summarizeDues(const []), isEmpty);
     });
@@ -155,6 +181,90 @@ void main() {
       expect(ids.payment(venmo).toJson()['note'], 'May');
       ids.settled();
       expect(ids.payment(venmo).id, 'id-2');
+    });
+  });
+
+  group('payment methods', () {
+    test('volunteer and waived are credits that need a note', () {
+      expect(ManualPaymentMethod.values.map((m) => m.name), [
+        'cash',
+        'venmo',
+        'zelle',
+        'check',
+        'other',
+        'volunteer',
+        'waived',
+      ]);
+      expect(ManualPaymentMethod.volunteer.label, 'Volunteered');
+      expect(ManualPaymentMethod.waived.label, 'Waived');
+      expect(ManualPaymentMethod.credits, [
+        ManualPaymentMethod.volunteer,
+        ManualPaymentMethod.waived,
+      ]);
+      expect(ManualPaymentMethod.money.where((m) => m.requiresNote), isEmpty);
+      expect(ManualPaymentMethod.volunteer.requiresNote, isTrue);
+      expect(
+        ManualPaymentMethod.volunteer.noteHint,
+        'What did they do? e.g. Reffed U12 game',
+      );
+      expect(
+        ManualPaymentMethod.waived.noteHint,
+        'Why? e.g. Scholarship, injury',
+      );
+    });
+
+    test('labels for every method the API sends', () {
+      expect(
+        [
+          for (final m in [
+            'stripe',
+            'cash',
+            'venmo',
+            'zelle',
+            'check',
+            'other',
+            'volunteer',
+            'waived',
+          ])
+            paymentMethodLabel(m),
+        ],
+        [
+          'Card',
+          'Cash',
+          'Venmo',
+          'Zelle',
+          'Check',
+          'Other',
+          'Volunteered',
+          'Waived',
+        ],
+      );
+      expect(paymentMethodLabel(null), isNull);
+      expect(paymentMethodLabel('paypal'), 'Paypal');
+      for (final m in ManualPaymentMethod.values) {
+        expect(paymentMethodLabel(m.name), m.label);
+      }
+    });
+
+    test('a credit is sent with its method and note', () {
+      final ids = PaymentIdempotency(newId: () => 'id-0');
+      expect(
+        ids
+            .payment(
+              const PaymentDraft(
+                amountCents: 2500,
+                method: ManualPaymentMethod.waived,
+                note: 'Scholarship',
+              ),
+            )
+            .toJson(),
+        {
+          'id': 'id-0',
+          'amountCents': 2500,
+          'method': 'waived',
+          'note': 'Scholarship',
+        },
+      );
     });
   });
 

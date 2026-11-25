@@ -25,12 +25,21 @@ export type DuesAssessment = {
     amountCents: number
     dueDate: string | null
     paidCents: number
+    /**
+     * The part of `paidCents` that is volunteer or waived credit rather than money.
+     * Missing from older API versions: treat as 0.
+     */
+    creditedCents?: number
     balanceCents: number
     pendingCheckoutCents: number
 }
 
-/** How a payment was made. "stripe" is set by the API for card checkouts; admins record the rest. */
-export type PaymentMethod = 'stripe' | 'cash' | 'venmo' | 'zelle' | 'check' | 'other'
+/**
+ * How a payment was made. "stripe" is set by the API for card checkouts; admins record the rest.
+ * "volunteer" (time or work for the club) and "waived" (forgiven by the club) are credits, not
+ * money, and the API requires a note for them.
+ */
+export type PaymentMethod = 'stripe' | 'cash' | 'venmo' | 'zelle' | 'check' | 'other' | 'volunteer' | 'waived'
 /** Methods an admin can record by hand (everything except Stripe). */
 export type ManualPaymentMethod = Exclude<PaymentMethod, 'stripe'>
 
