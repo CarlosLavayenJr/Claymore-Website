@@ -1,14 +1,21 @@
-import { saveMemberName } from './actions'
+import { saveMemberName, saveMemberRole } from './actions'
 import { AdminSection } from '@/components/members/admin-section'
-import { inputClass, Notice } from '@/components/members/member-ui'
+import { inputClass, Notice, RoleBadge } from '@/components/members/member-ui'
 import type { ApiResult, ClubMember } from '@/lib/claymores/api-client'
 import { MAX_NAME_LENGTH, needsFullName, splitName } from '@/lib/claymores/member-name'
 
 const saveClass =
     'inline-flex items-center justify-center rounded-md border border-[#77c3ef] px-3 py-2 text-sm font-semibold text-[#1f6f9c] transition-colors hover:bg-[#77c3ef] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]'
 
-/** Everyone who has signed in, with their name editable. Missing last names are listed first. */
-export function MembersSection({ members }: { members: ApiResult<ClubMember[]> }) {
+/**
+ * Everyone who has signed in, with their name editable and their role. Missing last names are
+ * listed first. The super admin can change anyone's role here (except their own).
+ */
+export function MembersSection({ members, canSetRoles = false, selfEmail }: {
+    members: ApiResult<ClubMember[]>
+    canSetRoles?: boolean
+    selfEmail?: string
+}) {
     const list = members.ok
         ? [...members.data].sort((a, b) =>
             Number(needsFullName(b.name)) - Number(needsFullName(a.name))
@@ -34,12 +41,15 @@ export function MembersSection({ members }: { members: ApiResult<ClubMember[]> }
                     <p className="mb-3 text-sm text-[#555555]">
                         Names come from Google, which sometimes only has a first name. Members are asked for their full
                         name when they sign in; you can fix anyone’s here.
+                        {canSetRoles && ' Change roles here too: coaches pick lineups and aren’t asked to play; admins run the club but don’t pick lineups.'}
                     </p>
                     <ul className="divide-y divide-[#EAEAEA]">
                         {list.map(m => {
                             const { first, last } = splitName(m.name)
+                            const self = m.email.toLowerCase() === selfEmail
+                            const changeable = canSetRoles && !self && m.role !== 'superadmin'
                             return (
-                                <li key={m.subject} className="py-3">
+                                <li key={m.subject} className="space-y-2 py-3">
                                     <form action={saveMemberName.bind(null, m.subject)}
                                         className="grid gap-2 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
                                         <span className="min-w-0 break-all text-sm text-[#555555]">
@@ -54,6 +64,19 @@ export function MembersSection({ members }: { members: ApiResult<ClubMember[]> }
                                             defaultValue={last} placeholder="Last" className={inputClass} />
                                         <button type="submit" className={saveClass}>Save</button>
                                     </form>
+                                    {changeable ? (
+                                        <form action={saveMemberRole.bind(null, m.email)} className="flex items-center gap-2">
+                                            <label htmlFor={`role-${m.subject}`} className="text-xs font-semibold uppercase tracking-widest text-[#555555]">Role</label>
+                                            <select id={`role-${m.subject}`} name="role" defaultValue={m.role ?? 'player'} className={`${inputClass} w-36 py-1.5 pr-8 text-sm`}>
+                                                <option value="player">Player</option>
+                                                <option value="coach">Coach</option>
+                                                <option value="admin">Admin</option>
+                                            </select>
+                                            <button type="submit" className={saveClass}>Save role</button>
+                                        </form>
+                                    ) : m.role ? (
+                                        <RoleBadge role={m.role} />
+                                    ) : null}
                                 </li>
                             )
                         })}

@@ -369,7 +369,7 @@ const server = createServer(async (req, res) => {
         return send(res, 200, { subject: named[1], name })
     }
     if (method === 'GET' && path === '/v1/admin/members') {
-        return send(res, 200, [...invitations.keys()].map(email => ({ subject: subjectOf(email), email, name: nameOf(email) })))
+        return send(res, 200, [...invitations.keys()].map(email => ({ subject: subjectOf(email), email, name: nameOf(email), role: invitations.get(email).role })))
     }
     const playerOf = subject => [...invitations.keys()].find(e => subjectOf(e) === subject)
     if (method === 'GET' && path === '/v1/admin/dues') return send(res, 200, dues.filter(d => !d.removed).map(assessment))

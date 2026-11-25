@@ -285,6 +285,16 @@ export async function saveLineup(previous: LineupState, formData: FormData): Pro
 
 // --- Member names ---
 
+/** Changes a signed-in member's role (Members list; the super admin only). */
+export async function saveMemberRole(email: string, formData: FormData) {
+    const r = role(formData.get('role'))
+    if (!r || !email) redirect(`${ADMIN}?error=invalid#members`)
+    const result = await (await admin()).putInvitation(email.toLowerCase(), r)
+    if (!result.ok) failed(result, 'role_saved')
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=role_saved#members`)
+}
+
 export async function saveMemberName(subject: string, formData: FormData) {
     const parsed = parseNameForm(formData)
     if (!parsed.ok || !subject || subject.length > 255) redirect(`${ADMIN}?error=name_invalid#members`)

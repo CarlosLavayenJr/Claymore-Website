@@ -878,6 +878,18 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
             $"/v1/admin/join-requests/{id}/approve", admin, new { role = "coach" }), Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post,
             $"/v1/admin/join-requests/{id}/approve", super, new { role = "coach" }), Ct)).StatusCode);
+
+        // The members list carries each member's real role, and a super admin who was also invited
+        // as an admin reads as super admin everywhere.
+        await InviteAsync(SuperAdminEmail, "admin");
+        using var listed = JsonDocument.Parse(await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/members", admin), Ct)).Content.ReadAsStringAsync(Ct));
+        string? RoleIn(JsonDocument doc, string email) => doc.RootElement.EnumerateArray()
+            .Where(m => m.GetProperty("email").GetString() == email).Select(m => m.GetProperty("role").GetString()).FirstOrDefault();
+        Assert.Equal("superadmin", RoleIn(listed, SuperAdminEmail));
+        Assert.Equal("admin", RoleIn(listed, "roles-coach@example.com"));
+        Assert.Equal("admin", RoleIn(listed, "roles-admin@example.com"));
+        using var invited = JsonDocument.Parse(await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/invitations", admin), Ct)).Content.ReadAsStringAsync(Ct));
+        Assert.Equal("superadmin", RoleIn(invited, SuperAdminEmail));
     }
 
     [Fact]

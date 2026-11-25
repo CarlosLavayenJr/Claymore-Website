@@ -224,6 +224,22 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
     }
 
     /// <summary>
+    /// Each invited email's role as sign-in resolves it: the configured super admin wins, then the
+    /// invitations table, then the configured player list.
+    /// </summary>
+    public async Task<Dictionary<string, string>> RolesAsync(CancellationToken ct)
+    {
+        var roles = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var email in ClubRoles.ConfiguredEmails(configuration, "PlayerEmails")) roles[email] = ClubRoles.Player;
+        await using (var command = dataSource.CreateCommand("SELECT email, role FROM club_invitations"))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+            while (await reader.ReadAsync(ct))
+                roles[reader.GetString(0)] = reader.GetString(1);
+        foreach (var email in ClubRoles.ConfiguredEmails(configuration, "AdminEmails")) roles[email] = ClubRoles.SuperAdmin;
+        return roles;
+    }
+
+    /// <summary>
     /// Members who play: everyone in <see cref="ListAsync"/> except coaches. They're the ones asked
     /// for availability and picked in lineups.
     /// </summary>
