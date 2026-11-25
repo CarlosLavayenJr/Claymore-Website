@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { DuesSummary } from './dues-summary'
 import { AssignDuesForm, AutomaticDuesForm, RecordPaymentForm, RemoveDuesButton, type MemberOption } from './dues-forms'
 import { CardHeading, formatDate, MemberCard, Notice } from '@/components/members/member-ui'
 import {
@@ -10,6 +11,7 @@ import {
     paymentMethodLabel,
     recordableCents,
     sortMembers,
+    summarizeDues,
 } from '@/lib/claymores/admin-dues'
 import { formatCents, type AdminDuesAssessment, type AdminDuesDetail, type ClaymoresApiClient } from '@/lib/claymores/api-client'
 
@@ -154,6 +156,7 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
         const r = await api.duesDetail(d.id)
         return r.ok ? r.data : null
     })
+    const summary = summarizeDues(list, playerLabel)
     const outstanding = list.reduce((sum, d) => sum + Math.max(0, d.balanceCents), 0)
 
     return (
@@ -188,6 +191,8 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
                     </div>
                 </section>
             )}
+
+            <DuesSummary groups={summary} />
 
             <h3 className="mt-8 text-lg font-semibold text-[#111111]">Assign dues</h3>
             <div className="mt-3 space-y-3">

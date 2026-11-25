@@ -1,6 +1,8 @@
-# Claymores RFC · Flutter starter
+# Claymores RFC · iPhone app
 
-A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. The whole app is public. Signing in is only for member features: today that's dues, and later game availability. Club contains notification settings and (when configured) Google sign-in and, on iOS, Sign in with Apple, which leads to a profile with dues and card payments.
+[← Back to the README](../README.md) · Releasing: [store/APP_STORE.md](store/APP_STORE.md)
+
+A club app for players, friends, and family. Home shows the next match and practice details. Fixtures shows the upcoming schedule and a season-filtered history. Standings shows the league table and playoffs from the club API. The whole app is public. Signing in is only for member features: today that's dues, and later game availability. Club has Google sign-in and, on iOS, Sign in with Apple, which lead to a profile with dues and card payments, a **Sign-in** section to link Sign in with Apple, and, for admins, **Club Admin** (dues summary, recording payments, join requests). On launch the crest animates into the top bar (`lib/app/launch_intro.dart`).
 
 ## Run it
 
@@ -113,7 +115,7 @@ The real values for the live API are in [`dart_defines/production.json`](dart_de
 flutter run --dart-define-from-file=dart_defines/production.json
 ```
 
-That file points at `https://claymores-api-4zm4.onrender.com` and uses the Google Cloud project `claymores-rfc`: the "Claymores web (API + website)" client as `GOOGLE_SERVER_CLIENT_ID` and the "Claymores iOS app" client as `GOOGLE_IOS_CLIENT_ID`. Client IDs aren't secret. Dues stay off until the API has `Dues__Enabled` and Stripe configured. The Xcode project already uses Apple team `57539PPNC3`, and the App ID `com.claymoresrfc.claymores` has Sign in with Apple enabled. Only test users listed in Google Cloud (Google Auth Platform → Audience) can sign in with Google while the consent screen is in testing.
+That file points at `https://claymores-api-4zm4.onrender.com` and uses the Google Cloud project `claymores-rfc`: the "Claymores web (API + website)" client as `GOOGLE_SERVER_CLIENT_ID` and the "Claymores iOS app" client as `GOOGLE_IOS_CLIENT_ID`. Client IDs aren't secret. `ENABLE_DUES` is on; card payments work once the Stripe account is verified (test mode until then). The Xcode project already uses Apple team `57539PPNC3`, and the App ID `com.claymoresrfc.claymores` has Sign in with Apple enabled. The Google consent screen is published, so any Google account can sign in; only invited members get in.
 
 Google Cloud setup (per the google_sign_in docs):
 
@@ -152,6 +154,20 @@ How the session works (`lib/features/auth/auth_service.dart`): the Google ID tok
 Dues: the profile lists `GET /v1/dues/mine`; a row opens `GET /v1/dues/mine/{id}` with payments and the pay form. The amount defaults to the full balance and must be between $0.50 and the balance. **Pay** calls `POST /v1/dues/{id}/checkout-session` with `amountCents` and opens the returned Stripe URL in the external browser. While a checkout is pending the amount is locked and **Resume checkout** resubmits `pendingCheckoutCents`.
 
 Stripe returns to `claymores://dues?checkout=returned` or `...=cancelled`. The scheme is registered in `ios/Runner/Info.plist` and `android/app/src/main/AndroidManifest.xml`; `app_links` delivers the link and go_router opens `/club/profile?checkout=...`, which refreshes dues and explains that the balance updates after Stripe confirms. Flutter's built-in deep linking is turned off on both platforms so links aren't routed twice. The API's checkout success/cancel URLs must use these exact links.
+
+## Club Admin (admins)
+
+Admins (role `admin`) see a **Club Admin** card on the profile (`/club/profile/admin`, `lib/features/admin/`), using the same admin API as the website:
+
+- **Dues summary:** one card per dues item ("14 of 22 paid in full · 5 partly paid · 3 unpaid", collected and outstanding), opening to the names in each group.
+- **Record payment:** tap someone who owes money to record cash, Venmo, Zelle, check or other, with a note. A retry after a network error reuses the payment ID, so it's never recorded twice.
+- **Join requests:** approve as a player, or deny with an optional reason.
+
+Assigning dues, automatic dues and invitations stay on the website (Club Admin).
+
+## Releasing
+
+`.github/workflows/ios-testflight.yml` builds, signs and uploads to TestFlight on GitHub's Macs (Actions → iOS TestFlight → Run workflow); no Mac needs an Apple sign-in. The build number is the run number. Listing text, screenshots and review notes: [store/APP_STORE.md](store/APP_STORE.md).
 
 ## Checks
 

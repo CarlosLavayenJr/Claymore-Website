@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/admin_repository.dart';
 import '../data/api_base.dart';
 import '../data/api_client.dart';
 import '../data/auth_api.dart';
@@ -58,6 +59,7 @@ class ClaymoresApp extends StatefulWidget {
     this.standings,
     this.auth,
     this.members,
+    this.admin,
     this.teams,
     this.deepLinks = const Stream.empty(),
     this.playIntro = true,
@@ -76,6 +78,9 @@ class ClaymoresApp extends StatefulWidget {
 
   /// Defaults to an API client authorised by [auth], when an API is set.
   final MemberRepository? members;
+
+  /// Defaults to an admin client authorised by [auth], when an API is set.
+  final AdminRepository? admin;
 
   /// Defaults to `/v1/teams` from the configured API plus bundled logos.
   final TeamDirectory? teams;
@@ -99,6 +104,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
     final prefs = SharedPreferencesAsync();
     final auth = widget.auth ?? authFromConfig();
     final base = ApiBase.tryParse(AppConfig.apiBaseUrl);
+    final api = base == null ? null : ApiClient(base: base, tokens: auth);
     services = AppServices(
       club: ClubDataController(widget.repository),
       standings:
@@ -106,11 +112,8 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
           StandingsRepository(apiBaseUrl: AppConfig.apiBaseUrl),
       teams: widget.teams ?? TeamDirectory(apiBaseUrl: AppConfig.apiBaseUrl),
       auth: auth,
-      members:
-          widget.members ??
-          (base == null
-              ? null
-              : MemberRepository(ApiClient(base: base, tokens: auth))),
+      members: widget.members ?? (api == null ? null : MemberRepository(api)),
+      admin: widget.admin ?? (api == null ? null : AdminRepository(api)),
       availability: AvailabilityStore(prefs),
       prefs: prefs,
     );

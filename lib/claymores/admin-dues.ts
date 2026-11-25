@@ -326,3 +326,117 @@ export async function mapWithConcurrency<T, R>(items: readonly T[], limit: numbe
     await Promise.all(workers)
     return results
 }
+
+/** One member's line in a dues group: who, and what they still owe on that item. */
+export type DuesSummaryMember = { label: string; balanceCents: number }
+
+/** "Who has paid what" for every dues item sharing one description (e.g. "2026-27 Season dues"). */
+export type DuesSummaryGroup = {
+    description: string
+    /** The amount every item in the group charges, or null when the amounts differ. */
+    amountCents: number | null
+    count: number
+    paidInFull: number
+    partlyPaid: number
+    unpaid: number
+    /** Sum of all amounts charged. */
+    totalCents: number
+    collectedCents: number
+    outstandingCents: number
+    pendingCheckoutCents: number
+    /** Collected from items paid in full, capped at each item's amount (for the progress bar). */
+    paidInFullCents: number
+    /** Collected from partly paid items (for the progress bar). */
+    partlyPaidCents: number
+    members: { paid: DuesSummaryMember[]; partly: DuesSummaryMember[]; unpaid: DuesSummaryMember[] }
+}
+
+type SummaryAssessment = Pick<DuesAssessment, 'description' | 'amountCents' | 'paidCents' | 'balanceCents' | 'pendingCheckoutCents'> & {
+    playerSubject: string
+}
+
+const groupKey = (description: string) => description.trim().replace(/\s+/g, ' ').toLowerCase()
+const byLabel = (a: DuesSummaryMember, b: DuesSummaryMember) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' })
+
+/**
+ * Groups dues by description (trimmed, case-insensitive) and counts who has paid in full,
+ * partly, or not at all. The group shows the most common spelling of its description.
+ * Groups with the most outstanding come first.
+ */
+export function summarizeDues(
+    assessments: readonly SummaryAssessment[],
+    memberLabels: ReadonlyMap<string, string> | ((subject: string) => string),
+): DuesSummaryGroup[] {
+    const labelFor = typeof memberLabels === 'function'
+        ? memberLabels
+        : (subject: string) => memberLabels.get(subject) ?? 'Former member'
+
+    const groups = new Map<string, { spellings: Map<string, number>; items: SummaryAssessment[] }>()
+    for (const a of assessments) {
+        const key = groupKey(a.description)
+        let group = groups.get(key)
+        if (!group) groups.set(key, (group = { spellings: new Map(), items: [] }))
+        const spelling = a.description.trim().replace(/\s+/g, ' ')
+        group.spellings.set(spelling, (group.spellings.get(spelling) ?? 0) + 1)
+        group.items.push(a)
+    }
+
+    const summaries = [...groups.values()].map(({ spellings, items }): DuesSummaryGroup => {
+        // Most common spelling; ties go to the one seen first (Map keeps insertion order).
+        let description = ''
+        let best = 0
+        for (const [spelling, n] of spellings) if (n > best) [description, best] = [spelling, n]
+
+        const amounts = new Set(items.map(a => a.amountCents))
+        const s: DuesSummaryGroup = {
+            description,
+            amountCents: amounts.size === 1 ? items[0].amountCents : null,
+            count: items.length,
+            paidInFull: 0,
+            partlyPaid: 0,
+            unpaid: 0,
+            totalCents: 0,
+            collectedCents: 0,
+            outstandingCents: 0,
+            pendingCheckoutCents: 0,
+            paidInFullCents: 0,
+            partlyPaidCents: 0,
+            members: { paid: [], partly: [], unpaid: [] },
+        }
+        for (const a of items) {
+            const paid = Math.max(0, a.paidCents)
+            const member = { label: labelFor(a.playerSubject), balanceCents: Math.max(0, a.balanceCents) }
+            s.totalCents += Math.max(0, a.amountCents)
+            s.collectedCents += paid
+            s.outstandingCents += member.balanceCents
+            s.pendingCheckoutCents += Math.max(0, a.pendingCheckoutCents)
+            if (a.balanceCents <= 0) {
+                s.paidInFull++
+                s.paidInFullCents += Math.min(paid, Math.max(0, a.amountCents))
+                s.members.paid.push(member)
+            } else if (paid > 0) {
+                s.partlyPaid++
+                s.partlyPaidCents += paid
+                s.members.partly.push(member)
+            } else {
+                s.unpaid++
+                s.members.unpaid.push(member)
+            }
+        }
+        s.members.paid.sort(byLabel)
+        s.members.partly.sort(byLabel)
+        s.members.unpaid.sort(byLabel)
+        return s
+    })
+
+    return summaries.sort((a, b) =>
+        b.outstandingCents - a.outstandingCents
+        || a.description.localeCompare(b.description, 'en', { sensitivity: 'base' }))
+}
+
+/** Dollars for summary lines: "$125" for whole amounts, "$25.50" otherwise. */
+export function formatSummaryCents(cents: number): string {
+    return cents % 100 === 0
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cents / 100)
+        : formatCents(cents)
+}

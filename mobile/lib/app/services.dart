@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/admin_repository.dart';
 import '../data/club_repository.dart';
 import '../data/member_repository.dart';
 import '../data/standings_repository.dart';
@@ -60,6 +61,7 @@ class AppServices {
     required this.members,
     required this.availability,
     required this.prefs,
+    this.admin,
     this.notifications = const ClubNotifications(),
   });
 
@@ -75,6 +77,10 @@ class AppServices {
 
   /// Null when the build has no API base URL.
   final MemberRepository? members;
+
+  /// Club admin calls (the API answers 403 unless the member is an admin).
+  /// Null when the build has no API base URL.
+  final AdminRepository? admin;
   final AvailabilityStore availability;
   final SharedPreferencesAsync prefs;
   final ClubNotifications notifications;
