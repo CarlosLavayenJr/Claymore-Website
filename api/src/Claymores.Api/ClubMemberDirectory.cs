@@ -222,6 +222,23 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
 
         return members;
     }
+
+    /// <summary>
+    /// Members who play: everyone in <see cref="ListAsync"/> except coaches. They're the ones asked
+    /// for availability and picked in lineups.
+    /// </summary>
+    public async Task<List<ClubMember>> ListPlayingAsync(CancellationToken ct)
+    {
+        var superAdmins = ClubRoles.ConfiguredEmails(configuration, "AdminEmails");
+        await using var command = dataSource.CreateCommand(
+            "SELECT email FROM club_invitations WHERE role = 'coach' AND NOT (email = ANY(@super))");
+        command.Parameters.AddWithValue("super", superAdmins);
+        var coaches = new HashSet<string>(StringComparer.Ordinal);
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+            while (await reader.ReadAsync(ct))
+                coaches.Add(reader.GetString(0));
+        return (await ListAsync(ct)).Where(m => !coaches.Contains(ClubInvitations.Normalize(m.Email))).ToList();
+    }
 }
 
 internal sealed record SetMemberName(string? Name);

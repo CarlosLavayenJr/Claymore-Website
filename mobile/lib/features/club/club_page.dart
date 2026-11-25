@@ -180,7 +180,7 @@ class _SignedInClubState extends State<_SignedInClub> {
                     child: BrandHeader(
                       eyebrow: user.role == null
                           ? 'Claymores RFC'
-                          : 'Claymores RFC · ${user.role}',
+                          : 'Claymores RFC · ${user.roleLabel}',
                       title: user.displayName,
                       titleSize: 22,
                     ),

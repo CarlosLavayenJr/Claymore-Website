@@ -255,7 +255,7 @@ internal sealed class MatchReminders(NpgsqlDataSource dataSource, FixtureDatabas
             if (!await ClaimAsync(result.Match.Id, "result", ct)) continue;
             var body = result.Text;
             var message = (string? token, string? topic) => new PushMessage(result.Title, body, Data(result.Match), token, topic);
-            foreach (var member in await availability.RosterAsync(result.Match.Id, ct))
+            foreach (var member in (await availability.MembersAsync(ct)).DistinctBy(m => m.Subject))
                 foreach (var token in tokens[member.Subject])
                     sent += await SendAsync(message(token, null), ct);
             sent += await SendAsync(message(null, MatchesTopic), ct);

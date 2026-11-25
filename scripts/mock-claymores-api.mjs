@@ -5,7 +5,7 @@
 //   MOCK_API_PORT=5399 MOCK_ACCESS_TTL_SECONDS=150 node scripts/mock-claymores-api.mjs
 //
 // Accepted "Google" id tokens: `dev-id-token:<email>` (what the development
-// sign-in provider sends). Seeded invitations: admin@example.com (admin) and
+// sign-in provider sends). Seeded: owner@example.com (super admin), coach@example.com (coach), admin@example.com (admin) and
 // player@example.com (player). Any other email is not invited and can request
 // to join. Refresh tokens rotate, and reusing an old one revokes the family,
 // like the real API. Public sports endpoints return empty data.
@@ -36,8 +36,14 @@ const accessTtl = Number(process.env.MOCK_ACCESS_TTL_SECONDS ?? 300) * 1000
 const webCheckout = process.env.MOCK_WEB_CHECKOUT !== 'off'
 const stripeDown = process.env.MOCK_STRIPE_DOWN === '1'
 
+// owner@example.com is the super admin (the real API reads it from configuration, so the
+// invitations list leaves it out); coach@example.com is a coach (admin access plus lineups, no availability).
+const SUPER = 'owner@example.com'
+const STAFF = ['admin', 'coach', 'superadmin']
 const invitations = new Map([
+    [SUPER, { role: 'superadmin', invitedBy: 'bootstrap', invitedAt: '2026-09-01T12:00:00Z' }],
     ['admin@example.com', { role: 'admin', invitedBy: 'bootstrap', invitedAt: '2026-09-01T12:00:00Z' }],
+    ['coach@example.com', { role: 'coach', invitedBy: SUPER, invitedAt: '2026-09-02T12:00:00Z' }],
     ['player@example.com', { role: 'player', invitedBy: 'admin@example.com', invitedAt: '2026-10-02T15:30:00Z' }],
 ])
 for (const email of ['tom.hooker@example.com', 'ben.lock@example.com', 'sam.flanker@example.com', 'jack.scrumhalf@example.com', 'leo.centre@example.com', 'max.wing@example.com']) {
@@ -148,7 +154,7 @@ function fixtureDate(id) {
 }
 function roster(id) {
     const a = answersFor(id)
-    return [...invitations.keys()].map(email => {
+    return [...invitations.keys()].filter(email => invitations.get(email).role !== 'coach').map(email => {
         const r = a.get(email)
         return { subject: subjectOf(email), email, name: nameOf(email), status: r?.status ?? null, note: r?.note ?? null, updatedAt: r?.updatedAt ?? null }
     })
@@ -318,6 +324,7 @@ const server = createServer(async (req, res) => {
         if (m[2] === 'lineup' && method === 'GET') return send(res, 200, lineupShape(id, true))
         if (m[2] === 'availability' && method === 'GET') return send(res, 200, mine(id, user.email))
         if (m[2] === 'availability' && method === 'PUT') {
+            if (user.role === 'coach') return send(res, 403, { error: "Coaches don't answer availability." })
             const status = typeof body.status === 'string' ? body.status.trim().toLowerCase() : null
             const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim() : null
             if (!['available', 'maybe', 'unavailable'].includes(status) || note?.length > 200) return send(res, 400, { error: 'Status must be available, maybe or unavailable, and the note at most 200 characters.' })
@@ -330,7 +337,8 @@ const server = createServer(async (req, res) => {
     }
 
     // --- Admin ---
-    if (path.startsWith('/v1/admin') && user.role !== 'admin') return send(res, 403, { error: 'forbidden' })
+    if (path.startsWith('/v1/admin') && !STAFF.includes(user.role)) return send(res, 403, { error: 'forbidden' })
+    const superOnly = () => send(res, 403, { error: 'Only the super admin can make or change admins and coaches.' })
     if (method === 'GET' && path === '/v1/admin/join-requests') {
         const status = url.searchParams.get('status')
         return send(res, 200, joinRequests.filter(r => !status || r.status === status))
@@ -341,7 +349,8 @@ const server = createServer(async (req, res) => {
         if (!r) return send(res, 404, { error: 'not_found' })
         if (r.status !== 'pending') return send(res, 409, { error: 'not_pending' })
         if (m[2] === 'approve') {
-            if (body.role !== 'player' && body.role !== 'admin') return send(res, 400, { error: 'invalid_request', field: 'role' })
+            if (!['player', 'coach', 'admin'].includes(body.role)) return send(res, 400, { error: 'invalid_request', field: 'role' })
+            if (body.role !== 'player' && user.role !== 'superadmin') return superOnly()
             r.status = 'approved'
             invitations.set(r.email, { role: body.role, invitedBy: user.email, invitedAt: new Date().toISOString() })
         } else {
@@ -434,6 +443,7 @@ const server = createServer(async (req, res) => {
         if (!fixtureDate(id)) return send(res, 404, { error: 'not_found' })
         if (m[2] === 'lineup' && method === 'GET') return send(res, 200, lineupShape(id, false))
         if (m[2] === 'lineup' && method === 'PUT') {
+            if (user.role !== 'coach' && user.role !== 'superadmin') return send(res, 403, { error: 'Only coaches pick lineups.' })
             const slots = (Array.isArray(body.slots) ? body.slots : []).filter(s => typeof s?.subject === 'string' && s.subject.trim()).map(s => ({ number: s.number, subject: s.subject.trim() }))
             const numbers = slots.map(s => s.number)
             if (slots.some(s => !Number.isInteger(s.number) || s.number < 1 || s.number > 23) || new Set(numbers).size !== numbers.length || new Set(slots.map(s => s.subject)).size !== slots.length) {
@@ -470,19 +480,22 @@ const server = createServer(async (req, res) => {
         return send(res, 204)
     }
     if (method === 'GET' && path === '/v1/admin/invitations') {
-        return send(res, 200, [...invitations].map(([email, v]) => ({ email, ...v })).sort((a, b) => a.role.localeCompare(b.role) || a.email.localeCompare(b.email)))
+        return send(res, 200, [...invitations].filter(([email]) => email !== SUPER).map(([email, v]) => ({ email, ...v })).sort((a, b) => a.role.localeCompare(b.role) || a.email.localeCompare(b.email)))
     }
     m = path.match(/^\/v1\/admin\/invitations\/([^/]+)$/)
     if (m) {
         const email = decodeURIComponent(m[1]).toLowerCase()
         if (method === 'PUT') {
-            if (body.role !== 'player' && body.role !== 'admin') return send(res, 400, { error: 'invalid_request' })
-            if (email === user.email && body.role !== 'admin') return send(res, 409, { error: "You can't remove your own admin role." })
+            if (!['player', 'coach', 'admin'].includes(body.role)) return send(res, 400, { error: 'invalid_request' })
+            if (email === SUPER) return send(res, 409, { error: "That's the super admin." })
+            if (email === user.email && body.role !== invitations.get(email)?.role) return send(res, 409, { error: "You can't change your own role." })
+            if ((body.role !== 'player' || STAFF.includes(invitations.get(email)?.role)) && user.role !== 'superadmin') return superOnly()
             invitations.set(email, { role: body.role, invitedBy: user.email, invitedAt: invitations.get(email)?.invitedAt ?? new Date().toISOString() })
             return send(res, 200, { email, role: body.role })
         }
         if (method === 'DELETE') {
-            if (email === user.email) return send(res, 409, { error: "You can't remove your own invitation." })
+            if (email === user.email || email === SUPER) return send(res, 409, { error: "You can't remove your own invitation." })
+            if (STAFF.includes(invitations.get(email)?.role) && user.role !== 'superadmin') return superOnly()
             return invitations.delete(email) ? send(res, 204) : send(res, 404, { error: 'not_found' })
         }
     }

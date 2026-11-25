@@ -119,7 +119,8 @@ class _DetailsState extends State<_Details> {
               ),
             ),
             if (takesAvailability(fixture)) ...[
-              if (memberView) ...[
+              // Coaches don't play, so they aren't asked.
+              if (memberView && user.plays) ...[
                 const SizedBox(height: 24),
                 MatchAvailabilityPanel(
                   key: ValueKey('availability-${user.subject}'),
@@ -143,6 +144,7 @@ class _DetailsState extends State<_Details> {
                 key: ValueKey('admin-${user.subject}'),
                 fixture: fixture,
                 admin: admin,
+                canEdit: user.canPickLineups,
                 onLineupChanged: () => setState(() => lineupVersion++),
               ),
           ],

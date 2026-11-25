@@ -20,12 +20,13 @@ import {
 import { formatCents, type ApiResult, type AssignAllResult, type Role } from '@/lib/claymores/api-client'
 import { parseLineupForm, type LineupValues } from '@/lib/claymores/match-availability'
 import { memberApi } from '@/lib/claymores/member'
+import { isInvitableRole } from '@/lib/claymores/roles'
 import { parseNameForm } from '@/lib/claymores/member-name'
 
 const ADMIN = '/account/admin'
 
 function role(value: FormDataEntryValue | null): Role | null {
-    return value === 'player' || value === 'admin' ? value : null
+    return isInvitableRole(value) ? value : null
 }
 
 function done(notice: string): never {
