@@ -6,8 +6,8 @@ import '../../app/theme.dart';
 import '../../data/api_client.dart';
 import '../../data/member_repository.dart';
 import '../../shared/widgets.dart';
+import '../club/my_dues.dart';
 import 'payment_amount.dart';
-import 'profile_page.dart';
 
 /// Opens Stripe Checkout outside the app; returns false if nothing opened.
 typedef CheckoutLauncher = Future<bool> Function(Uri url);
@@ -57,7 +57,9 @@ class _DuesDetailPageState extends State<DuesDetailPage> {
     super.dispose();
   }
 
-  void load() => detail = members?.duesDetail(widget.id);
+  void load() {
+    detail = members?.duesDetail(widget.id);
+  }
 
   @override
   Widget build(BuildContext context) {

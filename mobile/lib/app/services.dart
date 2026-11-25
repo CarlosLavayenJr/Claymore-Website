@@ -63,7 +63,12 @@ class AppServices {
     required this.prefs,
     this.admin,
     this.notifications = const ClubNotifications(),
+    this.duesEnabled = AppConfig.duesEnabled,
   });
+
+  /// Shows the member's dues on the Club tab ([AppConfig.duesEnabled];
+  /// tests switch it on).
+  final bool duesEnabled;
 
   final ClubDataController club;
   final StandingsRepository standings;

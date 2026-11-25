@@ -44,8 +44,8 @@ class JoinPage extends StatelessWidget {
         title: 'You’re in',
         body: 'You’re signed in as a club member.',
         action: FilledButton(
-          onPressed: () => context.go(profilePath),
-          child: const Text('MY PROFILE'),
+          onPressed: () => context.go(clubPath),
+          child: const Text('GO TO CLUB'),
         ),
       );
     }

@@ -134,7 +134,12 @@ class DuesPayment {
       amountCents = _cents(json['amountCents']),
       recordedAt = DateTime.tryParse(json['recordedAt'] as String? ?? ''),
       method = _opt(json['method']),
-      note = _opt(json['note']);
+      note = _opt(json['note']),
+      voidedAt = json['voidedAt'] is String
+          ? DateTime.tryParse(json['voidedAt'] as String)
+          : null,
+      voidedBy = _opt(json['voidedBy']),
+      voidReason = _opt(json['voidReason']);
 
   final String id;
   final int amountCents;
@@ -152,6 +157,16 @@ class DuesPayment {
 
   /// Admin-only; always null on the player routes.
   final String? note;
+
+  /// When an admin undid the payment; it no longer counts. Admin-only, and
+  /// absent from older API responses.
+  final DateTime? voidedAt;
+
+  /// Who undid it (email or subject), and why. Admin-only.
+  final String? voidedBy, voidReason;
+
+  /// Undone by an admin: shown crossed out, can't be edited or undone again.
+  bool get voided => voidedAt != null;
 }
 
 /// `DuesDetail` = `{assessment, payments}`.

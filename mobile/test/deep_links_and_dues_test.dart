@@ -4,11 +4,15 @@ import 'dart:convert';
 import 'package:claymores/app/deep_links.dart';
 import 'package:claymores/data/api_base.dart';
 import 'package:claymores/data/api_client.dart';
+import 'package:claymores/data/auth_api.dart';
 import 'package:claymores/data/club_repository.dart';
 import 'package:claymores/data/member_repository.dart';
+import 'package:claymores/features/auth/auth_platform.dart';
+import 'package:claymores/features/auth/auth_service.dart';
 import 'package:claymores/features/profile/dues_detail_page.dart';
 import 'package:claymores/main.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:material_ui/material_ui.dart';
@@ -19,6 +23,15 @@ class EmptyClubRepository extends ClubRepository {
   @override
   Future<ClubData> load() async =>
       ClubData('{"result":{"matches":[],"practice":null}}', isSnapshot: false);
+}
+
+class FakeGoogle implements IdTokenSource {
+  @override
+  bool get supported => true;
+  @override
+  Future<String?> idToken() async => 'google-id-token';
+  @override
+  Future<void> signOut() async {}
 }
 
 class StaticToken implements AccessTokenSource {
@@ -43,29 +56,29 @@ DuesAssessment dues({int balance = 10000, int pending = 0}) =>
 
 void main() {
   group('locationForDeepLink', () {
-    test('maps Stripe return links to the profile', () {
+    test('maps Stripe return links to the Club tab', () {
       expect(
         locationForDeepLink(Uri.parse('claymores://dues?checkout=returned')),
-        '/club/profile?checkout=returned',
+        '/club?checkout=returned',
       );
       expect(
         locationForDeepLink(Uri.parse('claymores://dues?checkout=cancelled')),
-        '/club/profile?checkout=cancelled',
+        '/club?checkout=cancelled',
       );
       expect(
         locationForDeepLink(Uri.parse('claymores:///dues?checkout=returned')),
-        '/club/profile?checkout=returned',
+        '/club?checkout=returned',
       );
       expect(
         locationForDeepLink(Uri.parse('/dues?checkout=returned')),
-        '/club/profile?checkout=returned',
+        '/club?checkout=returned',
       );
     });
 
     test('drops unknown checkout values and ignores other links', () {
       expect(
         locationForDeepLink(Uri.parse('claymores://dues?checkout=hacked')),
-        '/club/profile',
+        '/club',
       );
       expect(locationForDeepLink(Uri.parse('claymores://other')), isNull);
       expect(locationForDeepLink(Uri.parse('/home')), isNull);
@@ -76,7 +89,7 @@ void main() {
     });
   });
 
-  testWidgets('a checkout deep link opens the profile with its notice', (
+  testWidgets('a checkout deep link opens the Club tab with its notice', (
     tester,
   ) async {
     SharedPreferencesAsyncPlatform.instance =
@@ -90,7 +103,7 @@ void main() {
 
     links.add(Uri.parse('claymores://dues?checkout=cancelled'));
     await tester.pumpAndSettle();
-    expect(find.text('PROFILE'), findsOneWidget);
+    expect(find.text('CLAYMORES RFC'), findsOneWidget); // the tab shell
     expect(find.textContaining('Checkout cancelled'), findsOneWidget);
 
     links.add(Uri.parse('claymores://dues?checkout=returned'));
@@ -99,7 +112,7 @@ void main() {
       find.textContaining('Your balance updates after Stripe confirms'),
       findsOneWidget,
     );
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Dismiss'));
     await tester.pumpAndSettle();
     expect(
       find.textContaining('Your balance updates after Stripe confirms'),
@@ -107,6 +120,99 @@ void main() {
     );
     // Push isn't configured, so the notification switches stay hidden.
     expect(find.text('NOTIFICATIONS'), findsNothing);
+  });
+
+  testWidgets('signed in, the Stripe return shows the banner and refreshes '
+      'dues, also on resume and from the old profile link', (tester) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    var duesLoads = 0;
+    var paid = false;
+    final client = MockClient((request) async {
+      switch (request.url.path) {
+        case '/v1/auth/mobile/google' || '/v1/auth/mobile/refresh':
+          return http.Response(
+            jsonEncode({
+              'accessToken': 'access-1',
+              'accessTokenExpiresAt': DateTime.now()
+                  .toUtc()
+                  .add(const Duration(hours: 1))
+                  .toIso8601String(),
+              'refreshToken': 'refresh-1',
+              'user': {'subject': 's', 'name': 'Pat Prop', 'role': 'player'},
+            }),
+            200,
+          );
+        case '/v1/dues/mine':
+          duesLoads++;
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 'd1',
+                'playerSubject': 's',
+                'description': 'Season dues',
+                'amountCents': 15000,
+                'paidCents': paid ? 15000 : 5000,
+                'balanceCents': paid ? 0 : 10000,
+              },
+            ]),
+            200,
+          );
+        default:
+          return http.Response('[]', 200);
+      }
+    });
+    final base = ApiBase.tryParse('https://api.example.com')!;
+    final auth = AuthService(
+      api: AuthApi(base, client: client),
+      store: MemoryTokenStore(),
+      google: FakeGoogle(),
+    );
+    await auth.signIn();
+    final links = StreamController<Uri>();
+    addTearDown(links.close);
+    await tester.pumpWidget(
+      ClaymoresApp(
+        repository: EmptyClubRepository(),
+        auth: auth,
+        members: MemberRepository(
+          ApiClient(base: base, client: client, tokens: auth),
+        ),
+        deepLinks: links.stream,
+        duesEnabled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Club'));
+    await tester.pumpAndSettle();
+    expect(find.text('\$100.00 DUE'), findsOneWidget);
+    final loads = duesLoads;
+
+    paid = true;
+    links.add(Uri.parse('claymores://dues?checkout=returned'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Your balance updates after Stripe confirms'),
+      findsOneWidget,
+    );
+    expect(duesLoads, loads + 1);
+    expect(find.text('ALL PAID UP'), findsOneWidget);
+    expect(find.text('SIGN OUT'), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(duesLoads, loads + 2);
+
+    // A link to the old profile location with a checkout lands here too.
+    final router = GoRouter.of(tester.element(find.text('ALL PAID UP')));
+    router.go('/club/profile?checkout=cancelled');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Checkout cancelled'), findsOneWidget);
+    expect(find.text('ACCOUNT'), findsNothing);
+
+    // Disposing the app disposes the auth service (and its refresh timer).
+    await tester.pumpWidget(const SizedBox());
   });
 
   group('PayDuesForm', () {
