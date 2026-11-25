@@ -285,21 +285,26 @@ export async function saveLineup(previous: LineupState, formData: FormData): Pro
 
 // --- Member names ---
 
-/** Changes a signed-in member's role (Members list; the super admin only). */
-export async function saveMemberRole(email: string, formData: FormData) {
-    const r = role(formData.get('role'))
-    if (!r || !email) redirect(`${ADMIN}?error=invalid#members`)
-    const result = await (await admin()).putInvitation(email.toLowerCase(), r)
-    if (!result.ok) failed(result, 'role_saved')
-    revalidatePath(ADMIN)
-    redirect(`${ADMIN}?notice=role_saved#members`)
-}
-
-export async function saveMemberName(subject: string, formData: FormData) {
+/**
+ * Members list: saves a member's name and, when the form has one (the super admin), their role.
+ * Only what changed is sent.
+ */
+export async function saveMember(member: { subject: string; email: string; name: string | null; role: string | null }, formData: FormData) {
     const parsed = parseNameForm(formData)
-    if (!parsed.ok || !subject || subject.length > 255) redirect(`${ADMIN}?error=name_invalid#members`)
-    const result = await (await admin()).setMemberName(subject, parsed.name)
-    if (!result.ok) failed(result, 'name_saved')
+    if (!parsed.ok || !member.subject || member.subject.length > 255) redirect(`${ADMIN}?error=name_invalid#members`)
+    const api = await admin()
+    if (parsed.name !== member.name) {
+        const result = await api.setMemberName(member.subject, parsed.name)
+        if (!result.ok) failed(result, 'member_saved')
+    }
+    if (formData.has('role')) {
+        const r = role(formData.get('role'))
+        if (!r || !member.email) redirect(`${ADMIN}?error=invalid#members`)
+        if (r !== (member.role ?? 'player')) {
+            const result = await api.putInvitation(member.email.toLowerCase(), r)
+            if (!result.ok) failed(result, 'member_saved')
+        }
+    }
     revalidatePath(ADMIN)
-    redirect(`${ADMIN}?notice=name_saved#members`)
+    redirect(`${ADMIN}?notice=member_saved#members`)
 }

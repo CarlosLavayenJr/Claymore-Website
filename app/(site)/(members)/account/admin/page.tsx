@@ -51,7 +51,7 @@ const notices: Record<string, string> = {
     link_created: 'New invite link ready. Copy it below and post it in the group chat.',
     link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
     name_saved: 'Name saved.',
-    role_saved: 'Role saved. It takes effect within 30 seconds.',
+    member_saved: 'Saved. A role change takes effect within 30 seconds.',
     lineup_saved: 'Lineup saved as a draft. Only admins can see it.',
     lineup_published: 'Lineup published. Members can see it, and the players in it get a notification.',
 }
@@ -237,7 +237,7 @@ const TABS: { id: Tab; label: string }[] = [
     { id: 'people', label: 'People' },
     { id: 'dues', label: 'Dues' },
 ]
-const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending', 'role_saved', 'forbidden', 'conflict']
+const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending', 'member_saved', 'forbidden', 'conflict']
 const DUES_RESULTS = ['dues_removed', 'payment_undone', 'payment_undone_card', 'note_saved', 'undo_reason', 'payment_invalid']
 
 /** Which tab to show: ?tab=, else the tab a save just came back from, else Matches. */
