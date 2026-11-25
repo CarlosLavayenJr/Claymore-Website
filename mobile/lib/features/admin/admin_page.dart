@@ -11,7 +11,7 @@ import '../auth/auth_service.dart';
 import '../fixtures/fixture_card.dart' show FixtureBadge;
 import '../profile/payment_amount.dart';
 import 'dues_summary.dart';
-import 'record_payment_sheet.dart';
+import 'player_dues_page.dart';
 
 /// `/club/profile/admin`.
 const adminPath = '$profilePath/admin';
@@ -138,20 +138,19 @@ class _AdminBodyState extends State<_AdminBody> {
     ]);
   }
 
-  Future<void> record(DuesAssessment item, String label, String group) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final cents = await showRecordPaymentSheet(
+  /// Opens one player's dues: history, notes, record / edit / undo. The
+  /// summary refreshes afterwards if anything changed.
+  Future<void> open(DuesAssessment item, String label, String group) async {
+    var changed = false;
+    await showPlayerDues(
       context,
       admin: widget.admin,
       dues: item,
       memberLabel: label,
       description: group,
+      onChanged: () => changed = true,
     );
-    if (cents == null || !mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text('Recorded ${formatCents(cents)} for $label.')),
-    );
-    await refresh();
+    if (changed && mounted) await refresh();
   }
 
   Future<void> decide(AdminJoinRequest request, {required bool approve}) async {
@@ -241,7 +240,7 @@ class _AdminBodyState extends State<_AdminBody> {
                           expanded.add(group.key);
                         }
                       }),
-                      onRecord: (item) => record(
+                      onOpen: (item) => open(
                         item,
                         board.label(item.playerSubject),
                         group.description,
@@ -340,7 +339,7 @@ class _LoadError extends StatelessWidget {
 }
 
 /// One dues description across the club: progress, money, and (open) who
-/// is in each status. Tapping someone who owes money records a payment.
+/// is in each status. Tapping a player opens their dues and payment history.
 class DuesGroupCard extends StatelessWidget {
   const DuesGroupCard({
     super.key,
@@ -348,14 +347,14 @@ class DuesGroupCard extends StatelessWidget {
     required this.label,
     required this.expanded,
     required this.onToggle,
-    required this.onRecord,
+    required this.onOpen,
   });
 
   final DuesGroup group;
   final String Function(String subject) label;
   final bool expanded;
   final VoidCallback onToggle;
-  final void Function(DuesAssessment item) onRecord;
+  final void Function(DuesAssessment item) onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -437,9 +436,7 @@ class DuesGroupCard extends StatelessWidget {
                   _PlayerDuesRow(
                     dues: item,
                     label: label(item.playerSubject),
-                    onRecord: item.balanceCents > 0
-                        ? () => onRecord(item)
-                        : null,
+                    onOpen: () => onOpen(item),
                   ),
               ],
             const SizedBox(height: 8),
@@ -494,12 +491,12 @@ class _PlayerDuesRow extends StatelessWidget {
   const _PlayerDuesRow({
     required this.dues,
     required this.label,
-    required this.onRecord,
+    required this.onOpen,
   });
 
   final DuesAssessment dues;
   final String label;
-  final VoidCallback? onRecord;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -514,10 +511,10 @@ class _PlayerDuesRow extends StatelessWidget {
         'Card checkout ${formatCents(dues.pendingCheckoutCents)} in progress',
     ].join(' · ');
     return Semantics(
-      button: owes,
-      onTapHint: owes ? 'record a payment' : null,
+      button: true,
+      onTapHint: 'see payments',
       child: InkWell(
-        onTap: onRecord,
+        onTap: onOpen,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
@@ -548,11 +545,11 @@ class _PlayerDuesRow extends StatelessWidget {
                       fontFeatures: tabularFigures,
                     ),
                   ),
-                  const ExcludeSemantics(
-                    child: Icon(Icons.chevron_right, color: Brand.secondary),
-                  ),
                 ] else
                   const FixtureBadge(label: 'PAID'),
+                const ExcludeSemantics(
+                  child: Icon(Icons.chevron_right, color: Brand.secondary),
+                ),
               ],
             ),
           ),

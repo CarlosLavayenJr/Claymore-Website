@@ -8,15 +8,15 @@ import '../features/club/club_page.dart';
 import '../features/fixtures/fixtures_page.dart';
 import '../features/fixtures/match_details_page.dart';
 import '../features/home/home_page.dart';
+import '../features/profile/account_page.dart';
 import '../features/profile/dues_detail_page.dart';
-import '../features/profile/profile_page.dart';
 import '../features/standings/standings_page.dart';
 import '../shared/widgets.dart';
 import 'deep_links.dart';
 import 'launch_intro.dart';
 
 /// Tabs live in a [StatefulShellRoute] so each keeps its scroll position and
-/// filters. Detail screens (match, profile, dues) open on the root navigator
+/// filters. Detail screens (match, account, dues) open on the root navigator
 /// with their own app bar and back button.
 GoRouter buildRouter() {
   final rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -56,8 +56,12 @@ GoRouter buildRouter() {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/club',
-                builder: (_, _) => const ClubPage(),
+                path: clubPath,
+                builder: (_, state) => ClubPage(
+                  checkout: CheckoutReturn.parse(
+                    state.uri.queryParameters['checkout'],
+                  ),
+                ),
                 routes: [
                   GoRoute(
                     path: 'join',
@@ -67,11 +71,18 @@ GoRouter buildRouter() {
                   GoRoute(
                     path: 'profile',
                     parentNavigatorKey: rootKey,
-                    builder: (_, state) => ProfilePage(
-                      checkout: CheckoutReturn.parse(
+                    // Older Stripe return links pointed here; dues now live
+                    // on the Club tab.
+                    redirect: (_, state) {
+                      if (state.uri.path != profilePath) return null;
+                      final checkout = CheckoutReturn.parse(
                         state.uri.queryParameters['checkout'],
-                      ),
-                    ),
+                      );
+                      return checkout == null
+                          ? null
+                          : clubCheckoutLocation(checkout);
+                    },
+                    builder: (_, _) => const AccountPage(),
                     routes: [
                       GoRoute(
                         path: 'admin',

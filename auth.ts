@@ -14,6 +14,7 @@ import { cookies } from 'next/headers'
 import { exchangeGoogleIdToken, type ApiSession } from '@/lib/claymores/api-session'
 import { devSignInEnabled, SIGNED_IN_HINT_COOKIE } from '@/lib/claymores/auth-env'
 import { clearPendingGoogle, setPendingGoogle } from '@/lib/claymores/pending-google'
+import { clearPendingInvite, getPendingInvite } from '@/lib/claymores/pending-invite'
 import { apiClient, SESSION_MAX_AGE } from '@/lib/claymores/session-cookie'
 
 declare module 'next-auth/jwt' {
@@ -61,7 +62,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const idToken = idTokenFor(account, user as { idToken?: unknown })
             if (!account || !idToken) return '/sign-in?error=invalid'
 
-            const outcome = await exchangeGoogleIdToken(apiClient(), idToken)
+            let outcome = await exchangeGoogleIdToken(apiClient(), idToken)
+            if (outcome.kind === 'not-invited') {
+                // Came from an invite link: join as a player, then sign in for real.
+                const invite = await getPendingInvite()
+                if (invite) {
+                    const redeemed = await apiClient().redeemInvite(idToken, invite)
+                    await clearPendingInvite()
+                    if (redeemed.ok) outcome = await exchangeGoogleIdToken(apiClient(), idToken)
+                    else if (redeemed.status === 410) {
+                        await setPendingGoogle({ idToken, name: user.name ?? null, email: user.email ?? null })
+                        return '/sign-up?from=sign-in&invite=expired'
+                    }
+                }
+            }
             switch (outcome.kind) {
                 case 'signed-in': {
                     exchanged.set(account, outcome.session)

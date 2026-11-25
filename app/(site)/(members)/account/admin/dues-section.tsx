@@ -1,20 +1,25 @@
 import { randomUUID } from 'node:crypto'
+import { editDuesPaymentNote, undoDuesPayment } from './actions'
 import { DuesSummary } from './dues-summary'
+import { AdminSection } from '@/components/members/admin-section'
 import { AssignDuesForm, AutomaticDuesForm, RecordPaymentForm, RemoveDuesButton, type MemberOption } from './dues-forms'
-import { CardHeading, formatDate, MemberCard, Notice } from '@/components/members/member-ui'
+import { CardHeading, formatDate, inputClass, labelClass, MemberCard, Notice } from '@/components/members/member-ui'
 import {
     canRemoveDues,
     centsToDollarsInput,
     creditedCentsOf,
+    DUES_LIMITS,
+    isCreditMethod,
     mapWithConcurrency,
     memberLabel,
     normalizeAutomaticDues,
+    notePlaceholder,
     paymentMethodLabel,
     recordableCents,
     sortMembers,
     summarizeDues,
 } from '@/lib/claymores/admin-dues'
-import { formatCents, type AdminDuesAssessment, type AdminDuesDetail, type ClaymoresApiClient } from '@/lib/claymores/api-client'
+import { formatCents, type AdminDuesAssessment, type AdminDuesDetail, type ClaymoresApiClient, type DuesPayment } from '@/lib/claymores/api-client'
 
 /** Detail requests in flight at once while rendering the list. */
 const DETAIL_CONCURRENCY = 6
@@ -30,23 +35,94 @@ function Money({ label, cents, emphasis }: { label: string; cents: number; empha
     )
 }
 
+const smallButton =
+    'inline-flex items-center justify-center rounded-md border border-[#EAEAEA] px-3 py-1.5 text-sm font-semibold text-[#555555] transition-colors hover:border-[#111111] hover:text-[#111111] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]'
+const smallDanger =
+    'inline-flex items-center justify-center rounded-md border border-[#fd80b5] px-3 py-1.5 text-sm font-semibold text-[#b02a64] transition-colors hover:bg-[#fd80b5] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]'
+const disclosure = 'cursor-pointer list-none text-sm font-semibold text-[#fd80b5] marker:hidden hover:text-[#111111] [&::-webkit-details-marker]:hidden'
+
+function PaymentActions({ assessmentId, payment }: { assessmentId: string; payment: DuesPayment }) {
+    const credit = isCreditMethod(payment.method ?? '')
+    return (
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+            <details className="w-full sm:w-auto">
+                <summary className={disclosure}>Edit note</summary>
+                <form action={editDuesPaymentNote} className="mt-2 space-y-2">
+                    <input type="hidden" name="assessmentId" value={assessmentId} />
+                    <input type="hidden" name="paymentId" value={payment.id} />
+                    <label htmlFor={`note-${payment.id}`} className="sr-only">Note</label>
+                    <textarea
+                        id={`note-${payment.id}`}
+                        name="note"
+                        rows={2}
+                        maxLength={DUES_LIMITS.note}
+                        required={credit}
+                        defaultValue={payment.note ?? ''}
+                        placeholder={notePlaceholder(payment.method ?? 'other')}
+                        className={inputClass}
+                    />
+                    <button type="submit" className={smallButton}>Save note</button>
+                </form>
+            </details>
+            <details className="w-full sm:w-auto">
+                <summary className={disclosure}>Undo payment</summary>
+                <form action={undoDuesPayment} className="mt-2 space-y-2 rounded-lg border border-[#fd80b5] bg-[#fd80b5]/5 p-3">
+                    <input type="hidden" name="assessmentId" value={assessmentId} />
+                    <input type="hidden" name="paymentId" value={payment.id} />
+                    <input type="hidden" name="method" value={payment.method ?? ''} />
+                    <p className="text-sm text-[#111111]">
+                        It stays in the history, crossed out, and the balance goes back up by {formatCents(payment.amountCents)}.
+                    </p>
+                    {payment.method === 'stripe' && (
+                        <p className="text-sm font-semibold text-[#b02a64]">
+                            This only fixes the club’s records. To give the money back, refund it in the Stripe dashboard.
+                        </p>
+                    )}
+                    <label htmlFor={`reason-${payment.id}`} className={labelClass}>Why?</label>
+                    <input
+                        id={`reason-${payment.id}`}
+                        name="reason"
+                        required
+                        maxLength={DUES_LIMITS.note}
+                        placeholder="Recorded on the wrong player"
+                        className={inputClass}
+                    />
+                    <button type="submit" className={smallDanger}>Undo payment</button>
+                </form>
+            </details>
+        </div>
+    )
+}
+
 function PaymentHistory({ detail, context }: { detail: AdminDuesDetail | null; context: string }) {
     if (detail === null) return <p className="text-sm text-[#555555]">Payment history couldn’t load. Refresh in a minute.</p>
     if (detail.payments.length === 0) return <p className="text-sm text-[#555555]">No payments recorded yet.</p>
     return (
         <ul className="divide-y divide-[#EAEAEA] rounded-lg border border-[#EAEAEA]" aria-label={`Payments for ${context}`}>
-            {detail.payments.map(p => (
-                <li key={p.id} className="flex flex-col gap-1 px-3 py-2.5 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <div className="min-w-0">
-                        <p className="text-[#111111]">
-                            <span className="font-semibold">{formatCents(p.amountCents)}</span>
-                            <span className="text-[#555555]"> · {paymentMethodLabel(p.method) ?? 'Method not recorded'}</span>
-                        </p>
-                        {p.note && <p className="mt-0.5 whitespace-pre-line break-words text-[#555555]">{p.note}</p>}
-                    </div>
-                    <p className="shrink-0 text-xs text-[#555555] sm:text-sm">{formatDate(p.recordedAt, true) ?? '—'}</p>
-                </li>
-            ))}
+            {detail.payments.map(p => {
+                const undone = Boolean(p.voidedAt)
+                return (
+                    <li key={p.id} className={`px-3 py-2.5 text-sm ${undone ? 'bg-[#fafafa]' : ''}`}>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <div className="min-w-0">
+                                <p className={undone ? 'text-[#555555] line-through' : 'text-[#111111]'}>
+                                    <span className="font-semibold">{formatCents(p.amountCents)}</span>
+                                    <span className="text-[#555555]"> · {paymentMethodLabel(p.method) ?? 'Method not recorded'}</span>
+                                </p>
+                                {p.note && <p className="mt-0.5 whitespace-pre-line break-words text-[#555555]">{p.note}</p>}
+                                {undone && (
+                                    <p className="mt-0.5 break-words text-[#b02a64]">
+                                        Undone{p.voidedBy ? ` by ${p.voidedBy}` : ''}{p.voidedAt ? ` on ${formatDate(p.voidedAt)}` : ''}
+                                        {p.voidReason ? `: ${p.voidReason}` : ''}
+                                    </p>
+                                )}
+                            </div>
+                            <p className="shrink-0 text-xs text-[#555555] sm:text-sm">{formatDate(p.recordedAt, true) ?? '—'}</p>
+                        </div>
+                        {!undone && <PaymentActions assessmentId={detail.assessment.id} payment={p} />}
+                    </li>
+                )
+            })}
         </ul>
     )
 }
@@ -164,57 +240,68 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
     })
     const summary = summarizeDues(list, playerLabel)
     const outstanding = list.reduce((sum, d) => sum + Math.max(0, d.balanceCents), 0)
+    const paidCount = list.filter(d => d.balanceCents <= 0).length
+    const auto = automatic.ok ? normalizeAutomaticDues(automatic.data) : null
 
     return (
-        <MemberCard aria-labelledby="dues-heading">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <CardHeading id="dues-heading">Manage dues</CardHeading>
-                {dues.ok && list.length > 0 && (
-                    <p className="text-sm text-[#555555]">
-                        Outstanding <span className="font-claymore text-xl text-[#111111]">{formatCents(outstanding)}</span>
-                    </p>
-                )}
-            </div>
-            <p className="mt-2 text-sm text-[#555555]">
-                Assign dues to a member, then record cash, Venmo, Zelle, or check payments as they come in. Card payments
-                through Stripe record themselves.
-            </p>
+        <>
+            <AdminSection
+                id="who-has-paid"
+                title="Who has paid"
+                status={!dues.ok ? 'Couldn’t load' : list.length === 0
+                    ? 'No dues assigned yet'
+                    : <>{paidCount} of {list.length} paid in full · <span className="font-semibold text-[#111111]">{formatCents(outstanding)}</span> outstanding</>}
+            >
+                {summary.length > 0
+                    ? <DuesSummary groups={summary} />
+                    : <p className="text-[#555555]">Once dues are assigned, this shows who has paid, per dues item.</p>}
+            </AdminSection>
 
-            {/* 404 means dues are switched off (or this API predates automatic dues): hide the card. */}
+            <AdminSection
+                id="assign-dues"
+                title="Assign dues"
+                status="Bill one player or everyone at once"
+            >
+                <div className="space-y-3">
+                    {!members.ok && (
+                        <Notice tone="error" title="The member list couldn’t load">
+                            The club server didn’t respond. Refresh in a minute to assign dues.
+                        </Notice>
+                    )}
+                    {members.ok && <AssignDuesForm members={options} initialId={randomUUID()} />}
+                    {members.ok && options.length > 0 && (
+                        <p className="text-xs text-[#555555]">Only members who have signed in at least once are listed.</p>
+                    )}
+                </div>
+            </AdminSection>
+
             {(automatic.ok || automatic.status !== 404) && (
-                <section aria-labelledby="automatic-dues-heading" className="mt-6">
-                    <h3 id="automatic-dues-heading" className="text-lg font-semibold text-[#111111]">Automatic dues for new players</h3>
-                    <div className="mt-3">
-                        {automatic.ok ? (
-                            <AutomaticDuesForm saved={normalizeAutomaticDues(automatic.data)} />
-                        ) : (
-                            <Notice tone="error" title="Automatic dues couldn’t load">
-                                {automatic.status === 403
-                                    ? 'Only club admins can change automatic dues.'
-                                    : 'The club server didn’t respond. Refresh in a minute.'}
-                            </Notice>
-                        )}
-                    </div>
-                </section>
+                <AdminSection
+                    id="automatic-dues"
+                    title="Automatic dues"
+                    status={!auto ? 'Couldn’t load' : auto.enabled
+                        ? <>On · {auto.description} {formatCents(auto.amountCents)} for every new player</>
+                        : 'Off'}
+                >
+                    {auto ? (
+                        <AutomaticDuesForm saved={auto} />
+                    ) : (
+                        <Notice tone="error" title="Automatic dues couldn’t load">
+                            {automatic.status === 403
+                                ? 'Only club admins can change automatic dues.'
+                                : 'The club server didn’t respond. Refresh in a minute.'}
+                        </Notice>
+                    )}
+                </AdminSection>
             )}
 
-            <DuesSummary groups={summary} />
-
-            <h3 className="mt-8 text-lg font-semibold text-[#111111]">Assign dues</h3>
-            <div className="mt-3 space-y-3">
-                {!members.ok && (
-                    <Notice tone="error" title="The member list couldn’t load">
-                        The club server didn’t respond. Refresh in a minute to assign dues.
-                    </Notice>
-                )}
-                {members.ok && <AssignDuesForm members={options} initialId={randomUUID()} />}
-                {members.ok && options.length > 0 && (
-                    <p className="text-xs text-[#555555]">Only members who have signed in at least once are listed.</p>
-                )}
-            </div>
-
-            <h3 className="mt-8 text-lg font-semibold text-[#111111]">All dues</h3>
-            <div className="mt-3">
+            <AdminSection
+                id="all-dues"
+                title="Payments"
+                status={!dues.ok ? 'Couldn’t load' : list.length === 0
+                    ? 'Nothing yet'
+                    : 'Record cash, see each player’s history, edit notes, undo a payment'}
+            >
                 {!dues.ok ? (
                     <Notice tone="error" title="Dues couldn’t load">
                         {dues.status === 403
@@ -230,7 +317,7 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
                         ))}
                     </ul>
                 )}
-            </div>
-        </MemberCard>
+            </AdminSection>
+        </>
     )
 }

@@ -9,7 +9,7 @@ import 'package:claymores/data/club_time.dart';
 import 'package:claymores/data/member_repository.dart';
 import 'package:claymores/features/auth/auth_platform.dart';
 import 'package:claymores/features/auth/auth_service.dart';
-import 'package:claymores/features/profile/profile_page.dart';
+import 'package:claymores/features/club/my_dues.dart';
 import 'package:claymores/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -261,7 +261,7 @@ void main() {
           InMemorySharedPreferencesAsync.empty();
     });
 
-    testWidgets('profile: delete account confirms, signs out and says so', (
+    testWidgets('account: delete account confirms, signs out and says so', (
       tester,
     ) async {
       final server = FakeServer();
@@ -288,7 +288,9 @@ void main() {
       await tester.pumpAndSettle();
       links.add(Uri.parse('claymores://dues'));
       await tester.pumpAndSettle();
-      expect(find.text('PROFILE'), findsOneWidget);
+      await tester.tap(find.byTooltip('Account settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('ACCOUNT'), findsOneWidget);
 
       final delete = find.byKey(const Key('delete-account'));
       await tester.scrollUntilVisible(delete, 200);
@@ -313,7 +315,7 @@ void main() {
       expect(store.value, isNull);
     });
 
-    testWidgets('profile: the only admin is told why deletion failed', (
+    testWidgets('account: the only admin is told why deletion failed', (
       tester,
     ) async {
       final server = FakeServer()
@@ -339,6 +341,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       links.add(Uri.parse('claymores://dues'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Account settings'));
       await tester.pumpAndSettle();
       final delete = find.byKey(const Key('delete-account'));
       await tester.scrollUntilVisible(delete, 200);

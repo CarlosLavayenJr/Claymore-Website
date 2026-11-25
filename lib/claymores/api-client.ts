@@ -51,6 +51,10 @@ export type DuesPayment = {
     method?: PaymentMethod | string | null
     /** Admin-only; always null on the player routes. */
     note?: string | null
+    /** Admin-only: set when an admin undid the payment (it no longer counts). Players never see undone payments. */
+    voidedAt?: string | null
+    voidedBy?: string | null
+    voidReason?: string | null
 }
 export type DuesDetail = { assessment: DuesAssessment; payments: DuesPayment[] }
 
@@ -107,6 +111,18 @@ export type NewDuesPayment = {
     amountCents: number
     method: ManualPaymentMethod
     note?: string
+}
+
+/** An "anyone with the link" invite (GET /v1/admin/invite-links). */
+export type InviteLink = {
+    id: string
+    token: string
+    createdBy: string | null
+    createdAt: string
+    expiresAt: string
+    revokedAt: string | null
+    uses: number
+    active: boolean
 }
 
 export type JoinRequestStatus = 'none' | 'pending' | 'approved' | 'denied'
@@ -227,6 +243,12 @@ export class ClaymoresApiClient {
         return this.request<{ status: string; email?: string }>('POST', '/v1/auth/mobile/google/request-access', input)
     }
 
+    /** 200 {status: "joined" | "already_member"}; 410 when the link is expired, turned off, or wrong. */
+    redeemInvite(idToken: string, inviteToken: string) {
+        return this.request<{ status: 'joined' | 'already_member'; email?: string }>(
+            'POST', '/v1/auth/mobile/google/redeem-invite', { idToken, inviteToken })
+    }
+
     requestStatus(idToken: string) {
         return this.request<{ status: JoinRequestStatus }>('POST', '/v1/auth/mobile/google/request-status', { idToken })
     }
@@ -326,6 +348,30 @@ export class ClaymoresApiClient {
     }
 
     /** Records a cash/Venmo/Zelle/check/other payment. Idempotent on `input.id`. */
+    /** 204; 400 without a reason; 409 when it was already undone with another reason. */
+    voidDuesPayment(assessmentId: string, paymentId: string, reason: string) {
+        return this.request<null>('POST',
+            `/v1/admin/dues/${encodeURIComponent(assessmentId)}/payments/${encodeURIComponent(paymentId)}/void`, { reason })
+    }
+
+    /** 204; 400 when too long or a volunteer/waived credit would lose its note; 409 when undone. */
+    editDuesPaymentNote(assessmentId: string, paymentId: string, note: string | null) {
+        return this.request<null>('PATCH',
+            `/v1/admin/dues/${encodeURIComponent(assessmentId)}/payments/${encodeURIComponent(paymentId)}`, { note })
+    }
+
+    inviteLinks() {
+        return this.request<InviteLink[]>('GET', '/v1/admin/invite-links')
+    }
+
+    createInviteLink(expiresInDays: number) {
+        return this.request<InviteLink>('POST', '/v1/admin/invite-links', { expiresInDays })
+    }
+
+    revokeInviteLink(id: string) {
+        return this.request<null>('DELETE', `/v1/admin/invite-links/${encodeURIComponent(id)}`)
+    }
+
     recordDuesPayment(assessmentId: string, input: NewDuesPayment) {
         return this.request<unknown>('POST', `/v1/admin/dues/${encodeURIComponent(assessmentId)}/payments`, input)
     }

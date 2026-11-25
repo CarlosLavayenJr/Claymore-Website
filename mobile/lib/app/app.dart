@@ -63,7 +63,11 @@ class ClaymoresApp extends StatefulWidget {
     this.teams,
     this.deepLinks = const Stream.empty(),
     this.playIntro = true,
+    this.duesEnabled = AppConfig.duesEnabled,
   });
+
+  /// Shows the member's dues on the Club tab; see [AppConfig.duesEnabled].
+  final bool duesEnabled;
 
   /// The crest's launch animation (see [LaunchIntro]).
   final bool playIntro;
@@ -116,6 +120,7 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       admin: widget.admin ?? (api == null ? null : AdminRepository(api)),
       availability: AvailabilityStore(prefs),
       prefs: prefs,
+      duesEnabled: widget.duesEnabled,
     );
     unawaited(auth.restore());
     // A restore that failed offline at launch is retried when the app comes

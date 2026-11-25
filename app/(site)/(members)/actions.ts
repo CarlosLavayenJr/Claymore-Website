@@ -7,6 +7,7 @@ import { signIn, signOut } from '@/auth'
 import { ClaymoresApiClient } from '@/lib/claymores/api-client'
 import { apiBaseUrl, devSignInEnabled, memberAuthEnabled, SIGNED_IN_HINT_COOKIE } from '@/lib/claymores/auth-env'
 import { getMemberToken, safeCallbackUrl } from '@/lib/claymores/member'
+import { isInviteToken, setPendingInvite } from '@/lib/claymores/pending-invite'
 
 export async function signInWithGoogle(formData: FormData) {
     if (!memberAuthEnabled()) redirect('/sign-in')
@@ -35,4 +36,11 @@ export async function signOutMember() {
     }
     ;(await cookies()).delete(SIGNED_IN_HINT_COOKIE)
     await signOut({ redirectTo: '/sign-in?signedOut=1' })
+}
+
+/** The invite page's button: remember the link, then sign in with Google (auth.ts redeems it). */
+export async function joinWithInviteLink(token: string) {
+    if (!memberAuthEnabled() || !isInviteToken(token)) redirect('/sign-in')
+    await setPendingInvite(token)
+    await signIn('google', { redirectTo: '/account?joined=1' })
 }

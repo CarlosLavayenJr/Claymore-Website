@@ -184,6 +184,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
             </MemberHeader>
 
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+                {params.joined === '1' && (
+                    <Notice tone="success" title="Welcome to the Claymores">
+                        You’re in as a player. Your dues show here once the club assigns them, and you can sign in to the
+                        Claymores app with the same Google account.
+                    </Notice>
+                )}
                 {checkout === 'returned' && (
                     <Notice tone="success" title="Thanks — your payment is processing">
                         Your balance updates as soon as Stripe confirms the payment, usually within a few minutes.
