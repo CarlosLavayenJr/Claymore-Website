@@ -5,6 +5,7 @@ import { CardHeading, formatDate, MemberCard, Notice } from '@/components/member
 import {
     canRemoveDues,
     centsToDollarsInput,
+    creditedCentsOf,
     mapWithConcurrency,
     memberLabel,
     normalizeAutomaticDues,
@@ -86,6 +87,11 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
                         <Money label="Paid" cents={current.paidCents} />
                         <Money label="Balance" cents={current.balanceCents} emphasis />
                     </span>
+                    {creditedCentsOf(current) > 0 && (
+                        <span className="block text-sm text-[#555555]">
+                            Includes {formatCents(creditedCentsOf(current))} credited (volunteer/waived)
+                        </span>
+                    )}
                     {pending && (
                         <span className="block text-sm text-[#555555]">
                             Card checkout in progress: <span className="font-semibold text-[#111111]">{formatCents(current.pendingCheckoutCents)}</span>

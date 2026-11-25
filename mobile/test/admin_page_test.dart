@@ -59,6 +59,7 @@ Map<String, Object?> assessment(
   String id,
   String subject, {
   int paid = 0,
+  int credited = 0,
   int pending = 0,
   String description = '2026-27 Season dues',
 }) => {
@@ -68,6 +69,7 @@ Map<String, Object?> assessment(
   'amountCents': 12500,
   'dueDate': null,
   'paidCents': paid,
+  'creditedCents': credited,
   'balanceCents': 12500 - paid,
   'pendingCheckoutCents': pending,
 };
@@ -279,6 +281,89 @@ void main() {
     expect(ids, hasLength(2));
     expect(ids.first, ids.last);
     await finish(tester, services);
+  });
+
+  testWidgets('a volunteer credit needs a note before it is sent', (
+    tester,
+  ) async {
+    respond = (request) => switch (request.url.path) {
+      '/v1/admin/dues' => http.Response(
+        jsonEncode([
+          assessment('d1', 'alex', paid: 12500, credited: 2500),
+          assessment('d2', 'blake'),
+        ]),
+        200,
+      ),
+      '/v1/admin/dues/d2/payments' => http.Response('{}', 200),
+      _ => http.Response('[]', 200),
+    };
+    final services = await pump(tester, const AdminPage());
+    expect(
+      find.text('\$100 collected · \$25 credited · \$125 outstanding'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('2026-27 Season dues · \$125 each'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Former member').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Not money: Volunteered · Waived'), findsOneWidget);
+    expect(find.text('Note (optional)'), findsOneWidget);
+
+    await tester.tap(find.text('Volunteered'));
+    await tester.pump();
+    expect(find.text('What did they do? e.g. Reffed U12 game'), findsOneWidget);
+    await tester.tap(find.text('Waived'));
+    await tester.pump();
+    expect(find.text('Why? e.g. Scholarship, injury'), findsOneWidget);
+    await tester.tap(find.text('Volunteered'));
+    await tester.pump();
+
+    final save = find.byKey(const Key('save-payment'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('Add a note saying what they did.'), findsOneWidget);
+    expect(requests.where((r) => r.url.path.endsWith('/payments')), isEmpty);
+
+    await tester.enterText(
+      find.byKey(const Key('payment-note')),
+      '  Reffed U12 game ',
+    );
+    await tester.pump();
+    expect(find.text('Add a note saying what they did.'), findsNothing);
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    final post = requests.singleWhere((r) => r.url.path.endsWith('/payments'));
+    final body = jsonDecode(post.body) as Map<String, dynamic>;
+    expect(body['method'], 'volunteer');
+    expect(body['note'], 'Reffed U12 game');
+    expect(body['amountCents'], 12500);
+    expect(find.text('RECORD PAYMENT'), findsNothing);
+    await finish(tester, services);
+  });
+
+  testWidgets('members see what part of their dues was credited', (
+    tester,
+  ) async {
+    Widget tile(int credited) => MaterialApp(
+      theme: buildClaymoresTheme(),
+      home: Scaffold(
+        body: DuesTile(
+          dues: DuesAssessment.fromJson(
+            assessment('d1', 'me', paid: 7500, credited: credited),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(tile(2500));
+    expect(
+      find.text('Includes \$25.00 credited (volunteer/waived)'),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(tile(0));
+    expect(find.textContaining('credited'), findsNothing);
   });
 
   testWidgets('dues switched off, and a join request approved', (tester) async {

@@ -454,6 +454,16 @@ class DuesTile extends StatelessWidget {
                   fontFeatures: tabularFigures,
                 ),
               ),
+              if (dues.creditedCents > 0) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Includes ${formatCents(dues.creditedCents)} credited '
+                  '(volunteer/waived)',
+                  style: textTheme.bodySmall?.copyWith(
+                    fontFeatures: tabularFigures,
+                  ),
+                ),
+              ],
               if (dues.hasPendingCheckout) ...[
                 const SizedBox(height: 6),
                 Text(

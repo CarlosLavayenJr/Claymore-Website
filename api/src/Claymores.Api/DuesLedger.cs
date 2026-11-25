@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Npgsql;
 
+/// <param name="PaidCents">Everything that reduces the balance: money and credits.</param>
+/// <param name="CreditedCents">The part of <paramref name="PaidCents"/> that isn't money: volunteered or waived.</param>
 internal sealed record DuesAssessment(
     Guid Id, string PlayerSubject, string Description, int AmountCents, DateOnly? DueDate,
-    long PaidCents, long BalanceCents, long PendingCheckoutCents);
-/// <param name="Method">stripe, cash, venmo, zelle, check or other; null for entries made before methods existed.</param>
+    long PaidCents, long BalanceCents, long PendingCheckoutCents, long CreditedCents = 0);
+/// <param name="Method">stripe, cash, venmo, zelle, check, other, volunteer or waived; null for entries made before methods existed.</param>
 /// <param name="Note">The treasurer's note. Admin views only: always null in a player's own history.</param>
 internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt, string? Method = null, string? Note = null);
 internal sealed record DuesDetail(DuesAssessment Assessment, IReadOnlyList<DuesPayment> Payments);
@@ -19,12 +21,16 @@ internal sealed record CreateAssessment(Guid Id, string? PlayerSubject, string? 
 internal sealed record AssignToAll(Guid BatchId, string? Description, int AmountCents, DateOnly? DueDate, bool SkipExisting = true);
 
 internal sealed record AssignToAllResult(int Created, int Skipped, int Members);
-/// <param name="Method">How the club received it: cash, venmo, zelle, check or other (default other).</param>
-/// <param name="Note">Optional, up to 500 characters, shown to admins only.</param>
+/// <param name="Method">How the club received it: cash, venmo, zelle, check or other (default other); or a credit
+/// that isn't money: volunteer (time or work instead of paying) or waived (the club forgives it).</param>
+/// <param name="Note">Up to 500 characters, shown to admins only. Required for volunteer and waived (what they did, or why).</param>
 internal sealed record RecordDuesPayment(Guid Id, int AmountCents, string? Method = null, string? Note = null)
 {
     /// <summary>Methods a treasurer can record by hand. "stripe" is reserved for checkout payments.</summary>
-    public static readonly string[] ManualMethods = ["cash", "venmo", "zelle", "check", "other"];
+    public static readonly string[] ManualMethods = ["cash", "venmo", "zelle", "check", "other", "volunteer", "waived"];
+
+    /// <summary>Credits that reduce the balance but aren't money.</summary>
+    public static readonly string[] CreditMethods = ["volunteer", "waived"];
     public const int MaxNoteLength = 500;
 
     /// <summary>The trimmed method (other when blank) and note (null when blank), or null when invalid.</summary>
@@ -33,6 +39,7 @@ internal sealed record RecordDuesPayment(Guid Id, int AmountCents, string? Metho
         var method = string.IsNullOrWhiteSpace(Method) ? "other" : Method.Trim().ToLowerInvariant();
         var note = string.IsNullOrWhiteSpace(Note) ? null : Note.Trim();
         if (!ManualMethods.Contains(method) || note?.Length > MaxNoteLength) return null;
+        if (CreditMethods.Contains(method) && note is null) return null;
         return (method, note);
     }
 }
@@ -43,7 +50,9 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         SELECT a.id, a.player_subject, a.description, a.amount_cents, a.due_date,
           COALESCE((SELECT sum(amount_cents) FROM dues_payments WHERE assessment_id = a.id), 0),
           COALESCE((SELECT sum(amount_cents) FROM dues_checkouts
-                    WHERE assessment_id = a.id AND status = 'pending'), 0)
+                    WHERE assessment_id = a.id AND status = 'pending'), 0),
+          COALESCE((SELECT sum(amount_cents) FROM dues_payments
+                    WHERE assessment_id = a.id AND method IN ('volunteer', 'waived')), 0)
         FROM dues_assessments a
         WHERE a.removed_at IS NULL
         """;
@@ -264,7 +273,8 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         var amount = reader.GetInt32(3);
         var paid = reader.GetInt64(5);
         return new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), amount,
-            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4), paid, amount - paid, reader.GetInt64(6));
+            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4), paid, amount - paid, reader.GetInt64(6),
+            reader.GetInt64(7));
     }
 }
 
@@ -368,7 +378,7 @@ internal static class DuesEndpoints
                 PaymentResult.Recorded => Results.Ok(new { request.Id }),
                 PaymentResult.NotFound => Results.NotFound(),
                 PaymentResult.Overpayment => Results.Conflict(new { error = "Payment exceeds the available balance after any pending checkout." }),
-                PaymentResult.Invalid => Results.BadRequest(new { error = "Method must be cash, venmo, zelle, check or other, and the note at most 500 characters." }),
+                PaymentResult.Invalid => Results.BadRequest(new { error = "Method must be cash, venmo, zelle, check, other, volunteer or waived, the note at most 500 characters, and volunteer or waived need a note saying what they did or why." }),
                 _ => Results.Conflict(new { error = "Payment ID is already in use." })
             };
         }).AddEndpointFilter(SameOrigin)

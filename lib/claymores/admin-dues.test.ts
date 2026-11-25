@@ -14,6 +14,13 @@ import {
     sortMembers,
     summarizeDues,
     formatSummaryCents,
+    creditedCentsOf,
+    duesMoneyLine,
+    duesSummaryTotals,
+    isCreditMethod,
+    MANUAL_PAYMENT_METHODS,
+    notePlaceholder,
+    noteRequiredMessage,
 } from './admin-dues'
 import { ClaymoresApiClient, UNREACHABLE, type ApiResult, type FetchLike } from './api-client'
 
@@ -44,6 +51,8 @@ test('labels payment methods and members', () => {
     assert.equal(paymentMethodLabel('stripe'), 'Card (Stripe)')
     assert.equal(paymentMethodLabel('cash'), 'Cash')
     assert.equal(paymentMethodLabel('zelle'), 'Zelle')
+    assert.equal(paymentMethodLabel('volunteer'), 'Volunteered')
+    assert.equal(paymentMethodLabel('waived'), 'Waived')
     assert.equal(paymentMethodLabel('something-new'), 'Other')
     assert.equal(paymentMethodLabel(null), null)
     assert.equal(paymentMethodLabel(undefined), null)
@@ -278,8 +287,9 @@ test('automatic dues and remove: client routes and write outcomes', async () => 
     assert.equal(down.kind === 'error' && down.message, 'The club server didn’t respond. Try again in a minute.')
 })
 
-const dues = (playerSubject: string, description: string, amountCents: number, paidCents: number, pendingCheckoutCents = 0) => ({
+const dues = (playerSubject: string, description: string, amountCents: number, paidCents: number, pendingCheckoutCents = 0, creditedCents?: number) => ({
     playerSubject, description, amountCents, paidCents, balanceCents: amountCents - paidCents, pendingCheckoutCents,
+    ...(creditedCents === undefined ? {} : { creditedCents }),
 })
 const names = new Map([['a', 'Alice'], ['b', 'bob'], ['c', 'Cara'], ['d', 'Dan']])
 
@@ -342,4 +352,72 @@ test('summarizeDues: mixed amounts have no single amount; most outstanding first
 test('formatSummaryCents drops cents only for whole dollars', () => {
     assert.equal(formatSummaryCents(195000), '$1,950')
     assert.equal(formatSummaryCents(2550), '$25.50')
+})
+
+test('volunteer and waived are credit methods offered in the picker, and need a note', () => {
+    assert.deepEqual(
+        MANUAL_PAYMENT_METHODS.filter(m => m.kind === 'credit').map(m => [m.value, m.option]),
+        [['volunteer', 'Volunteered (time, not money)'], ['waived', 'Waived']],
+    )
+    assert.equal(isCreditMethod('volunteer'), true)
+    assert.equal(isCreditMethod('waived'), true)
+    assert.equal(isCreditMethod('cash'), false)
+    assert.equal(isCreditMethod('stripe'), false)
+    assert.equal(isCreditMethod(null), false)
+    assert.equal(noteRequiredMessage('cash'), null)
+    assert.match(noteRequiredMessage('volunteer') ?? '', /what they did/)
+    assert.match(noteRequiredMessage('waived') ?? '', /why/)
+    assert.equal(notePlaceholder('volunteer'), 'What did they do? e.g. Reffed U12 game 3/14')
+    assert.equal(notePlaceholder('waived'), 'Why? e.g. Scholarship, injury')
+    assert.equal(notePlaceholder('cash'), 'Paid cash at practice 11/20')
+})
+
+test('parseRecordPaymentForm: volunteer and waived require a note; with one they parse', () => {
+    for (const method of ['volunteer', 'waived'] as const) {
+        const blank = parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '50', method, note: '   ' }))
+        assert.equal(blank.ok, false, method)
+        assert.equal(!blank.ok && blank.message, noteRequiredMessage(method))
+        assert.equal(blank.values.method, method) // echoed back so the picker keeps it
+
+        const ok = parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '50', method, note: 'Reffed U12 game 3/14' }))
+        assert.deepEqual(ok.ok && ok.value.payment, { id: ID, amountCents: 5000, method, note: 'Reffed U12 game 3/14' })
+    }
+})
+
+test('creditedCentsOf treats a missing or odd value as 0 and never exceeds paid', () => {
+    assert.equal(creditedCentsOf({ paidCents: 5000 }), 0)
+    assert.equal(creditedCentsOf({ paidCents: 5000, creditedCents: 2000 }), 2000)
+    assert.equal(creditedCentsOf({ paidCents: 5000, creditedCents: -1 }), 0)
+    assert.equal(creditedCentsOf({ paidCents: 1000, creditedCents: 2000 }), 1000)
+})
+
+test('summarizeDues: collected is money only; credit is split out but still counts toward paid status', () => {
+    const [g] = summarizeDues([
+        dues('a', 'Season dues', 10000, 10000, 0, 10000), // fully waived
+        dues('b', 'Season dues', 10000, 10000, 0, 2500),  // $75 money + $25 volunteered
+        dues('c', 'Season dues', 10000, 4000, 0, 4000),   // partly, all volunteered
+        dues('d', 'Season dues', 10000, 3000),            // partly, money (no creditedCents from older API)
+        dues('x', 'Season dues', 10000, 0),
+    ], names)
+    assert.deepEqual([g.paidInFull, g.partlyPaid, g.unpaid], [2, 2, 1])
+    assert.equal(g.collectedCents, 7500 + 3000)
+    assert.equal(g.creditedCents, 10000 + 2500 + 4000)
+    assert.equal(g.outstandingCents, 6000 + 7000 + 10000)
+    assert.equal(g.paidInFullCents, 7500)
+    assert.equal(g.paidInFullCreditedCents, 12500)
+    assert.equal(g.partlyPaidCents, 3000)
+    assert.equal(g.partlyPaidCreditedCents, 4000)
+    assert.deepEqual(g.members.paid.map(m => m.label), ['Alice', 'bob'])
+})
+
+test('summary money line splits collected and credited, and omits credited when 0', () => {
+    const groups = summarizeDues([
+        dues('a', 'Season dues', 150000, 120000, 0, 25000),
+        dues('b', 'Kit fee', 100000, 100000),
+        dues('c', 'Kit fee', 80000, 0),
+    ], names)
+    const totals = duesSummaryTotals(groups)
+    assert.deepEqual(totals, { collectedCents: 195000, creditedCents: 25000, outstandingCents: 110000 })
+    assert.equal(duesMoneyLine(totals), '$1,950 collected · $250 credited · $1,100 outstanding')
+    assert.equal(duesMoneyLine({ collectedCents: 195000, creditedCents: 0, outstandingCents: 80000 }), '$1,950 collected · $800 outstanding')
 })

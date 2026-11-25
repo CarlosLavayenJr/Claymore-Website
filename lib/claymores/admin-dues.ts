@@ -24,13 +24,50 @@ export const DUES_LIMITS = {
 
 export const DEFAULT_DUES_DESCRIPTION = 'Season dues'
 
-export const MANUAL_PAYMENT_METHODS: readonly { value: ManualPaymentMethod; label: string }[] = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'venmo', label: 'Venmo' },
-    { value: 'zelle', label: 'Zelle' },
-    { value: 'check', label: 'Check' },
-    { value: 'other', label: 'Other' },
+/**
+ * Methods an admin can record by hand. `kind: 'credit'` methods count toward the balance but
+ * aren't money (time volunteered, or dues the club forgives); the API requires a note for them.
+ * `option` is the wording in the record-payment picker; `label` is how history lines show it.
+ */
+export const MANUAL_PAYMENT_METHODS: readonly {
+    value: ManualPaymentMethod
+    label: string
+    option: string
+    kind: 'money' | 'credit'
+}[] = [
+    { value: 'cash', label: 'Cash', option: 'Cash', kind: 'money' },
+    { value: 'venmo', label: 'Venmo', option: 'Venmo', kind: 'money' },
+    { value: 'zelle', label: 'Zelle', option: 'Zelle', kind: 'money' },
+    { value: 'check', label: 'Check', option: 'Check', kind: 'money' },
+    { value: 'other', label: 'Other', option: 'Other', kind: 'money' },
+    { value: 'volunteer', label: 'Volunteered', option: 'Volunteered (time, not money)', kind: 'credit' },
+    { value: 'waived', label: 'Waived', option: 'Waived', kind: 'credit' },
 ]
+
+/** True for volunteer/waived: credit toward dues, not money, and a note is required. */
+export function isCreditMethod(method: string | null | undefined): boolean {
+    return MANUAL_PAYMENT_METHODS.some(m => m.value === method && m.kind === 'credit')
+}
+
+/** Placeholder for the record-payment note, prompting for what a credit needs explained. */
+export function notePlaceholder(method: string | null | undefined): string {
+    if (method === 'volunteer') return 'What did they do? e.g. Reffed U12 game 3/14'
+    if (method === 'waived') return 'Why? e.g. Scholarship, injury'
+    return 'Paid cash at practice 11/20'
+}
+
+/** Why a credit can't be saved without a note; null when the method doesn't need one. */
+export function noteRequiredMessage(method: string | null | undefined): string | null {
+    if (method === 'volunteer') return 'Add a note saying what they did for the club (e.g. “Reffed U12 game 3/14”).'
+    if (method === 'waived') return 'Add a note saying why the dues are waived (e.g. “Scholarship”).'
+    return null
+}
+
+/** Credited cents on an assessment (volunteer/waived), clamped to 0..paid; missing reads as 0. */
+export function creditedCentsOf(dues: Pick<DuesAssessment, 'paidCents' | 'creditedCents'>): number {
+    const credited = typeof dues.creditedCents === 'number' && Number.isFinite(dues.creditedCents) ? dues.creditedCents : 0
+    return Math.min(Math.max(0, credited), Math.max(0, dues.paidCents))
+}
 
 const METHOD_LABELS: Record<string, string> = {
     stripe: 'Card (Stripe)',
@@ -159,6 +196,8 @@ export function parseRecordPaymentForm(form: FormLike): Parsed<{ assessmentId: s
     const amount = parsePositiveDollars(values.amount)
     if (!amount.ok) return { ok: false, message: amount.message, values }
     if (!isManualPaymentMethod(values.method)) return { ok: false, message: 'Choose how they paid.', values }
+    const noteNeeded = noteRequiredMessage(values.method)
+    if (noteNeeded && !values.note) return { ok: false, message: noteNeeded, values }
     if (values.note.length > DUES_LIMITS.note) {
         return { ok: false, message: `Keep the note to ${DUES_LIMITS.note} characters or fewer.`, values }
     }
@@ -341,17 +380,27 @@ export type DuesSummaryGroup = {
     unpaid: number
     /** Sum of all amounts charged. */
     totalCents: number
+    /** Money actually received (paid minus volunteer/waived credit). */
     collectedCents: number
+    /** Volunteer/waived credit: counts toward balances, but isn't money. */
+    creditedCents: number
     outstandingCents: number
     pendingCheckoutCents: number
-    /** Collected from items paid in full, capped at each item's amount (for the progress bar). */
+    /**
+     * Money from items paid in full, capped at each item's amount (for the progress bar).
+     * Credit on those items is in `paidInFullCreditedCents`, so the two never overlap.
+     */
     paidInFullCents: number
-    /** Collected from partly paid items (for the progress bar). */
+    /** Credit on items paid in full, within each item's amount (for the progress bar). */
+    paidInFullCreditedCents: number
+    /** Money from partly paid items (for the progress bar). */
     partlyPaidCents: number
+    /** Credit on partly paid items (for the progress bar). */
+    partlyPaidCreditedCents: number
     members: { paid: DuesSummaryMember[]; partly: DuesSummaryMember[]; unpaid: DuesSummaryMember[] }
 }
 
-type SummaryAssessment = Pick<DuesAssessment, 'description' | 'amountCents' | 'paidCents' | 'balanceCents' | 'pendingCheckoutCents'> & {
+type SummaryAssessment = Pick<DuesAssessment, 'description' | 'amountCents' | 'paidCents' | 'creditedCents' | 'balanceCents' | 'pendingCheckoutCents'> & {
     playerSubject: string
 }
 
@@ -397,26 +446,38 @@ export function summarizeDues(
             unpaid: 0,
             totalCents: 0,
             collectedCents: 0,
+            creditedCents: 0,
             outstandingCents: 0,
             pendingCheckoutCents: 0,
             paidInFullCents: 0,
+            paidInFullCreditedCents: 0,
             partlyPaidCents: 0,
+            partlyPaidCreditedCents: 0,
             members: { paid: [], partly: [], unpaid: [] },
         }
         for (const a of items) {
             const paid = Math.max(0, a.paidCents)
+            const credited = creditedCentsOf(a)
+            const money = paid - credited
             const member = { label: labelFor(a.playerSubject), balanceCents: Math.max(0, a.balanceCents) }
             s.totalCents += Math.max(0, a.amountCents)
-            s.collectedCents += paid
+            s.collectedCents += money
+            s.creditedCents += credited
             s.outstandingCents += member.balanceCents
             s.pendingCheckoutCents += Math.max(0, a.pendingCheckoutCents)
+            // Status uses the balance, so credit counts toward being paid.
             if (a.balanceCents <= 0) {
                 s.paidInFull++
-                s.paidInFullCents += Math.min(paid, Math.max(0, a.amountCents))
+                // For the bar: credit first, then money up to the amount (an overpayment is money).
+                const cap = Math.max(0, a.amountCents)
+                const creditPart = Math.min(credited, cap)
+                s.paidInFullCreditedCents += creditPart
+                s.paidInFullCents += Math.min(money, cap - creditPart)
                 s.members.paid.push(member)
             } else if (paid > 0) {
                 s.partlyPaid++
-                s.partlyPaidCents += paid
+                s.partlyPaidCents += money
+                s.partlyPaidCreditedCents += credited
                 s.members.partly.push(member)
             } else {
                 s.unpaid++
@@ -432,6 +493,34 @@ export function summarizeDues(
     return summaries.sort((a, b) =>
         b.outstandingCents - a.outstandingCents
         || a.description.localeCompare(b.description, 'en', { sensitivity: 'base' }))
+}
+
+/** Club-wide totals across every summary group. */
+export function duesSummaryTotals(groups: readonly MoneyTotals[]): MoneyTotals {
+    return groups.reduce(
+        (t, g) => ({
+            collectedCents: t.collectedCents + g.collectedCents,
+            creditedCents: t.creditedCents + g.creditedCents,
+            outstandingCents: t.outstandingCents + g.outstandingCents,
+        }),
+        { collectedCents: 0, creditedCents: 0, outstandingCents: 0 },
+    )
+}
+
+type MoneyTotals = { collectedCents: number; creditedCents: number; outstandingCents: number }
+
+/** The parts of a summary money line, in order; "credited" only when there is some. */
+export function duesMoneyParts(t: MoneyTotals): { amount: string; label: 'collected' | 'credited' | 'outstanding' }[] {
+    return [
+        { amount: formatSummaryCents(t.collectedCents), label: 'collected' as const },
+        ...(t.creditedCents > 0 ? [{ amount: formatSummaryCents(t.creditedCents), label: 'credited' as const }] : []),
+        { amount: formatSummaryCents(t.outstandingCents), label: 'outstanding' as const },
+    ]
+}
+
+/** "$1,950 collected · $250 credited · $800 outstanding" (credited omitted when 0). */
+export function duesMoneyLine(t: MoneyTotals): string {
+    return duesMoneyParts(t).map(p => `${p.amount} ${p.label}`).join(' · ')
 }
 
 /** Dollars for summary lines: "$125" for whole amounts, "$25.50" otherwise. */

@@ -15,7 +15,7 @@ import {
     RoleBadge,
     secondaryCtaClass,
 } from '@/components/members/member-ui'
-import { paymentMethodLabel } from '@/lib/claymores/admin-dues'
+import { creditedCentsOf, paymentMethodLabel } from '@/lib/claymores/admin-dues'
 import { formatCents, type DuesAssessment, type DuesDetail } from '@/lib/claymores/api-client'
 import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { checkoutReturnStatus } from '@/lib/claymores/checkout'
@@ -51,6 +51,7 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
     const due = formatDate(dues.dueDate)
     const paidInFull = dues.balanceCents <= 0
     const pending = dues.pendingCheckoutCents > 0
+    const credited = creditedCentsOf(dues)
     return (
         <article className="rounded-lg border border-[#EAEAEA] p-4 sm:p-5" aria-labelledby={`dues-${dues.id}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -73,6 +74,9 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
                 <Amount label="Paid" cents={dues.paidCents} />
                 <Amount label="Balance" cents={dues.balanceCents} emphasis />
             </dl>
+            {credited > 0 && (
+                <p className="mt-2 text-sm text-[#555555]">Includes {formatCents(credited)} credited (volunteer/waived)</p>
+            )}
 
             {pending && (
                 <Notice tone="info" title={`A payment of ${formatCents(dues.pendingCheckoutCents)} is already in progress`} className="mt-4">

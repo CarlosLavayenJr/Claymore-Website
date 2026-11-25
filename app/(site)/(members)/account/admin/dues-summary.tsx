@@ -1,6 +1,36 @@
-import { formatSummaryCents, type DuesSummaryGroup, type DuesSummaryMember } from '@/lib/claymores/admin-dues'
+import {
+    duesMoneyParts,
+    duesSummaryTotals,
+    formatSummaryCents,
+    type DuesSummaryGroup,
+    type DuesSummaryMember,
+} from '@/lib/claymores/admin-dues'
 
 const pct = (part: number, total: number) => (total > 0 ? Math.min(100, Math.max(0, (part / total) * 100)) : 0)
+
+/** Volunteer/waived credit in the progress bar: light steel blue with diagonal stripes. */
+const creditStyle = {
+    backgroundColor: 'rgba(119, 195, 239, 0.35)',
+    backgroundImage: 'repeating-linear-gradient(135deg, rgba(119, 195, 239, 0.9) 0 3px, transparent 3px 6px)',
+}
+
+/** "$1,950 collected · $250 credited · $800 outstanding", credited only when there is some. */
+function MoneyLine({ totals }: { totals: Parameters<typeof duesMoneyParts>[0] }) {
+    return (
+        <>
+            {duesMoneyParts(totals).map((part, i) => (
+                <span key={part.label}>
+                    {i > 0 && ' · '}
+                    {part.label === 'credited' && (
+                        <span aria-hidden className="mr-1 inline-block h-2.5 w-2.5 rounded-full align-[-1px]" style={creditStyle} />
+                    )}
+                    <span className="font-semibold text-[#111111]">{part.amount}</span> {part.label}
+                    {part.label === 'credited' && <span className="sr-only"> (volunteered or waived, not money)</span>}
+                </span>
+            ))}
+        </>
+    )
+}
 
 function NameList({ title, people, showBalance, tone }: {
     title: string
@@ -34,8 +64,10 @@ function NameList({ title, people, showBalance, tone }: {
 }
 
 function GroupCard({ group }: { group: DuesSummaryGroup }) {
+    // Order: money paid in full (blue), all volunteer/waived credit (striped), money partly paid (pink).
     const full = pct(group.paidInFullCents, group.totalCents)
-    const partly = Math.min(100 - full, pct(group.partlyPaidCents, group.totalCents))
+    const credited = Math.min(100 - full, pct(group.paidInFullCreditedCents + group.partlyPaidCreditedCents, group.totalCents))
+    const partly = Math.min(100 - full - credited, pct(group.partlyPaidCents, group.totalCents))
     const counts = [
         group.partlyPaid > 0 && `${group.partlyPaid} partly paid`,
         group.unpaid > 0 && `${group.unpaid} unpaid`,
@@ -59,6 +91,7 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
                     </span>
                     <span aria-hidden className="flex h-2.5 w-full overflow-hidden rounded-full bg-[#EAEAEA]">
                         <span className="h-full bg-[#77c3ef]" style={{ width: `${full}%` }} />
+                        {credited > 0 && <span className="h-full" style={{ ...creditStyle, width: `${credited}%` }} />}
                         <span className="h-full bg-[#fd80b5]/50" style={{ width: `${partly}%` }} />
                     </span>
                     <span className="block text-sm text-[#111111]">
@@ -66,9 +99,7 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
                         {counts.map(c => <span key={String(c)} className="text-[#555555]"> · {c}</span>)}
                     </span>
                     <span className="block text-sm text-[#555555]">
-                        <span className="font-semibold text-[#111111]">{formatSummaryCents(group.collectedCents)}</span> collected
-                        {' · '}
-                        <span className="font-semibold text-[#111111]">{formatSummaryCents(group.outstandingCents)}</span> outstanding
+                        <MoneyLine totals={group} />
                         {group.pendingCheckoutCents > 0 && <> · {formatSummaryCents(group.pendingCheckoutCents)} in card checkout</>}
                     </span>
                     <span className="text-sm font-semibold text-[#fd80b5] group-open:hidden">Show who has paid</span>
@@ -87,16 +118,13 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
 /** "Who has paid what": one card per dues description plus a club-wide total. */
 export function DuesSummary({ groups }: { groups: DuesSummaryGroup[] }) {
     if (groups.length === 0) return null
-    const collected = groups.reduce((sum, g) => sum + g.collectedCents, 0)
-    const outstanding = groups.reduce((sum, g) => sum + g.outstandingCents, 0)
+    const totals = duesSummaryTotals(groups)
 
     return (
         <section aria-labelledby="dues-summary-heading" className="mt-8">
             <h3 id="dues-summary-heading" className="text-lg font-semibold text-[#111111]">Who has paid</h3>
             <p className="mt-1 text-sm text-[#555555]">
-                Club total: <span className="font-semibold text-[#111111]">{formatSummaryCents(collected)}</span> collected
-                {' · '}
-                <span className="font-semibold text-[#111111]">{formatSummaryCents(outstanding)}</span> outstanding
+                Club total: <MoneyLine totals={totals} />
             </p>
             <ul className="mt-3 space-y-3">
                 {groups.map(g => <GroupCard key={g.description.toLowerCase()} group={g} />)}
