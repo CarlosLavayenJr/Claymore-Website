@@ -8,7 +8,17 @@ internal sealed record DuesAssessment(
     long PaidCents, long BalanceCents, long PendingCheckoutCents, long CreditedCents = 0);
 /// <param name="Method">stripe, cash, venmo, zelle, check, other, volunteer or waived; null for entries made before methods existed.</param>
 /// <param name="Note">The treasurer's note. Admin views only: always null in a player's own history.</param>
-internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt, string? Method = null, string? Note = null);
+/// <param name="VoidedAt">When an admin undid it; it no longer counts. Admin views only: a player's history leaves voided payments out.</param>
+/// <param name="VoidedBy">Who undid it (email or subject). Admin views only.</param>
+/// <param name="VoidReason">Why it was undone. Admin views only.</param>
+internal sealed record DuesPayment(Guid Id, int AmountCents, DateTime RecordedAt, string? Method = null, string? Note = null,
+    DateTime? VoidedAt = null, string? VoidedBy = null, string? VoidReason = null);
+
+/// <summary>Undo a payment: it stays in the history, crossed out, and stops counting.</summary>
+internal sealed record VoidDuesPayment(string? Reason);
+
+/// <summary>Change the treasurer's note on a payment. Volunteer and waived credits still need one.</summary>
+internal sealed record EditPaymentNote(string? Note);
 internal sealed record DuesDetail(DuesAssessment Assessment, IReadOnlyList<DuesPayment> Payments);
 internal sealed record CreateAssessment(Guid Id, string? PlayerSubject, string? Description, int AmountCents, DateOnly? DueDate);
 
@@ -48,11 +58,12 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 {
     private const string AssessmentQuery = """
         SELECT a.id, a.player_subject, a.description, a.amount_cents, a.due_date,
-          COALESCE((SELECT sum(amount_cents) FROM dues_payments WHERE assessment_id = a.id), 0),
+          COALESCE((SELECT sum(amount_cents) FROM dues_payments
+                    WHERE assessment_id = a.id AND voided_at IS NULL), 0),
           COALESCE((SELECT sum(amount_cents) FROM dues_checkouts
                     WHERE assessment_id = a.id AND status = 'pending'), 0),
           COALESCE((SELECT sum(amount_cents) FROM dues_payments
-                    WHERE assessment_id = a.id AND method IN ('volunteer', 'waived')), 0)
+                    WHERE assessment_id = a.id AND voided_at IS NULL AND method IN ('volunteer', 'waived')), 0)
         FROM dues_assessments a
         WHERE a.removed_at IS NULL
         """;
@@ -85,8 +96,10 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         }
 
         await using var payments = new NpgsqlCommand("""
-            SELECT id, amount_cents, recorded_at, method, note FROM dues_payments
-            WHERE assessment_id = @id ORDER BY recorded_at, id
+            SELECT id, amount_cents, recorded_at, method, note, voided_at, voided_by, void_reason FROM dues_payments
+            WHERE assessment_id = @id
+            """ + (subject is null ? "" : " AND voided_at IS NULL") + """
+             ORDER BY recorded_at, id
             """, connection, transaction);
         payments.Parameters.AddWithValue("id", id);
         await using var paymentReader = await payments.ExecuteReaderAsync(ct);
@@ -95,7 +108,10 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
             entries.Add(new(paymentReader.GetGuid(0), paymentReader.GetInt32(1), paymentReader.GetDateTime(2),
                 paymentReader.IsDBNull(3) ? null : paymentReader.GetString(3),
                 // A player's own history never shows the treasurer's note.
-                subject is null && !paymentReader.IsDBNull(4) ? paymentReader.GetString(4) : null));
+                subject is null && !paymentReader.IsDBNull(4) ? paymentReader.GetString(4) : null,
+                paymentReader.IsDBNull(5) ? null : paymentReader.GetDateTime(5),
+                paymentReader.IsDBNull(6) ? null : paymentReader.GetString(6),
+                paymentReader.IsDBNull(7) ? null : paymentReader.GetString(7)));
         return new(assessment, entries);
     }
 
@@ -203,7 +219,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
             if (await lockRow.ExecuteScalarAsync(ct) is null) return RemoveResult.NotFound;
         }
         await using (var used = new NpgsqlCommand("""
-            SELECT EXISTS (SELECT 1 FROM dues_payments WHERE assessment_id = @id)
+            SELECT EXISTS (SELECT 1 FROM dues_payments WHERE assessment_id = @id AND voided_at IS NULL)
                 OR EXISTS (SELECT 1 FROM dues_checkouts WHERE assessment_id = @id AND status = 'pending')
             """, connection, transaction))
         {
@@ -244,7 +260,8 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 
         await using var sum = new NpgsqlCommand(
             """
-            SELECT COALESCE((SELECT sum(amount_cents) FROM dues_payments WHERE assessment_id = @id), 0)
+            SELECT COALESCE((SELECT sum(amount_cents) FROM dues_payments
+                             WHERE assessment_id = @id AND voided_at IS NULL), 0)
                 + COALESCE((SELECT sum(amount_cents) FROM dues_checkouts
                             WHERE assessment_id = @id AND status = 'pending'), 0)
             """, connection, transaction);
@@ -268,6 +285,79 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         return PaymentResult.Recorded;
     }
 
+    /// <summary>
+    /// Undo a payment. The row stays, marked voided with who and why, and stops counting toward the
+    /// balance. Undoing it again with the same reason is a no-op; with another reason it's a conflict.
+    /// A card payment is only undone in the club's books: refunding it is done in Stripe.
+    /// </summary>
+    public async Task<PaymentChangeResult> VoidAsync(Guid assessmentId, Guid paymentId, string? reason, string admin, CancellationToken ct)
+    {
+        var text = reason?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length > RecordDuesPayment.MaxNoteLength) return PaymentChangeResult.Invalid;
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        // Same lock order as recording a payment: the assessment first.
+        await using (var lockRow = new NpgsqlCommand(
+            "SELECT 1 FROM dues_assessments WHERE id = @id AND removed_at IS NULL FOR UPDATE", connection, transaction))
+        {
+            lockRow.Parameters.AddWithValue("id", assessmentId);
+            if (await lockRow.ExecuteScalarAsync(ct) is null) return PaymentChangeResult.NotFound;
+        }
+        await using (var current = new NpgsqlCommand(
+            "SELECT void_reason FROM dues_payments WHERE id = @payment AND assessment_id = @id FOR UPDATE", connection, transaction))
+        {
+            current.Parameters.AddWithValue("payment", paymentId);
+            current.Parameters.AddWithValue("id", assessmentId);
+            await using var reader = await current.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return PaymentChangeResult.NotFound;
+            if (!reader.IsDBNull(0))
+                return reader.GetString(0) == text ? PaymentChangeResult.Changed : PaymentChangeResult.AlreadyVoided;
+        }
+        await using var update = new NpgsqlCommand("""
+            UPDATE dues_payments SET voided_at = now(), voided_by = @admin, void_reason = @reason WHERE id = @payment
+            """, connection, transaction);
+        update.Parameters.AddWithValue("payment", paymentId);
+        update.Parameters.AddWithValue("admin", admin);
+        update.Parameters.AddWithValue("reason", text);
+        await update.ExecuteNonQueryAsync(ct);
+        await transaction.CommitAsync(ct);
+        return PaymentChangeResult.Changed;
+    }
+
+    /// <summary>Replace the note on a payment that hasn't been undone. Blank clears it, except on credits.</summary>
+    public async Task<PaymentChangeResult> EditNoteAsync(Guid assessmentId, Guid paymentId, string? note, CancellationToken ct)
+    {
+        var text = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (text?.Length > RecordDuesPayment.MaxNoteLength) return PaymentChangeResult.Invalid;
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        string? method;
+        await using (var current = new NpgsqlCommand("""
+            SELECT p.method, p.voided_at IS NOT NULL FROM dues_payments p
+            JOIN dues_assessments a ON a.id = p.assessment_id AND a.removed_at IS NULL
+            WHERE p.id = @payment AND p.assessment_id = @id FOR UPDATE OF p
+            """, connection, transaction))
+        {
+            current.Parameters.AddWithValue("payment", paymentId);
+            current.Parameters.AddWithValue("id", assessmentId);
+            await using var reader = await current.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return PaymentChangeResult.NotFound;
+            if (reader.GetBoolean(1)) return PaymentChangeResult.AlreadyVoided;
+            method = reader.IsDBNull(0) ? null : reader.GetString(0);
+        }
+        if (text is null && method is not null && RecordDuesPayment.CreditMethods.Contains(method))
+            return PaymentChangeResult.Invalid;
+        await using var update = new NpgsqlCommand("""
+            UPDATE dues_payments SET note = @note, note_edited_at = now()
+            WHERE id = @payment AND note IS DISTINCT FROM @note
+            """, connection, transaction);
+        update.Parameters.AddWithValue("payment", paymentId);
+        update.Parameters.Add("note", NpgsqlTypes.NpgsqlDbType.Text).Value = (object?)text ?? DBNull.Value;
+        await update.ExecuteNonQueryAsync(ct);
+        await transaction.CommitAsync(ct);
+        return PaymentChangeResult.Changed;
+    }
+
     private static DuesAssessment ReadAssessment(NpgsqlDataReader reader)
     {
         var amount = reader.GetInt32(3);
@@ -281,6 +371,8 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
 internal enum PaymentResult { Recorded, NotFound, Conflict, Overpayment, Invalid }
 
 internal enum RemoveResult { Removed, NotFound, HasPayments }
+
+internal enum PaymentChangeResult { Changed, NotFound, AlreadyVoided, Invalid }
 
 internal static class DuesEndpoints
 {
@@ -383,6 +475,27 @@ internal static class DuesEndpoints
             };
         }).AddEndpointFilter(SameOrigin)
             .WithSummary("Record a full or partial payment already received (cash, Venmo, ...) with an optional note").Produces(200).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
+        admin.MapPost("/{id:guid}/payments/{paymentId:guid}/void", async (Guid id, Guid paymentId, VoidDuesPayment request, ClaimsPrincipal user, DuesLedger ledger, CancellationToken ct) =>
+                await ledger.VoidAsync(id, paymentId, request.Reason, user.FindFirstValue("email") ?? user.FindFirstValue("sub")!, ct) switch
+                {
+                    PaymentChangeResult.Changed => Results.NoContent(),
+                    PaymentChangeResult.NotFound => Results.NotFound(),
+                    PaymentChangeResult.Invalid => Results.BadRequest(new { error = "Say why it's being undone, in at most 500 characters." }),
+                    _ => Results.Conflict(new { error = "This payment was already undone." }),
+                })
+            .AddEndpointFilter(SameOrigin)
+            .WithSummary("Undo a payment: it stays in the history, crossed out, and the balance goes back up. Refund card payments in Stripe.")
+            .Produces(204).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
+        admin.MapPatch("/{id:guid}/payments/{paymentId:guid}", async (Guid id, Guid paymentId, EditPaymentNote request, DuesLedger ledger, CancellationToken ct) =>
+                await ledger.EditNoteAsync(id, paymentId, request.Note, ct) switch
+                {
+                    PaymentChangeResult.Changed => Results.NoContent(),
+                    PaymentChangeResult.NotFound => Results.NotFound(),
+                    PaymentChangeResult.Invalid => Results.BadRequest(new { error = "Notes are at most 500 characters, and volunteer or waived credits need one." }),
+                    _ => Results.Conflict(new { error = "This payment was undone, so its note can't change." }),
+                })
+            .AddEndpointFilter(SameOrigin)
+            .WithSummary("Change the note on a payment").Produces(204).Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
     }
 
     private static ValueTask<object?> NoStore(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
