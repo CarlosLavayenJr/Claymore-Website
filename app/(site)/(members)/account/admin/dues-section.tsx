@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { ChevronDown } from 'lucide-react'
 import { editDuesPaymentNote, undoDuesPayment } from './actions'
 import { DuesSummary } from './dues-summary'
 import { AdminSection } from '@/components/members/admin-section'
@@ -138,8 +139,7 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
 
     return (
         <li className="rounded-lg border border-[#EAEAEA]">
-            <details className="group">
-                <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 marker:hidden sm:p-5 [&::-webkit-details-marker]:hidden">
+            <div className="flex flex-col gap-3 p-4 sm:p-5">
                     <span className="flex flex-wrap items-start justify-between gap-2">
                         <span className="min-w-0">
                             <span className="block break-words font-semibold text-[#111111]">{player}</span>
@@ -173,8 +173,12 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
                             Card checkout in progress: <span className="font-semibold text-[#111111]">{formatCents(current.pendingCheckoutCents)}</span>
                         </span>
                     )}
-                    <span className="text-sm font-semibold text-[#fd80b5] group-open:hidden">Show payments{!paidInFull && ' and record a payment'}</span>
-                    <span className="hidden text-sm font-semibold text-[#fd80b5] group-open:inline">Hide details</span>
+            </div>
+            <details className="group/pay border-t border-[#EAEAEA]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-b-lg px-4 py-3 text-sm font-semibold text-[#fd80b5] marker:hidden hover:bg-[#fafafa] sm:px-5 [&::-webkit-details-marker]:hidden">
+                    <span className="group-open/pay:hidden">Show payments{!paidInFull && ' and record a payment'}</span>
+                    <span className="hidden group-open/pay:inline">Hide payments</span>
+                    <ChevronDown aria-hidden className="h-4 w-4 shrink-0 transition-transform group-open/pay:rotate-180" />
                 </summary>
 
                 <div className="space-y-4 border-t border-[#EAEAEA] p-4 sm:p-5">

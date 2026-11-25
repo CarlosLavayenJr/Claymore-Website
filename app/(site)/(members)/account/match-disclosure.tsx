@@ -20,10 +20,10 @@ export function MatchDisclosure({ id, defaultOpen, summary, children }: {
         }
     }, [id])
     return (
-        <details ref={ref} id={id} open={defaultOpen} className="group scroll-mt-24 rounded-lg border border-[#EAEAEA]">
+        <details ref={ref} id={id} open={defaultOpen} className="group/match scroll-mt-24 rounded-lg border border-[#EAEAEA]">
             <summary className="flex cursor-pointer list-none items-center gap-3 p-4 marker:hidden sm:px-5 [&::-webkit-details-marker]:hidden">
                 {summary}
-                <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#555555] transition-transform group-open:rotate-180">
+                <svg aria-hidden viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#555555] transition-transform group-open/match:rotate-180">
                     <path fill="currentColor" d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4Z" />
                 </svg>
             </summary>

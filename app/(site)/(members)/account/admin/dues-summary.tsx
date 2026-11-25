@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react'
 import {
     duesMoneyParts,
     duesSummaryTotals,
@@ -75,8 +76,7 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
 
     return (
         <li className="rounded-lg border border-[#EAEAEA]">
-            <details className="group">
-                <summary className="flex cursor-pointer list-none flex-col gap-2.5 p-4 marker:hidden [&::-webkit-details-marker]:hidden">
+            <div className="flex flex-col gap-2.5 p-4">
                     <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                         <span className="min-w-0 break-words font-semibold text-[#111111]">
                             {group.description}
@@ -102,8 +102,12 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
                         <MoneyLine totals={group} />
                         {group.pendingCheckoutCents > 0 && <> · {formatSummaryCents(group.pendingCheckoutCents)} in card checkout</>}
                     </span>
-                    <span className="text-sm font-semibold text-[#fd80b5] group-open:hidden">Show who has paid</span>
-                    <span className="hidden text-sm font-semibold text-[#fd80b5] group-open:inline">Hide names</span>
+            </div>
+            <details className="group/names border-t border-[#EAEAEA]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-b-lg px-4 py-3 text-sm font-semibold text-[#fd80b5] marker:hidden hover:bg-[#fafafa] [&::-webkit-details-marker]:hidden">
+                    <span className="group-open/names:hidden">Show names ({group.count})</span>
+                    <span className="hidden group-open/names:inline">Hide names</span>
+                    <ChevronDown aria-hidden className="h-4 w-4 shrink-0 transition-transform group-open/names:rotate-180" />
                 </summary>
                 <div className="grid gap-4 border-t border-[#EAEAEA] p-4 sm:grid-cols-3">
                     <NameList title="Paid in full" people={group.members.paid} tone="blue" />
