@@ -7,6 +7,7 @@ import MatchCalendar from '@/components/match-calendar'
 import MatchTypeBadge from '@/components/match-type-badge'
 import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
+import { findTeamLogo } from '@/lib/team-logo'
 import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
 
 function isClaymores(name: string) {
@@ -17,17 +18,6 @@ function formatDate(d: string) {
     return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
-function findTeamLogo(name: string, teams: SanityTeam[]): string | null {
-    const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const n = normalized(name)
-    for (const team of teams) {
-        const candidates = [team.name, ...(team.aliases ?? [])]
-        if (candidates.some(alias => n.includes(normalized(alias)) || normalized(alias).includes(n))) {
-            return team.logoUrl ?? null
-        }
-    }
-    return null
-}
 
 type UpcomingItem =
     | { kind: 'match'; date: string; match: SanityMatch }
