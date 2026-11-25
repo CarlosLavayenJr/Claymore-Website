@@ -59,12 +59,19 @@ class AppServices {
     required this.teams,
     required this.auth,
     required this.members,
-    required this.availability,
     required this.prefs,
+    AvailabilityStore? availability,
     this.admin,
-    this.notifications = const ClubNotifications(),
+    ClubNotifications? notifications,
     this.duesEnabled = AppConfig.duesEnabled,
-  });
+  }) : notifications = notifications ?? ClubNotifications(),
+       availability =
+           availability ??
+           AvailabilityStore(
+             auth: auth,
+             members: members,
+             enabled: AppConfig.availabilityEnabled,
+           );
 
   /// Shows the member's dues on the Club tab ([AppConfig.duesEnabled];
   /// tests switch it on).
@@ -86,12 +93,14 @@ class AppServices {
   /// Club admin calls (the API answers 403 unless the member is an admin).
   /// Null when the build has no API base URL.
   final AdminRepository? admin;
+
+  /// The member's availability answers, for fixture cards.
   final AvailabilityStore availability;
   final SharedPreferencesAsync prefs;
   final ClubNotifications notifications;
 
-  /// Whether fixtures show availability pickers: signed-in members only, and
-  /// only in builds with `ENABLE_AVAILABILITY`.
+  /// Whether match pages and cards show availability and lineups:
+  /// signed-in members only, in builds with availability on (the default).
   late final showAvailability = AvailabilityGate(
     auth,
     () => auth.signedIn,
@@ -102,9 +111,10 @@ class AppServices {
     club.dispose();
     standingsTable.dispose();
     teams.dispose();
-    auth.dispose();
+    notifications.dispose();
     availability.dispose();
     showAvailability.dispose();
+    auth.dispose();
   }
 }
 
@@ -126,6 +136,7 @@ class AppScope extends InheritedWidget {
 
 /// True only when availability is enabled for the build and a member is
 /// signed in. The app is public; sign-in is just for member features.
+/// [enabled] alone says whether to invite signed-out visitors to sign in.
 class AvailabilityGate extends ValueNotifier<bool> {
   AvailabilityGate(this._source, this._signedIn, {required bool enabled})
     : _enabled = enabled,
@@ -136,6 +147,8 @@ class AvailabilityGate extends ValueNotifier<bool> {
   final Listenable _source;
   final bool Function() _signedIn;
   final bool _enabled;
+
+  bool get enabled => _enabled;
 
   void _update() => value = _enabled && _signedIn();
 

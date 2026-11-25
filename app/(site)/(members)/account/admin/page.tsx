@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { approveJoinRequest, createInviteLink, denyJoinRequest, removeInvitation, revokeInviteLink, saveInvitation } from './actions'
 import { CopyLink } from './copy-link'
 import { DuesSection } from './dues-section'
+import { MatchesSection } from './matches-section'
 import { AdminSection } from '@/components/members/admin-section'
 import { ConfirmSubmit } from '@/components/members/confirm-submit'
 import {
@@ -42,6 +43,8 @@ const notices: Record<string, string> = {
     note_saved: 'Note saved.',
     link_created: 'New invite link ready. Copy it below and post it in the group chat.',
     link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
+    lineup_saved: 'Lineup saved as a draft. Only admins can see it.',
+    lineup_published: 'Lineup published. Members can see it, and the players in it get a notification.',
 }
 
 const errors: Record<string, string> = {
@@ -248,7 +251,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     return (
         <>
             <MemberHeader eyebrow="Claymores RFC · Admin" title="Club admin">
-                Review requests to join, manage who can sign in, and keep track of dues. <Link href="/account" className={linkClass}>Back to my account</Link>
+                Review requests to join, pick match lineups, manage who can sign in, and keep track of dues. <Link href="/account" className={linkClass}>Back to my account</Link>
             </MemberHeader>
 
             <div className="mx-auto max-w-5xl space-y-4 px-4 py-10 sm:px-6 lg:px-8">
@@ -275,6 +278,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         </ul>
                     )}
                 </AdminSection>
+
+                <MatchesSection api={api} openFixture={typeof params.fixture === 'string' ? params.fixture : undefined} />
 
                 <AdminSection
                     id="invitations"

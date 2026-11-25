@@ -15,7 +15,7 @@ flutter run -d chrome
 
 The browser preview uses a labeled November 23, 2026 Sanity snapshot. Native builds fetch the published Sanity feed and fall back to the snapshot when the feed is unavailable. To use live Sanity in a browser deployment, allow its exact origin in Sanity and build with `--dart-define=SANITY_WEB_LIVE=true`.
 
-Match availability is hidden until it syncs with the API. Build with `--dart-define=ENABLE_AVAILABILITY=true` to show the pickers; even then they appear only for signed-in members. Responses are still saved on the device by fixture ID.
+Signed-in members answer "Can you play?" (Available / Maybe / Out, with an optional note) on upcoming match pages, see their answer as a chip on fixture cards, and see the lineup once a coach publishes it. Club admins also get the squad's answers and a lineup editor on each match page. Answers and lineups live in the API (`/v1/fixtures/{id}/availability`, `/v1/fixtures/{id}/lineup`); `--dart-define=ENABLE_AVAILABILITY=false` hides all of it.
 
 Dues are off by default (`--dart-define=ENABLE_DUES=true`) and only appear once a member signs in. The profile then lists their dues and lets them pay by card (below).
 
@@ -63,9 +63,9 @@ When Google or Apple sign-in returns 403 `not_invited`, the app keeps that ident
 
 ## Configure mobile push
 
-1. Register the Android and iOS apps in the club's Firebase project. The starter uses `com.claymoresrfc.claymores` for both app IDs. Run `flutterfire configure --platforms=android,ios` and let it replace `lib/firebase_options.dart` and wire the native Firebase config.
+1. Register the iOS app (`com.claymoresrfc.claymores`) in the club's Firebase project. `lib/firebase_options.dart` reads its values from dart-defines taken from the app's `GoogleService-Info.plist`: `FIREBASE_IOS_API_KEY`, `FIREBASE_IOS_APP_ID`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_PROJECT_ID` (and `FIREBASE_IOS_BUNDLE_ID`, default `com.claymoresrfc.claymores`). Push stays off unless `ENABLE_PUSH=true` and all of these are set. Android has no Firebase options yet.
 2. In the iOS Runner target, enable Push Notifications and the Remote notifications background mode. Upload the APNs authentication key to Firebase. Test on an iPhone and use an Android device or emulator with Google Play services for Android.
-3. Run on the device with `flutter run --dart-define=ENABLE_PUSH=true`. Open **Club** and opt in. Send a test notification to a device using the Firebase console, then verify topic deliveries through an authorized server or the Firebase Admin SDK. The public topics are `claymores_matches` and `claymores_practice`.
+3. Run on the device with `ENABLE_PUSH=true`, `ENABLE_NOTIFICATIONS=true` and the Firebase defines. Open **Club** and opt in. Turning on **Match updates** while signed in also registers the device's FCM token with the API (`POST /v1/me/devices`) for personal reminders and lineup notices; it is re-registered on sign-in and token refresh and removed on sign-out. Tapping a notification with a `fixtureId` opens that match. Send a test notification to a device using the Firebase console, then verify topic deliveries through an authorized server or the Firebase Admin SDK. The public topics are `claymores_matches` and `claymores_practice`.
 4. Use notification payloads for visible OS alerts. iOS can present alerts while the app is open. On Android, verify initial delivery with the app in the background. A foreground Android banner and automatic sending when Sanity publishes a change are follow-on work.
 
 Use public club information in topics. Player-specific alerts should be sent by a trusted backend after it verifies who should receive them. This starter has no club Firebase project connected. Device registration and delivery still need an on-device check.
@@ -107,7 +107,8 @@ Sign-in and dues are behind dart-defines so a release build without the config s
 | `GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID (iOS only). |
 | `ENABLE_APPLE_SIGN_IN` | Sign in with Apple, iOS only. Defaults to `true`; set `false` to hide it. |
 | `ENABLE_DUES=true` | Shows dues on the profile. |
-| `ENABLE_AVAILABILITY=true` | Shows match availability pickers to signed-in members (local only for now). |
+| `ENABLE_AVAILABILITY` | Match availability and lineups for signed-in members. Defaults to `true`; set `false` to hide them. |
+| `ENABLE_PUSH=true` + `FIREBASE_*` | Push notifications (see "Configure mobile push"). |
 
 The real values for the live API are in [`dart_defines/production.json`](dart_defines/production.json), so this is all it takes:
 

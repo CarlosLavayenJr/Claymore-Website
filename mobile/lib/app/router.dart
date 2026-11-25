@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../data/club_repository.dart';
+import '../data/teams.dart';
 import '../features/admin/admin_page.dart';
 import '../features/auth/join_page.dart';
 import '../features/club/club_page.dart';
@@ -11,13 +12,14 @@ import '../features/home/home_page.dart';
 import '../features/profile/account_page.dart';
 import '../features/profile/dues_detail_page.dart';
 import '../features/standings/standings_page.dart';
+import '../features/teams/team_page.dart';
 import '../shared/widgets.dart';
 import 'deep_links.dart';
 import 'launch_intro.dart';
 
 /// Tabs live in a [StatefulShellRoute] so each keeps its scroll position and
 /// filters. Detail screens (match, account, dues) open on the root navigator
-/// with their own app bar and back button.
+/// with their own app bar and back button, as do team pages (`/team/:slug`).
 GoRouter buildRouter() {
   final rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
   return GoRouter(
@@ -109,6 +111,15 @@ GoRouter buildRouter() {
           id: state.pathParameters['id']!,
           fixture: state.extra is Fixture ? state.extra as Fixture : null,
         ),
+      ),
+      GoRoute(
+        path: '/team/:slug',
+        // The Claymores' own "team page" is the Club tab.
+        redirect: (_, state) =>
+            TeamResolver.isClaymores(state.pathParameters['slug'] ?? '')
+            ? clubPath
+            : null,
+        builder: (_, state) => TeamPage(slug: state.pathParameters['slug']!),
       ),
     ],
   );

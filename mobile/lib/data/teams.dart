@@ -11,6 +11,7 @@ class Team {
     required this.slug,
     this.aliases = const [],
     this.logoUrl,
+    this.city,
   });
 
   Team.fromJson(Map<String, dynamic> json)
@@ -21,9 +22,16 @@ class Team {
               growable: false,
             )
           : const [],
-      logoUrl = sanityLogo(json['logoUrl']);
+      logoUrl = sanityLogo(json['logoUrl']),
+      city = switch (_str(json['city'])) {
+        '' => null,
+        final city => city,
+      };
 
   final String name, slug;
+
+  /// Where the club is based ("Lakeland, FL"), from the CMS; null if unset.
+  final String? city;
   final List<String> aliases;
 
   /// A resized PNG from the Sanity CDN, or null.
@@ -86,12 +94,14 @@ class TeamResolver {
   };
 
   final _byName = <String, Team>{};
+  final _bySlug = <String, Team>{};
   final _byAlias = <String, Team>{};
   final _fuzzy = <(List<String>, Team)>[];
   Team? _claymores;
 
   /// First added wins on clashes.
   void _add(Team team) {
+    if (team.slug.isNotEmpty) _bySlug.putIfAbsent(team.slug, () => team);
     final name = normalize(team.name);
     if (name.isNotEmpty) {
       _byName.putIfAbsent(name, () => team);
@@ -146,6 +156,9 @@ class TeamResolver {
     return tokens.join(' ');
   }
 
+  /// The team with this slug (first added wins), or null.
+  Team? bySlug(String slug) => _bySlug[slug];
+
   Team? resolve(String raw) {
     if (isClaymores(raw) && _claymores != null) return _claymores;
 
@@ -194,6 +207,9 @@ class TeamDirectory extends ChangeNotifier {
 
   Team? resolve(String name) =>
       _cache.putIfAbsent(name, () => _resolver.resolve(name));
+
+  /// The team with this URL slug, e.g. for `/team/lakeland-lancers`.
+  Team? bySlug(String slug) => _resolver.bySlug(slug);
 
   /// Loads `/v1/teams` once. Failures keep the bundled list.
   Future<void> load() => _loading ??= _load();

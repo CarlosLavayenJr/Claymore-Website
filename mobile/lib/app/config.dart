@@ -6,18 +6,25 @@ abstract final class AppConfig {
   /// Shows the dues section and the profile's dues ledger.
   static const duesEnabled = bool.fromEnvironment('ENABLE_DUES');
 
-  /// Match availability pickers. Off until responses sync with the API; even
-  /// then they only show to signed-in members. Everything else is public.
+  /// Match availability ("can you play?") and lineups, synced with the API.
+  /// On by default; they only show to signed-in members (everything else is
+  /// public). `--dart-define=ENABLE_AVAILABILITY=false` switches them off.
   static const availabilityEnabled = bool.fromEnvironment(
     'ENABLE_AVAILABILITY',
+    defaultValue: true,
   );
 
   /// Match and practice notification switches under the Club tab. Off until
   /// push is configured (APNs key, Firebase): App Review rejects controls that
-  /// don't work.
+  /// don't work. The switches only work with [pushEnabled] and the Firebase
+  /// defines (see `firebase_options.dart`).
   static const notificationsEnabled = bool.fromEnvironment(
     'ENABLE_NOTIFICATIONS',
   );
+
+  /// Firebase Cloud Messaging (topics and device registration for match
+  /// reminders). Off unless set; also needs the Firebase defines.
+  static const pushEnabled = bool.fromEnvironment('ENABLE_PUSH');
 
   /// Shows Google sign-in under the Club tab.
   static const signInEnabled = bool.fromEnvironment('ENABLE_SIGN_IN');

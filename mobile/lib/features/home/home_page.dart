@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../app/services.dart';
 import '../../data/club_time.dart';
 import '../../shared/widgets.dart';
+import '../fixtures/availability.dart';
 import '../fixtures/club_data_view.dart';
 import '../fixtures/fixture_card.dart';
 import '../standings/standings_preview.dart';
@@ -35,7 +36,7 @@ class HomePage extends StatelessWidget {
               FixtureCard(
                 key: ValueKey(next.id),
                 fixture: next,
-                availability: showAvailability,
+                availability: showAvailability && takesAvailability(next),
                 featured: true,
               ),
             const SizedBox(height: 24),

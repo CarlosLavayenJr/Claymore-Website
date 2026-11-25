@@ -1,9 +1,12 @@
 import 'api_client.dart';
 import 'models/account.dart';
+import 'models/availability.dart';
 
 export 'models/account.dart';
+export 'models/availability.dart';
 
-/// Signed-in member calls: identity, dues and Stripe checkout.
+/// Signed-in member calls: identity, dues and Stripe checkout, match
+/// availability and lineups, and push devices.
 class MemberRepository {
   MemberRepository(this._api);
 
@@ -78,4 +81,58 @@ class MemberRepository {
       throw ApiException.fromResponse(response);
     }
   }
+
+  static String _id(String id) => Uri.encodeComponent(id);
+
+  /// `GET /v1/availability/mine`: my answers for upcoming matches.
+  Future<List<AvailabilityAnswer>> myAvailability() async =>
+      (await _api.getJson('/v1/availability/mine', auth: true) as List? ??
+              const [])
+          .whereType<Map<String, dynamic>>()
+          .map(AvailabilityAnswer.fromJson)
+          .toList(growable: false);
+
+  /// `GET /v1/fixtures/{id}/availability`. Throws [ApiException] 404 for an
+  /// unknown match.
+  Future<MyAvailability> availability(String fixtureId) async =>
+      MyAvailability.fromJson(
+        await _api.getJson(
+          '/v1/fixtures/${_id(fixtureId)}/availability',
+          auth: true,
+        ) as Map<String, dynamic>,
+      );
+
+  /// `PUT /v1/fixtures/{id}/availability`. Throws [ApiException]: 400 for an
+  /// invalid answer (note over 200 characters), 409 once the match is played.
+  Future<MyAvailability> answerAvailability(
+    String fixtureId,
+    AvailabilityStatus status, {
+    String? note,
+  }) async {
+    final text = note?.trim() ?? '';
+    return MyAvailability.fromJson(
+      await _api.putJson('/v1/fixtures/${_id(fixtureId)}/availability', {
+        'status': status.api,
+        'note': text.isEmpty ? null : text,
+      }, auth: true) as Map<String, dynamic>,
+    );
+  }
+
+  /// `GET /v1/fixtures/{id}/lineup`: status `none` until it's published.
+  Future<Lineup> lineup(String fixtureId) async => Lineup.fromJson(
+    await _api.getJson('/v1/fixtures/${_id(fixtureId)}/lineup', auth: true)
+        as Map<String, dynamic>,
+  );
+
+  /// `POST /v1/me/devices` (204): this device's push token, for match
+  /// reminders and lineup notices. [platform] is `ios` or `android`.
+  Future<void> registerDevice(String token, String platform) => _api.postJson(
+    '/v1/me/devices',
+    {'token': token, 'platform': platform},
+    auth: true,
+  );
+
+  /// `POST /v1/me/devices/remove` (204): stop pushing to this device.
+  Future<void> removeDevice(String token) =>
+      _api.postJson('/v1/me/devices/remove', {'token': token}, auth: true);
 }

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../app/services.dart';
 import '../../app/theme.dart';
 import '../../data/standings_repository.dart';
+import '../../shared/team_link.dart';
 import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 
@@ -184,12 +185,15 @@ class _Card extends StatelessWidget {
               gapAbove:
                   index > 0 && row.position > rows[index - 1].position + 1,
               pos: Text('${row.position}', style: cell(row)),
-              team: Row(
-                children: [
-                  TeamLogo(name: row.teamName, size: 24),
-                  const SizedBox(width: 8),
-                  Expanded(child: TeamName(row.teamName, style: cell(row))),
-                ],
+              team: TeamLink(
+                name: row.teamName,
+                child: Row(
+                  children: [
+                    TeamLogo(name: row.teamName, size: 24),
+                    const SizedBox(width: 8),
+                    Expanded(child: TeamName(row.teamName, style: cell(row))),
+                  ],
+                ),
               ),
               played: Text('${row.played}', style: cell(row)),
               won: Text('${row.won}', style: cell(row)),

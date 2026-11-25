@@ -72,6 +72,9 @@ services:
         value: "true"
       - key: Stripe__SecretKey
         sync: false
+      # Firebase service account JSON for push (lineup alerts); the reminder cron has its own copy.
+      - key: Push__FirebaseServiceAccount
+        sync: false
       - key: Stripe__WebhookSecret
         sync: false
       - key: Stripe__ReturnOrigin
@@ -164,3 +167,32 @@ databases:
     region: virginia
     plan: basic-256mb
     ipAllowList: []
+  # Match reminders (push), hourly: 21, 14, 7, 5 and 2 days out, the day before and match day,
+  # each sent once after 10 AM Orlando time (see MatchReminders). Needs Push__FirebaseServiceAccount.
+  - type: cron
+    name: claymores-send-reminders
+    runtime: docker
+    region: virginia
+    plan: starter
+    schedule: "30 * * * *"
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    dockerCommand: dotnet Claymores.Api.dll --send-reminders
+    buildFilter:
+      paths:
+        - api/**
+        - render.yaml
+      ignoredPaths:
+        - api/**/*.md
+        - api/tests/**
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: claymores-db
+          property: connectionString
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Fixtures__Source
+        value: scraper
+      - key: Push__FirebaseServiceAccount
+        sync: false

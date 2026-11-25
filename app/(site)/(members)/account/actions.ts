@@ -7,6 +7,7 @@ import { ACCOUNT_DELETED_PARAM, DELETE_CONFIRMATION, deletionOutcome, isDeleteCo
 import { parseDollarsToCents, formatCents } from '@/lib/claymores/api-client'
 import { memberAuthEnabled, SIGNED_IN_HINT_COOKIE, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { CHECKOUT_UNAVAILABLE_MESSAGE, checkoutOutcome } from '@/lib/claymores/checkout'
+import { matchAnchor, parseAvailabilityForm } from '@/lib/claymores/match-availability'
 import { memberApi } from '@/lib/claymores/member'
 
 export type PayState = { error: string | null; amount?: string }
@@ -54,4 +55,27 @@ async function checkout(id: string, amount: string): Promise<PayState> {
     if (outcome.kind === 'redirect') redirect(outcome.url)
     if (outcome.kind === 'sign-in') redirect('/sign-in?error=expired&callbackUrl=/account')
     return { error: outcome.message }
+}
+
+/**
+ * Saves the member's answer for a match (the Available / Maybe / Out button pressed, plus an
+ * optional note) and comes back to that match card with `?availability=<outcome>`.
+ */
+export async function answerAvailability(formData: FormData) {
+    const parsed = parseAvailabilityForm(formData)
+    if (!parsed.ok) back('invalid', parsed.fixtureId)
+
+    const session = await memberApi()
+    if (!session) redirect('/sign-in?callbackUrl=/account')
+    const result = await session.api.answerAvailability(parsed.fixtureId, parsed.status, parsed.note)
+    if (result.ok) back('saved', parsed.fixtureId)
+    if (result.status === 401) redirect('/sign-in?error=expired&callbackUrl=/account')
+    back(result.status === 409 ? 'closed'
+        : result.status === 404 ? 'not_found'
+        : result.status === 400 ? 'invalid'
+        : 'unavailable', parsed.fixtureId)
+}
+
+function back(outcome: string, fixtureId: string | null): never {
+    redirect(`/account?availability=${outcome}${fixtureId ? `#${matchAnchor(fixtureId)}` : '#matches'}`)
 }

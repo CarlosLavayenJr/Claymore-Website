@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../app/services.dart';
 import '../../app/theme.dart';
 import '../../data/standings_repository.dart';
+import '../../shared/team_link.dart';
 import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 
@@ -265,22 +266,26 @@ class LeagueTable extends StatelessWidget {
           cell(
             row == null
                 ? Text('TEAM', style: header)
-                : Row(
-                    children: [
-                      TeamLogo(name: row.teamName, size: 24),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            TeamName(row.teamName, style: cellStyle(row)),
-                            if (showPools && row.pool.isNotEmpty)
-                              Text(row.pool, style: textTheme.bodySmall),
-                          ],
+                : TeamLink(
+                    key: ValueKey('team-${row.position}'),
+                    name: row.teamName,
+                    child: Row(
+                      children: [
+                        TeamLogo(name: row.teamName, size: 24),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TeamName(row.teamName, style: cellStyle(row)),
+                              if (showPools && row.pool.isNotEmpty)
+                                Text(row.pool, style: textTheme.bodySmall),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
             width: 176,
             start: true,
@@ -393,23 +398,36 @@ class PlayoffList extends StatelessWidget {
 
     Widget side(String team, int? score, bool won) => Container(
       color: won ? Brand.pinkTint : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(6, 2, 12, 2),
       child: Row(
         children: [
-          TeamLogo(name: team, size: 22),
-          const SizedBox(width: 8),
           Expanded(
-            child: TeamName(
-              team,
-              maxLines: null,
-              overflow: null,
-              style: TextStyle(
-                fontWeight: won || isClaymoresTeam(team)
-                    ? FontWeight.w700
-                    : FontWeight.w400,
+            child: TeamLink(
+              name: team,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                child: Row(
+                  children: [
+                    TeamLogo(name: team, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TeamName(
+                        team,
+                        maxLines: null,
+                        overflow: null,
+                        style: TextStyle(
+                          fontWeight: won || isClaymoresTeam(team)
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+          const SizedBox(width: 6),
           Text(
             score?.toString() ?? '–',
             style: TextStyle(

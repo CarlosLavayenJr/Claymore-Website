@@ -31,6 +31,16 @@ export default async function Fixtures() {
                 <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-2">Central Florida Claymores RFC</p>
                 <h1 className="text-5xl md:text-6xl font-claymore text-[#111111] mb-3">Fixtures</h1>
                 <div className="w-12 h-px bg-[#fd80b5] mx-auto" />
+                <a
+                    href="webcal://www.claymoresrfc.com/calendar.ics"
+                    className="mt-5 inline-flex items-center gap-2 rounded-md border border-[#77c3ef] px-5 py-2.5 font-claymore text-base text-[#77c3ef] transition-colors hover:bg-[#77c3ef] hover:text-white"
+                >
+                    Add all matches to your calendar
+                </a>
+                <p className="mt-2 text-xs text-[#555555]">
+                    Kickoffs and venues update on their own. Google Calendar: add by URL{' '}
+                    <span className="select-all font-mono">https://www.claymoresrfc.com/calendar.ics</span>
+                </p>
             </div>
 
             <FixturesSchedule matches={matches} teams={teams} practices={practices} />
