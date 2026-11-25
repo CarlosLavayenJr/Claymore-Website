@@ -23,7 +23,7 @@ class _AlertSettingsState extends State<AlertSettings> {
 
   Future<Set<ClubAlert>> loadAlerts() async => {
     for (final alert in ClubAlert.values)
-      if (await widget.prefs.getBool('alerts.${alert.name}') ?? false) alert,
+      if (await widget.prefs.getBool(alert.prefKey) ?? false) alert,
   };
 
   Future<void> change(
@@ -34,7 +34,7 @@ class _AlertSettingsState extends State<AlertSettings> {
     setState(() => saving = true);
     try {
       await widget.notifications.subscribe(alert, enabled);
-      await widget.prefs.setBool('alerts.${alert.name}', enabled);
+      await widget.prefs.setBool(alert.prefKey, enabled);
       if (mounted) {
         setState(() {
           alerts = Future.value({

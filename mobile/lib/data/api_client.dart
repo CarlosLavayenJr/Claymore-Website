@@ -75,6 +75,12 @@ class ApiClient {
     bool auth = false,
   }) async => _decode(await send('POST', path, body: body, auth: auth));
 
+  Future<Object?> putJson(
+    String path,
+    Object? body, {
+    bool auth = false,
+  }) async => _decode(await send('PUT', path, body: body, auth: auth));
+
   Future<http.Response> send(
     String method,
     String path, {

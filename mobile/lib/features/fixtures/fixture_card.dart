@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../app/theme.dart';
 import '../../data/club_repository.dart';
+import '../../shared/team_link.dart';
 import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 import 'availability.dart';
@@ -14,12 +15,16 @@ class FixtureCard extends StatelessWidget {
   const FixtureCard({
     super.key,
     required this.fixture,
-    required this.availability,
+    this.availability = false,
     this.featured = false,
   });
 
   final Fixture fixture;
-  final bool availability, featured;
+
+  /// Shows the signed-in member's answer for the match; the featured (Home)
+  /// card also asks them to answer when they haven't.
+  final bool availability;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
@@ -52,9 +57,11 @@ class FixtureCard extends StatelessWidget {
                 ),
               ),
               if (availability)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: AvailabilityPicker(fixtureId: fixture.id),
+                AvailabilityCardFooter(
+                  fixture: fixture,
+                  prompt: featured,
+                  onAnswer: () =>
+                      context.push(matchLocation(fixture), extra: fixture),
                 ),
             ],
           ),
@@ -199,20 +206,28 @@ class FixtureTeam extends StatelessWidget {
   final String? logo;
   final double logoSize;
 
+  /// Crest and name open the team page (the Claymores: the Club tab); the
+  /// rest of the card keeps its own tap.
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: TeamLogo(name: name, url: logo, size: logoSize),
+  Widget build(BuildContext context) => TeamLink(
+    name: name,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: TeamLogo(name: name, url: logo, size: logoSize),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
-      const SizedBox(height: 4),
-      Text(
-        name,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-    ],
+    ),
   );
 }
 

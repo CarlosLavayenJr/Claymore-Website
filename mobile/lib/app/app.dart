@@ -15,7 +15,6 @@ import '../data/standings_repository.dart';
 import '../data/teams.dart';
 import '../features/auth/auth_platform.dart';
 import '../features/auth/auth_service.dart';
-import '../features/fixtures/availability.dart';
 import 'config.dart';
 import 'deep_links.dart';
 import 'launch_intro.dart';
@@ -118,7 +117,6 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
       auth: auth,
       members: widget.members ?? (api == null ? null : MemberRepository(api)),
       admin: widget.admin ?? (api == null ? null : AdminRepository(api)),
-      availability: AvailabilityStore(prefs),
       prefs: prefs,
       duesEnabled: widget.duesEnabled,
     );
@@ -126,7 +124,19 @@ class _ClaymoresAppState extends State<ClaymoresApp> {
     // A restore that failed offline at launch is retried when the app comes
     // back to the foreground (the refresh token is still stored).
     lifecycle = AppLifecycleListener(
-      onResume: () => unawaited(auth.retryRestore()),
+      onResume: () {
+        unawaited(auth.retryRestore());
+        unawaited(services.availability.refresh());
+      },
+    );
+    // Inert unless push is configured for this build.
+    unawaited(
+      services.notifications.attach(
+        auth: auth,
+        members: services.members,
+        prefs: prefs,
+        open: (location) => router.push(location),
+      ),
     );
     unawaited(services.teams.load());
     links = widget.deepLinks.listen(
