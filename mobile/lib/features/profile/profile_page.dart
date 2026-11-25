@@ -8,6 +8,7 @@ import '../../app/theme.dart';
 import '../../data/api_client.dart';
 import '../../data/member_repository.dart';
 import '../../shared/widgets.dart';
+import '../admin/admin_page.dart';
 import '../auth/auth_service.dart';
 import 'payment_amount.dart';
 
@@ -168,6 +169,10 @@ class _SignedInProfileState extends State<_SignedInProfile> {
               ],
             ),
           ),
+          if (isClubAdmin(user)) ...[
+            const SizedBox(height: 16),
+            const ClubAdminEntry(),
+          ],
           const SizedBox(height: 24),
           const SectionHeading('SIGN-IN'),
           _SignInMethods(
@@ -230,6 +235,53 @@ class _SignedInProfileState extends State<_SignedInProfile> {
           const SizedBox(height: 8),
           DeleteAccountButton(members: widget.members),
         ],
+      ),
+    );
+  }
+}
+
+/// "Club admin" card on the profile, shown to admins only. Opens
+/// [adminPath]: dues across the club and join requests.
+class ClubAdminEntry extends StatelessWidget {
+  const ClubAdminEntry({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Panel(
+      key: const Key('club-admin-entry'),
+      featured: true,
+      padding: EdgeInsets.zero,
+      child: Semantics(
+        button: true,
+        label: 'Club admin: dues and join requests',
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: () => context.push(adminPath),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.admin_panel_settings_outlined),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CLUB ADMIN', style: displayStyle(20)),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Dues, payments and join requests',
+                        style: textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Brand.secondary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
