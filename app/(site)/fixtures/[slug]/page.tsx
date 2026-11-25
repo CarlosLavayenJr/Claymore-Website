@@ -27,6 +27,7 @@ import FestivalDetails from '@/components/festival-details'
 import { festivalsQuery, festivalSlug } from '@/lib/festivals'
 import type { SanityPractice } from '@/sanity/lib/queries'
 import { ogImage } from '@/lib/og'
+import { memberAuthEnabled } from '@/lib/claymores/auth-env'
 
 export const revalidate = 3600
 
@@ -312,6 +313,16 @@ export default async function MatchPage({ params, searchParams }: Params) {
 
             {match.note && (
                 <p className="mt-6 text-sm text-[#555555] italic">Match note: {match.note}</p>
+            )}
+
+            {/* Members say whether they can play on /account; names and lineups stay private. */}
+            {outcome === 'pending' && memberAuthEnabled() && (
+                <p className="mt-6 text-sm text-[#555555]">
+                    Claymores players:{' '}
+                    <Link href="/account#matches" rel="nofollow" className="text-[#fd80b5] underline-offset-4 hover:underline">
+                        sign in to say if you can play
+                    </Link>
+                </p>
             )}
 
             {/* Cross-links */}

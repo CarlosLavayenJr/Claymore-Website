@@ -149,6 +149,53 @@ export type ClubInvitation = {
     invitedAt?: string | null
 }
 
+/** A member's answer for a match. "unavailable" shows as "Out". */
+export type AvailabilityStatus = 'available' | 'maybe' | 'unavailable'
+
+export type AvailabilityCounts = { available: number; maybe: number; unavailable: number; noReply: number }
+
+/** GET/PUT /v1/fixtures/{id}/availability: my answer, the club's counts, and whether answers are open. */
+export type MyAvailability = {
+    fixtureId: string
+    status: AvailabilityStatus | null
+    note: string | null
+    updatedAt: string | null
+    counts: AvailabilityCounts
+    /** False after match day (Orlando time): answers are closed. */
+    open: boolean
+}
+
+/** GET /v1/availability/mine: my answers for matches from today on. */
+export type MyAvailabilityAnswer = { fixtureId: string; status: AvailabilityStatus; note: string | null }
+
+/** One member's answer for admins. status null: no reply yet. */
+export type MemberAvailability = {
+    subject: string
+    email: string
+    name: string | null
+    status: AvailabilityStatus | null
+    note: string | null
+    updatedAt: string | null
+}
+
+export type FixtureAvailability = { fixtureId: string; counts: AvailabilityCounts; members: MemberAvailability[] }
+
+/** 1-15 starters, 16-23 replacements. `name` is null when the member has no name on file. */
+export type LineupSlot = { number: number; position: string; subject: string; name: string | null }
+
+/** Members only ever see "none" or "published"; admins also see "draft". */
+export type LineupStatus = 'none' | 'draft' | 'published'
+
+export type Lineup = {
+    fixtureId: string
+    status: LineupStatus
+    publishedAt: string | null
+    updatedAt: string | null
+    slots: LineupSlot[]
+}
+
+export type SaveLineupInput = { slots: { number: number; subject: string }[]; publish: boolean }
+
 export type ApiResult<T> =
     | { ok: true; status: number; data: T }
     | { ok: false; status: number; error: string | null; field?: string | null; body: unknown }
@@ -276,6 +323,25 @@ export class ClaymoresApiClient {
         return this.request<{ url: string }>('POST', `/v1/dues/${encodeURIComponent(id)}/checkout-session`, { amountCents, returnTo })
     }
 
+    /** 404 when the API doesn't know the fixture. */
+    fixtureAvailability(fixtureId: string) {
+        return this.request<MyAvailability>('GET', `/v1/fixtures/${encodeURIComponent(fixtureId)}/availability`)
+    }
+
+    /** 400 invalid status or note over 200 characters; 404 unknown fixture; 409 the match has been played. */
+    answerAvailability(fixtureId: string, status: AvailabilityStatus, note: string | null) {
+        return this.request<MyAvailability>('PUT', `/v1/fixtures/${encodeURIComponent(fixtureId)}/availability`, { status, note })
+    }
+
+    myAvailability() {
+        return this.request<MyAvailabilityAnswer[]>('GET', '/v1/availability/mine')
+    }
+
+    /** The published lineup (status "none" until an admin publishes one). */
+    fixtureLineup(fixtureId: string) {
+        return this.request<Lineup>('GET', `/v1/fixtures/${encodeURIComponent(fixtureId)}/lineup`)
+    }
+
     // --- Admin (bearer, role=admin) ---
     joinRequests(status: JoinRequestStatus = 'pending') {
         return this.request<JoinRequest[]>('GET', `/v1/admin/join-requests?status=${encodeURIComponent(status)}`)
@@ -358,6 +424,24 @@ export class ClaymoresApiClient {
     editDuesPaymentNote(assessmentId: string, paymentId: string, note: string | null) {
         return this.request<null>('PATCH',
             `/v1/admin/dues/${encodeURIComponent(assessmentId)}/payments/${encodeURIComponent(paymentId)}`, { note })
+    }
+
+    /** Every current member with their answer (status null: no reply). */
+    adminFixtureAvailability(fixtureId: string) {
+        return this.request<FixtureAvailability>('GET', `/v1/admin/fixtures/${encodeURIComponent(fixtureId)}/availability`)
+    }
+
+    /** The lineup, draft or published. */
+    adminFixtureLineup(fixtureId: string) {
+        return this.request<Lineup>('GET', `/v1/admin/fixtures/${encodeURIComponent(fixtureId)}/lineup`)
+    }
+
+    /**
+     * Replaces the whole lineup. 400 `{ error }` for bad or repeated numbers, a player picked twice, or a
+     * non-member. The first publish notifies the selected players.
+     */
+    saveFixtureLineup(fixtureId: string, input: SaveLineupInput) {
+        return this.request<Lineup>('PUT', `/v1/admin/fixtures/${encodeURIComponent(fixtureId)}/lineup`, input)
     }
 
     inviteLinks() {

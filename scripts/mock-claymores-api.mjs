@@ -19,6 +19,14 @@
 //
 // DELETE /v1/me deletes the caller's account (204) and answers 409 last_admin
 // for the only admin, so delete player@example.com to try it.
+//
+// Match availability and lineups: GET /v1/fixtures returns seeded fixtures dated
+// from today (three upcoming matches, a Highland Games club event, one played
+// match), so run the site with CLAYMORES_DATA_SOURCE=api to see them. A few more
+// players are seeded with answers for the first match. Fixture ids the mock
+// doesn't know (Sanity ids, when the site reads Sanity) are treated as upcoming,
+// so availability works either way. Answers close after match day (409); lineup
+// saves validate like the API (400 { error }).
 
 import { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -32,6 +40,9 @@ const invitations = new Map([
     ['admin@example.com', { role: 'admin', invitedBy: 'bootstrap', invitedAt: '2026-09-01T12:00:00Z' }],
     ['player@example.com', { role: 'player', invitedBy: 'admin@example.com', invitedAt: '2026-10-02T15:30:00Z' }],
 ])
+for (const email of ['tom.hooker@example.com', 'ben.lock@example.com', 'sam.flanker@example.com', 'jack.scrumhalf@example.com', 'leo.centre@example.com', 'max.wing@example.com']) {
+    invitations.set(email, { role: 'player', invitedBy: 'admin@example.com', invitedAt: '2026-10-05T12:00:00Z' })
+}
 const accessTokens = new Map() // token -> { email, exp }
 const refreshTokens = new Map() // token -> { email, family, used }
 const revokedFamilies = new Set()
@@ -99,6 +110,66 @@ const inviteLinks = [] // { id, token, createdBy, createdAt, expiresAt, revokedA
 const linkShape = l => ({ ...l, active: !l.revokedAt && new Date(l.expiresAt) > new Date() })
 let automatic = { enabled: false, description: '', amountCents: 0, dueDate: null }
 
+// --- Fixtures, availability, lineups ---
+const orlandoDate = date => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+const daysFromToday = n => orlandoDate(new Date(Date.now() + n * 86400000))
+const seasonOf = date => { const [y, m] = date.split('-').map(Number); return m >= 8 ? y + 1 : y }
+const fixture = (id, offset, homeTeam, awayTeam, extra = {}) => {
+    const date = daysFromToday(offset)
+    return {
+        id, updatedAt: new Date().toISOString(), date, season: seasonOf(date), homeTeam, awayTeam, homeScore: 0, awayScore: 0,
+        status: 'upcoming', matchType: 'league', competition: 'Florida Rugby Union D3', note: null, venue: null,
+        kickoffTime: '1:00 PM', homeLogo: null, awayLogo: null, homeTeamSlug: null, awayTeamSlug: null, ...extra,
+    }
+}
+const fixtures = [
+    fixture('mock-fixture-played', -9, 'Daytona (D3)', 'Claymores', { status: 'played', homeScore: 12, awayScore: 24 }),
+    fixture('mock-fixture-lakeland', 3, 'Claymores', 'Lakeland (D3)', { venue: 'Barnett Park, Orlando' }),
+    fixture('mock-fixture-games', 10, 'Claymores', 'Claymores', { competition: 'highland games', matchType: 'friendly', kickoffTime: '10:00 AM' }),
+    fixture('mock-fixture-tampa', 17, 'Tampa Bay (D3)', 'Claymores', { kickoffTime: '2:00 PM' }),
+    fixture('mock-fixture-sarasota', 31, 'Claymores', 'Sarasota (D3)', { venue: 'Barnett Park, Orlando', matchType: 'friendly', competition: 'Friendly' }),
+].sort((a, b) => a.date.localeCompare(b.date))
+
+const answers = new Map() // fixtureId -> Map(email -> { status, note, updatedAt })
+const answersFor = id => answers.get(id) ?? answers.set(id, new Map()).get(id)
+for (const [email, status, note] of [
+    ['tom.hooker@example.com', 'available', null], ['ben.lock@example.com', 'available', null],
+    ['sam.flanker@example.com', 'maybe', 'First half only, wedding that evening'], ['jack.scrumhalf@example.com', 'available', null],
+    ['max.wing@example.com', 'unavailable', 'Hamstring'],
+]) answersFor('mock-fixture-lakeland').set(email, { status, note, updatedAt: '2026-11-20T15:00:00Z' })
+const lineups = new Map() // fixtureId -> { status, publishedAt, updatedAt, slots: [{ number, email }] }
+const POSITIONS = ['Loosehead prop', 'Hooker', 'Tighthead prop', 'Lock', 'Lock', 'Blindside flanker', 'Openside flanker', 'Number 8', 'Scrum-half', 'Fly-half', 'Left wing', 'Inside centre', 'Outside centre', 'Right wing', 'Fullback']
+
+/** null: no such fixture. Unknown ids (Sanity mode) count as upcoming. */
+function fixtureDate(id) {
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(id)) return null
+    return fixtures.find(f => f.id === id)?.date ?? '9999-12-31'
+}
+function roster(id) {
+    const a = answersFor(id)
+    return [...invitations.keys()].map(email => {
+        const r = a.get(email)
+        return { subject: subjectOf(email), email, name: nameOf(email), status: r?.status ?? null, note: r?.note ?? null, updatedAt: r?.updatedAt ?? null }
+    })
+}
+const countOf = r => ({
+    available: r.filter(m => m.status === 'available').length, maybe: r.filter(m => m.status === 'maybe').length,
+    unavailable: r.filter(m => m.status === 'unavailable').length, noReply: r.filter(m => m.status === null).length,
+})
+function mine(id, email) {
+    const r = roster(id)
+    const me = r.find(m => m.email === email)
+    return { fixtureId: id, status: me?.status ?? null, note: me?.note ?? null, updatedAt: me?.updatedAt ?? null, counts: countOf(r), open: fixtureDate(id) >= orlandoDate(new Date()) }
+}
+function lineupShape(id, publishedOnly) {
+    const l = lineups.get(id)
+    if (!l || (publishedOnly && l.status !== 'published')) return { fixtureId: id, status: 'none', publishedAt: null, updatedAt: null, slots: [] }
+    return {
+        fixtureId: id, status: l.status, publishedAt: l.publishedAt, updatedAt: l.updatedAt,
+        slots: l.slots.map(s => ({ number: s.number, position: s.number <= 15 ? POSITIONS[s.number - 1] : 'Replacement', subject: subjectOf(s.email), name: invitations.has(s.email) ? nameOf(s.email) : null })),
+    }
+}
+
 async function readJson(req) {
     let raw = ''
     for await (const chunk of req) raw += chunk
@@ -119,8 +190,14 @@ const server = createServer(async (req, res) => {
     res.on('finish', () => console.log(`${method} ${path}${url.search} -> ${res.statusCode} (${Date.now() - started}ms)`))
 
     // Public sports data, enough for the website to build and render.
-    if (method === 'GET' && ['/v1/fixtures', '/v1/teams', '/v1/players', '/v1/practices', '/v1/standings/seasons'].includes(path)) return send(res, 200, [])
-    if (method === 'GET' && (path.startsWith('/v1/fixtures/') || path.startsWith('/v1/players/') || path === '/v1/standings' || path === '/v1/practices/schedule')) return send(res, 404, { error: 'not_found' })
+    if (method === 'GET' && path === '/v1/fixtures') return send(res, 200, fixtures)
+    if (method === 'GET' && ['/v1/teams', '/v1/players', '/v1/practices', '/v1/standings/seasons'].includes(path)) return send(res, 200, [])
+    const fixtureDetail = path.match(/^\/v1\/fixtures\/([^/]+)$/)
+    if (method === 'GET' && fixtureDetail) {
+        const f = fixtures.find(x => x.id === decodeURIComponent(fixtureDetail[1]))
+        return f ? send(res, 200, f) : send(res, 404, { error: 'not_found' })
+    }
+    if (method === 'GET' && (path.startsWith('/v1/players/') || path === '/v1/standings' || path === '/v1/practices/schedule')) return send(res, 404, { error: 'not_found' })
     if (path === '/health') return send(res, 200, { status: 'ok' })
 
     const body = method === 'POST' || method === 'PUT' || method === 'PATCH' ? await readJson(req) : {}
@@ -178,7 +255,7 @@ const server = createServer(async (req, res) => {
 
     // --- Member ---
     const user = bearer(req)
-    if (path.startsWith('/v1/me') || path.startsWith('/v1/dues') || path.startsWith('/v1/admin')) {
+    if (path.startsWith('/v1/me') || path.startsWith('/v1/dues') || path.startsWith('/v1/admin') || path.startsWith('/v1/fixtures/') || path.startsWith('/v1/availability')) {
         if (!user) return send(res, 401, { error: 'invalid_token' })
     }
     if (method === 'DELETE' && path === '/v1/me') {
@@ -215,6 +292,34 @@ const server = createServer(async (req, res) => {
         if (a.pendingCheckoutCents > 0) return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_resume_${randomBytes(6).toString('hex')}` })
         if (body.amountCents > a.balanceCents) return send(res, 409, { error: 'overpayment' })
         return send(res, 200, { url: `https://checkout.stripe.com/c/pay/mock_${returnTo}_${randomBytes(6).toString('hex')}` })
+    }
+
+    // --- Availability and lineups (member) ---
+    if (method === 'GET' && path === '/v1/availability/mine') {
+        const today = orlandoDate(new Date())
+        const rows = []
+        for (const [id, a] of answers) {
+            const r = a.get(user.email)
+            if (r && fixtureDate(id) >= today) rows.push({ fixtureId: id, status: r.status, note: r.note })
+        }
+        return send(res, 200, rows)
+    }
+    m = path.match(/^\/v1\/fixtures\/([^/]+)\/(availability|lineup)$/)
+    if (m) {
+        const id = decodeURIComponent(m[1])
+        if (!fixtureDate(id)) return send(res, 404, { error: 'not_found' })
+        if (m[2] === 'lineup' && method === 'GET') return send(res, 200, lineupShape(id, true))
+        if (m[2] === 'availability' && method === 'GET') return send(res, 200, mine(id, user.email))
+        if (m[2] === 'availability' && method === 'PUT') {
+            const status = typeof body.status === 'string' ? body.status.trim().toLowerCase() : null
+            const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim() : null
+            if (!['available', 'maybe', 'unavailable'].includes(status) || note?.length > 200) return send(res, 400, { error: 'Status must be available, maybe or unavailable, and the note at most 200 characters.' })
+            if (fixtureDate(id) < orlandoDate(new Date())) return send(res, 409, { error: 'This match has been played, so answers are closed.' })
+            const prev = answersFor(id).get(user.email)
+            const changed = !prev || prev.status !== status || prev.note !== note
+            answersFor(id).set(user.email, { status, note, updatedAt: changed ? new Date().toISOString() : prev.updatedAt })
+            return send(res, 200, mine(id, user.email))
+        }
     }
 
     // --- Admin ---
@@ -301,6 +406,36 @@ const server = createServer(async (req, res) => {
             if (!note && (p.method === 'volunteer' || p.method === 'waived')) return send(res, 400, { error: 'Volunteer or waived credits need a note.' })
             p.note = note
             return send(res, 204)
+        }
+    }
+    m = path.match(/^\/v1\/admin\/fixtures\/([^/]+)\/(availability|lineup)$/)
+    if (m) {
+        const id = decodeURIComponent(m[1])
+        if (m[2] === 'availability' && method === 'GET') {
+            const r = roster(id)
+            return send(res, 200, { fixtureId: id, counts: countOf(r), members: r })
+        }
+        if (!fixtureDate(id)) return send(res, 404, { error: 'not_found' })
+        if (m[2] === 'lineup' && method === 'GET') return send(res, 200, lineupShape(id, false))
+        if (m[2] === 'lineup' && method === 'PUT') {
+            const slots = (Array.isArray(body.slots) ? body.slots : []).filter(s => typeof s?.subject === 'string' && s.subject.trim()).map(s => ({ number: s.number, subject: s.subject.trim() }))
+            const numbers = slots.map(s => s.number)
+            if (slots.some(s => !Number.isInteger(s.number) || s.number < 1 || s.number > 23) || new Set(numbers).size !== numbers.length || new Set(slots.map(s => s.subject)).size !== slots.length) {
+                return send(res, 400, { error: 'Numbers run 1 to 23, each used once, and each player at most once.' })
+            }
+            const emails = slots.map(s => playerOf(s.subject))
+            if (emails.some(e => !e)) return send(res, 400, { error: 'Everyone in a lineup must be a club member who has signed in.' })
+            const prev = lineups.get(id)
+            const publish = body.publish === true
+            if (publish && prev?.status !== 'published' && !prev?.notified) console.log(`>> lineup published for ${id}: would notify ${emails.length} players`)
+            lineups.set(id, {
+                status: publish ? 'published' : 'draft',
+                publishedAt: publish ? prev?.publishedAt ?? new Date().toISOString() : null,
+                updatedAt: new Date().toISOString(),
+                notified: prev?.notified || publish,
+                slots: slots.map((s, i) => ({ number: s.number, email: emails[i] })).sort((a, b) => a.number - b.number),
+            })
+            return send(res, 200, lineupShape(id, false))
         }
     }
     if (method === 'GET' && path === '/v1/admin/invite-links') return send(res, 200, inviteLinks.map(linkShape).reverse())

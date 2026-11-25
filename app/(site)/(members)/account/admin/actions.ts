@@ -18,6 +18,7 @@ import {
     type RecordPaymentValues,
 } from '@/lib/claymores/admin-dues'
 import { formatCents, type ApiResult, type AssignAllResult, type Role } from '@/lib/claymores/api-client'
+import { parseLineupForm, type LineupValues } from '@/lib/claymores/match-availability'
 import { memberApi } from '@/lib/claymores/member'
 
 const ADMIN = '/account/admin'
@@ -247,4 +248,35 @@ export async function revokeInviteLink(id: string) {
     if (!result.ok) failed(result, 'link_revoked')
     revalidatePath(ADMIN)
     redirect(`${ADMIN}?notice=link_revoked#invitations`)
+}
+
+// --- Match lineups ---
+// Returns state on failure so the 23 picks survive and the API's own error shows; a save
+// redirects back to the match (`?fixture=<id>#matches`) with a page notice.
+
+export type LineupState = {
+    status: 'idle' | 'error'
+    message: string | null
+    values?: LineupValues
+    /** Bumped on every failed submit so the editor re-applies `values`. */
+    attempt: number
+}
+
+export async function saveLineup(previous: LineupState, formData: FormData): Promise<LineupState> {
+    const parsed = parseLineupForm(formData)
+    const attempt = previous.attempt + 1
+    if (!parsed.ok) return { status: 'error', message: parsed.message, values: parsed.values, attempt }
+
+    const result = await (await admin()).saveFixtureLineup(parsed.fixtureId, parsed.input)
+    if (!result.ok) {
+        if (result.status === 401) redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
+        const message = result.status === 400 ? result.error ?? 'Check the lineup and try again.'
+            : result.status === 403 ? 'Only club admins can do that.'
+            : result.status === 404 ? 'That match is no longer in the club’s fixtures.'
+            : 'The club server didn’t respond. Try again in a minute.'
+        return { status: 'error', message, values: parsed.values, attempt }
+    }
+    revalidatePath(ADMIN)
+    const notice = parsed.input.publish ? 'lineup_published' : 'lineup_saved'
+    redirect(`${ADMIN}?notice=${notice}&fixture=${encodeURIComponent(parsed.fixtureId)}#matches`)
 }
