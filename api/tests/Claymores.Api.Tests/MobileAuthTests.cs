@@ -104,6 +104,10 @@ internal sealed class FakeStripe : HttpMessageHandler
             }
 
             var form = QueryHelpers.ParseQuery(body).ToDictionary(pair => pair.Key, pair => pair.Value.ToString());
+            // Like Stripe since API 2026-09-30: the old parameter is refused.
+            if (form.Keys.Any(key => key.StartsWith("payment_method_types", StringComparison.Ordinal)))
+                return Error(HttpStatusCode.BadRequest, "invalid_request_error",
+                    "The `payment_method_types` parameter is no longer supported when creating a Checkout Session.");
             Creates.Enqueue(form);
             var live = request.Headers.Authorization?.Parameter?.StartsWith("sk_live_", StringComparison.Ordinal) == true;
             var id = (live ? "cs_live_" : "cs_test_") + Guid.NewGuid().ToString("N");

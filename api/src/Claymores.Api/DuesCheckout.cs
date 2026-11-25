@@ -148,7 +148,8 @@ internal sealed class DuesCheckout(
                         }
                     ]
                 };
-                options.AddExtraParam("payment_method_types", new[] { "card" });
+                // Card only. Stripe API 2026-09-30 (endive) removed payment_method_types for Checkout.
+                options.AddExtraParam("allowed_payment_method_types", new[] { "card" });
                 var key = legacy
                     ? $"claymores-dues-test-{attempt.Id:D}"
                     : $"claymores-dues-{settings.ModeName}-{Name(target)}-{attempt.Id:D}";
