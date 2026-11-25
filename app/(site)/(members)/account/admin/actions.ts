@@ -20,6 +20,7 @@ import {
 import { formatCents, type ApiResult, type AssignAllResult, type Role } from '@/lib/claymores/api-client'
 import { parseLineupForm, type LineupValues } from '@/lib/claymores/match-availability'
 import { memberApi } from '@/lib/claymores/member'
+import { parseNameForm } from '@/lib/claymores/member-name'
 
 const ADMIN = '/account/admin'
 
@@ -279,4 +280,15 @@ export async function saveLineup(previous: LineupState, formData: FormData): Pro
     revalidatePath(ADMIN)
     const notice = parsed.input.publish ? 'lineup_published' : 'lineup_saved'
     redirect(`${ADMIN}?notice=${notice}&fixture=${encodeURIComponent(parsed.fixtureId)}#matches`)
+}
+
+// --- Member names ---
+
+export async function saveMemberName(subject: string, formData: FormData) {
+    const parsed = parseNameForm(formData)
+    if (!parsed.ok || !subject || subject.length > 255) redirect(`${ADMIN}?error=name_invalid#members`)
+    const result = await (await admin()).setMemberName(subject, parsed.name)
+    if (!result.ok) failed(result, 'name_saved')
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=name_saved#members`)
 }

@@ -7,6 +7,7 @@ import '../../app/theme.dart';
 import '../../data/member_repository.dart';
 import '../../shared/widgets.dart';
 import '../auth/auth_service.dart';
+import 'full_name_form.dart';
 
 /// `/club/profile` (opened from the gear on the Club tab): who is signed in,
 /// the sign-ins that open the account, sign out and delete account. Dues
@@ -82,6 +83,20 @@ class _SignedInAccountState extends State<_SignedInAccount> {
     await identities?.then<void>((_) {}, onError: (Object _) {});
   }
 
+  Future<void> changeName() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final name = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) =>
+            ChangeNamePage(user: widget.user, members: widget.members),
+      ),
+    );
+    if (name != null) {
+      messenger.showSnackBar(SnackBar(content: Text('Saved: $name')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -110,6 +125,12 @@ class _SignedInAccountState extends State<_SignedInAccount> {
                         const SizedBox(height: 10),
                         Text(user.email!, style: textTheme.bodySmall),
                       ],
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        key: const Key('change-name'),
+                        onPressed: changeName,
+                        child: const Text('CHANGE NAME'),
+                      ),
                     ],
                   ),
                 ),

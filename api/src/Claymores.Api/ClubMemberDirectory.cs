@@ -15,8 +15,9 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
             VALUES (@subject, @email, @name)
             ON CONFLICT (google_subject) DO UPDATE SET
                 email = EXCLUDED.email,
-                display_name = CASE WHEN @keepName
-                    THEN COALESCE(EXCLUDED.display_name, club_members.display_name)
+                display_name = CASE
+                    WHEN club_members.name_set_by IS NOT NULL THEN club_members.display_name
+                    WHEN @keepName THEN COALESCE(EXCLUDED.display_name, club_members.display_name)
                     ELSE EXCLUDED.display_name END,
                 last_sign_in_at = now()
             RETURNING display_name
@@ -27,6 +28,52 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
             (object?)member.Name ?? DBNull.Value;
         command.Parameters.AddWithValue("keepName", keepExistingName);
         return await command.ExecuteScalarAsync(ct) as string;
+    }
+
+    internal const int MaxNameLength = 80;
+
+    public async Task<string?> NameAsync(string subject, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand("SELECT display_name FROM club_members WHERE google_subject = @subject");
+        command.Parameters.AddWithValue("subject", subject);
+        return await command.ExecuteScalarAsync(ct) as string;
+    }
+
+    /// <summary>Trims and collapses spaces; null when empty or longer than 80 characters.</summary>
+    internal static string? CleanName(string? name)
+    {
+        var clean = string.Join(' ', (name ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return clean.Length is >= 1 and <= MaxNameLength ? clean : null;
+    }
+
+    /// <summary>
+    /// Sets a member's name (they typed it, or an admin did). Sign-in won't replace it afterwards,
+    /// and their app sessions pick it up on the next token refresh.
+    /// </summary>
+    /// <returns>False when there's no such member.</returns>
+    public async Task<bool> SetNameAsync(string subject, string name, string setBy, CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var update = new NpgsqlCommand("""
+            UPDATE club_members SET display_name = @name, name_set_by = @by, name_set_at = now()
+            WHERE google_subject = @subject
+            """, connection, transaction))
+        {
+            update.Parameters.AddWithValue("subject", subject);
+            update.Parameters.AddWithValue("name", name);
+            update.Parameters.AddWithValue("by", setBy);
+            if (await update.ExecuteNonQueryAsync(ct) == 0) return false;
+        }
+        await using (var sessions = new NpgsqlCommand(
+            "UPDATE mobile_refresh_tokens SET display_name = @name WHERE google_subject = @subject", connection, transaction))
+        {
+            sessions.Parameters.AddWithValue("subject", subject);
+            sessions.Parameters.AddWithValue("name", name);
+            await sessions.ExecuteNonQueryAsync(ct);
+        }
+        await transaction.CommitAsync(ct);
+        return true;
     }
 
     /// <summary>
@@ -174,5 +221,38 @@ internal sealed class ClubMemberDirectory(NpgsqlDataSource dataSource, IConfigur
                 reader.IsDBNull(2) ? null : reader.GetString(2)));
 
         return members;
+    }
+}
+
+internal sealed record SetMemberName(string? Name);
+
+internal static class MemberNameEndpoints
+{
+    public static void Map(WebApplication app)
+    {
+        app.MapPut("/v1/me/name", async (SetMemberName request, System.Security.Claims.ClaimsPrincipal user,
+                ClubMemberDirectory members, CancellationToken ct) =>
+            {
+                if (ClubMemberDirectory.CleanName(request.Name) is not { } name)
+                    return Results.BadRequest(new { error = "Enter your name, at most 80 characters." });
+                var subject = user.FindFirst("sub")!.Value;
+                return await members.SetNameAsync(subject, name, subject, ct)
+                    ? Results.Ok(new { name }) : Results.NotFound();
+            })
+            .RequireAuthorization(GoogleSignIn.RolePolicy).AddEndpointFilter(SameOriginGuard.Filter)
+            .WithTags("Members").WithSummary("Set my name as the club shows it (sign-in won't replace it)")
+            .Produces(200).Produces(400).Produces(401).Produces(404);
+
+        app.MapPut("/v1/admin/members/{subject}/name", async (string subject, SetMemberName request,
+                System.Security.Claims.ClaimsPrincipal user, ClubMemberDirectory members, CancellationToken ct) =>
+            {
+                if (ClubMemberDirectory.CleanName(request.Name) is not { } name)
+                    return Results.BadRequest(new { error = "Enter a name, at most 80 characters." });
+                var admin = user.FindFirst("email")?.Value ?? user.FindFirst("sub")!.Value;
+                return await members.SetNameAsync(subject, name, admin, ct) ? Results.Ok(new { subject, name }) : Results.NotFound();
+            })
+            .RequireAuthorization(GoogleSignIn.AdminPolicy).AddEndpointFilter(SameOriginGuard.Filter)
+            .WithTags("Members").WithSummary("Set a member's name")
+            .Produces(200).Produces(400).Produces(401).Produces(403).Produces(404);
     }
 }

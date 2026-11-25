@@ -16,6 +16,16 @@ class MemberRepository {
     await _api.getJson('/v1/me', auth: true) as Map<String, dynamic>,
   );
 
+  /// `PUT /v1/me/name`: the member's own name as the club shows it ("First
+  /// Last"); sign-in won't replace it afterwards. Returns the stored name.
+  /// Throws [ApiException] 400 (with the API's message) when blank or over
+  /// 80 characters.
+  Future<String> setName(String name) async {
+    final json = await _api.putJson('/v1/me/name', {'name': name}, auth: true);
+    final saved = json is Map ? json['name'] : null;
+    return saved is String && saved.trim().isNotEmpty ? saved : name;
+  }
+
   Future<List<DuesAssessment>> myDues() async =>
       (await _api.getJson('/v1/dues/mine', auth: true) as List)
           .whereType<Map<String, dynamic>>()

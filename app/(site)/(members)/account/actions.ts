@@ -9,6 +9,7 @@ import { memberAuthEnabled, SIGNED_IN_HINT_COOKIE, webCheckoutEnabled } from '@/
 import { CHECKOUT_UNAVAILABLE_MESSAGE, checkoutOutcome } from '@/lib/claymores/checkout'
 import { matchAnchor, parseAvailabilityForm } from '@/lib/claymores/match-availability'
 import { memberApi } from '@/lib/claymores/member'
+import { parseNameForm } from '@/lib/claymores/member-name'
 
 export type PayState = { error: string | null; amount?: string }
 
@@ -78,4 +79,15 @@ export async function answerAvailability(formData: FormData) {
 
 function back(outcome: string, fixtureId: string | null): never {
     redirect(`/account?availability=${outcome}${fixtureId ? `#${matchAnchor(fixtureId)}` : '#matches'}`)
+}
+
+/** "What's your full name?" on /account. */
+export async function saveMyName(formData: FormData) {
+    const parsed = parseNameForm(formData)
+    if (!parsed.ok) redirect(`/account?name=invalid&editName=1`)
+    const session = await memberApi()
+    if (!session) redirect('/sign-in?callbackUrl=/account')
+    const result = await session.api.setMyName(parsed.name)
+    if (!result.ok && result.status === 401) redirect('/sign-in?error=expired&callbackUrl=/account')
+    redirect(result.ok ? '/account?name=saved' : '/account?name=failed&editName=1')
 }

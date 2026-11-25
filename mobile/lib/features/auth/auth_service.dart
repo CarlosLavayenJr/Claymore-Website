@@ -569,6 +569,32 @@ class AuthService extends ChangeNotifier implements AccessTokenSource {
     }
   }
 
+  /// Picks up a change to the signed-in member (their name) right away: the
+  /// API updated the refresh token, so a refresh brings the new name, and
+  /// listeners are notified. A refresh already in flight may predate the
+  /// change, so it is awaited first. When the refresh can't deliver [name]
+  /// (offline), it is applied to this session locally.
+  Future<void> refreshUser({String? name}) async {
+    if (!signedIn) return;
+    final generation = _generation;
+    final inFlight = _refreshing;
+    if (inFlight != null) await inFlight;
+    if (generation != _generation) return;
+    await _refresh();
+    final session = _session;
+    if (generation != _generation || session == null || name == null) return;
+    if (session.user.name != name) {
+      _session = AuthSession(
+        accessToken: session.accessToken,
+        accessTokenExpiresAt: session.accessTokenExpiresAt,
+        refreshToken: session.refreshToken,
+        user: session.user.withName(name),
+        serverDate: session.serverDate,
+      );
+      _set(_status);
+    }
+  }
+
   /// Ends the session on this device only (the server already ended it).
   Future<void> _endLocally(String? message) async {
     _endSession();
