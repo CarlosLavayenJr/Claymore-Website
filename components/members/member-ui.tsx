@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { roleLabel } from '@/lib/claymores/roles'
 
 export const ctaClass =
     'inline-flex items-center justify-center gap-3 rounded-md bg-[#77c3ef] px-6 py-3 font-claymore text-lg text-white transition-colors hover:bg-[#a0d5f5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] disabled:cursor-not-allowed disabled:opacity-60'
@@ -65,7 +66,7 @@ export function Notice({ tone = 'info', title, children, className }: { tone?: T
 }
 
 export function RoleBadge({ role }: { role: string | null | undefined }) {
-    const admin = role === 'admin'
+    const admin = role === 'admin' || role === 'coach' || role === 'superadmin'
     return (
         <span
             className={cn(
@@ -73,7 +74,7 @@ export function RoleBadge({ role }: { role: string | null | undefined }) {
                 admin ? 'bg-[#fd80b5] text-white' : 'bg-[#77c3ef]/15 text-[#1f6f9c]',
             )}
         >
-            {admin ? 'Admin' : role === 'player' ? 'Player' : role ?? 'Member'}
+            {roleLabel(role)}
         </span>
     )
 }

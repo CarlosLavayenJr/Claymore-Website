@@ -163,11 +163,15 @@ class MatchAdminSection extends StatefulWidget {
     required this.fixture,
     required this.admin,
     required this.onLineupChanged,
+    this.canEdit = true,
   });
 
   final Fixture fixture;
   final AdminRepository admin;
   final VoidCallback onLineupChanged;
+
+  /// Coaches (and the super admin) pick lineups; admins only see them.
+  final bool canEdit;
 
   @override
   State<MatchAdminSection> createState() => _MatchAdminSectionState();
@@ -249,10 +253,16 @@ class _MatchAdminSectionState extends State<MatchAdminSection> {
                         ],
                       ),
                     ),
-                    FilledButton(
-                      onPressed: edit,
-                      child: const Text('EDIT LINEUP'),
-                    ),
+                    if (widget.canEdit)
+                      FilledButton(
+                        onPressed: edit,
+                        child: const Text('EDIT LINEUP'),
+                      )
+                    else
+                      Text(
+                        'The coach picks it',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
               ),

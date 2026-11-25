@@ -451,7 +451,7 @@ internal static class DuesEndpoints
                 description is null || description.Length is < 1 or > 120)
                 return Results.BadRequest(new { error = "Provide a batch ID, description, and positive amount in cents." });
 
-            var subjects = (await members.ListAsync(ct)).Select(m => m.Subject).Distinct(StringComparer.Ordinal).ToArray();
+            var subjects = (await members.ListPlayingAsync(ct)).Select(m => m.Subject).Distinct(StringComparer.Ordinal).ToArray();
             if (subjects.Length == 0)
                 return Results.Conflict(new { error = "No members have signed in yet." });
             return await ledger.AssignToAllAsync(request with { Description = description }, subjects, ct) is { } result

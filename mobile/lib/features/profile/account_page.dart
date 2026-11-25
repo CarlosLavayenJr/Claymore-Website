@@ -118,7 +118,7 @@ class _SignedInAccountState extends State<_SignedInAccount> {
                       BrandHeader(
                         eyebrow: user.role == null
                             ? 'Claymores RFC'
-                            : 'Claymores RFC · ${user.role}',
+                            : 'Claymores RFC · ${user.roleLabel}',
                         title: user.displayName,
                       ),
                       if (user.email != null) ...[

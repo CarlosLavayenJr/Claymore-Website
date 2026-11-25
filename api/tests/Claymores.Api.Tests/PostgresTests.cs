@@ -103,7 +103,7 @@ public sealed class InvitationTests(PostgresDatabase database) : IClassFixture<P
         }).Build();
 
         await invitations.UpsertAsync("bootstrap@example.com", "player", null, ct);
-        Assert.Equal("admin", await ClubRoles.ResolveAsync(Identities.Google("bootstrap@example.com"),
+        Assert.Equal("superadmin", await ClubRoles.ResolveAsync(Identities.Google("bootstrap@example.com"),
             configuration, invitations, ct));
     }
 

@@ -479,10 +479,29 @@ void main() {
       expect(find.text('Draft · 1 of 23 picked'), findsOneWidget);
     });
 
-    testWidgets('the editor saves a draft and publishes after confirming', (
+    testWidgets('admins see the lineup but only the coach picks it', (
       tester,
     ) async {
       await pump(tester, details(), role: 'admin');
+      expect(find.text('Draft · 1 of 23 picked'), findsOneWidget);
+      expect(find.text('EDIT LINEUP'), findsNothing);
+      expect(find.text('The coach picks it'), findsOneWidget);
+      expect(find.text('CAN YOU PLAY?'), findsOneWidget);
+    });
+
+    testWidgets('coaches pick lineups and aren’t asked to play', (
+      tester,
+    ) async {
+      await pump(tester, details(), role: 'coach');
+      expect(find.text('EDIT LINEUP'), findsOneWidget);
+      expect(find.text('CAN YOU PLAY?'), findsNothing);
+      expect(find.text('AVAILABLE · 2'), findsOneWidget);
+    });
+
+    testWidgets('the editor saves a draft and publishes after confirming', (
+      tester,
+    ) async {
+      await pump(tester, details(), role: 'coach');
       await tester.tap(find.text('EDIT LINEUP'));
       await tester.pumpAndSettle();
 
@@ -565,7 +584,7 @@ void main() {
         'error':
             'Everyone in a lineup must be a club member who has signed in.',
       }, 400);
-      await pump(tester, details(), role: 'admin');
+      await pump(tester, details(), role: 'coach');
       await tester.tap(find.text('EDIT LINEUP'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('SAVE DRAFT'));

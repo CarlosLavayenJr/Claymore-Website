@@ -13,7 +13,7 @@ internal sealed class BearerOperationFilter : IOperationFilter
 
         var policy = metadata.OfType<IAuthorizeData>().Select(item => item.Policy);
         // Club routes take the browser session or, with mobile sign-in on, an API bearer token.
-        string[] schemes = policy.Any(name => name is GoogleSignIn.RolePolicy or GoogleSignIn.AdminPolicy)
+        string[] schemes = policy.Any(name => name is GoogleSignIn.RolePolicy or GoogleSignIn.AdminPolicy or GoogleSignIn.LineupPolicy)
             ? ["ClubSession", "Bearer"] : ["Bearer"];
         operation.Security ??= [];
         foreach (var scheme in schemes)

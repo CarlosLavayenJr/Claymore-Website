@@ -61,7 +61,7 @@ public sealed class ConfiguredRoleTests
         }).Build();
 
     [Theory]
-    [InlineData("captain@example.com", "admin")]
+    [InlineData("captain@example.com", "superadmin")]
     [InlineData("PLAYER@example.com", "player")]
     [InlineData("stranger@example.com", null)]
     public async Task Resolves_roles_from_configuration(string email, string? expected) =>

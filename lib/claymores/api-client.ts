@@ -2,7 +2,8 @@
 // in practice (it carries bearer tokens), but it has no `server-only` import so
 // it can be unit tested with a fake fetch.
 
-export type Role = 'player' | 'admin'
+/** A role an admin can give (see lib/claymores/roles.ts). The API also reports 'superadmin'. */
+export type Role = 'player' | 'coach' | 'admin'
 
 export type ApiUser = {
     subject: string

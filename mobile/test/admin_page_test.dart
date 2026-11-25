@@ -821,7 +821,9 @@ void main() {
       final date = const DefaultMaterialLocalizations()
           .formatMediumDate(next)
           .replaceFirst(', ', ' ');
-      final nextTile = tester.widget<AdminTile>(find.byKey(const Key('tile-next-match')));
+      final nextTile = tester.widget<AdminTile>(
+        find.byKey(const Key('tile-next-match')),
+      );
       expect(nextTile.label, 'Next match · $date');
       expect(nextTile.value, 'at Jacksonville RFC');
       expect(nextTile.detail, startsWith('14 can play'));
@@ -942,9 +944,21 @@ void main() {
       await finish(tester, services);
     });
 
+    testWidgets('admins approve players; only the super admin picks a role', (
+      tester,
+    ) async {
+      final services = await openAdmin(tester, tab: 'people');
+      await tap(tester, find.byKey(const Key('more-options-r2')));
+      expect(find.byKey(const Key('role-admin-r2')), findsNothing);
+      expect(find.byKey(const Key('role-coach-r2')), findsNothing);
+      expect(find.byKey(const Key('deny-reason-r2')), findsOneWidget);
+      await finish(tester, services);
+    });
+
     testWidgets('approve as player, and as admin under More options', (
       tester,
     ) async {
+      role = 'superadmin';
       final services = await openAdmin(tester, tab: 'people');
       await tap(tester, find.byKey(const Key('approve-r1')));
       final first = requests.lastWhere((r) => r.url.path.endsWith('/approve'));

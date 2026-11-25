@@ -122,7 +122,8 @@ internal sealed class MatchAvailability(NpgsqlDataSource dataSource, ClubMemberD
     /// </summary>
     public async Task<List<MemberAvailability>> RosterAsync(string fixtureId, CancellationToken ct)
     {
-        var current = await members.ListAsync(ct);
+        // Coaches don't play, so they aren't asked or counted.
+        var current = await members.ListPlayingAsync(ct);
         var answers = new Dictionary<string, (string Status, string? Note, DateTimeOffset UpdatedAt)>(StringComparer.Ordinal);
         await using (var command = dataSource.CreateCommand(
             "SELECT member_subject, status, note, updated_at FROM match_availability WHERE fixture_id = @id"))
@@ -140,6 +141,9 @@ internal sealed class MatchAvailability(NpgsqlDataSource dataSource, ClubMemberD
                 : new MemberAvailability(m.Subject, m.Email, m.Name, null, null, null))
             .ToList();
     }
+
+    /// <summary>Every current member, coaches included (results go to everyone).</summary>
+    public Task<List<ClubMember>> MembersAsync(CancellationToken ct) => members.ListAsync(ct);
 
     internal static AvailabilityCounts Count(IReadOnlyList<MemberAvailability> roster) => new(
         roster.Count(m => m.Status == "available"), roster.Count(m => m.Status == "maybe"),
@@ -196,7 +200,7 @@ internal sealed class MatchAvailability(NpgsqlDataSource dataSource, ClubMemberD
             slots.Select(s => s.Subject).Distinct(StringComparer.Ordinal).Count() != slots.Count)
             return LineupResult.Invalid;
         if (await FixtureDateAsync(fixtureId, ct) is null) return LineupResult.NotFound;
-        var known = (await members.ListAsync(ct)).Select(m => m.Subject).ToHashSet(StringComparer.Ordinal);
+        var known = (await members.ListPlayingAsync(ct)).Select(m => m.Subject).ToHashSet(StringComparer.Ordinal);
         if (slots.Any(s => !known.Contains(s.Subject))) return LineupResult.NotMember;
 
         await using var connection = await dataSource.OpenConnectionAsync(ct);
@@ -253,7 +257,9 @@ internal static class MatchAvailabilityEndpoints
             .Produces<MyAvailability>().Produces(401).Produces(404);
         member.MapPut("/fixtures/{id}/availability", async (string id, AvailabilityAnswer request, ClaimsPrincipal user,
                 MatchAvailability store, CancellationToken ct) =>
-                await store.AnswerAsync(id, user.FindFirstValue("sub")!, request, ct) switch
+                !ClubRoles.Plays(ClubRoles.Of(user))
+                    ? Results.Json(new { error = "Coaches don't answer availability." }, statusCode: StatusCodes.Status403Forbidden)
+                    : await store.AnswerAsync(id, user.FindFirstValue("sub")!, request, ct) switch
                 {
                     AnswerResult.Saved => Results.Ok(await store.MineAsync(id, user.FindFirstValue("sub")!, ct)),
                     AnswerResult.NotFound => Results.NotFound(),
@@ -262,7 +268,7 @@ internal static class MatchAvailabilityEndpoints
                 })
             .AddEndpointFilter(SameOriginGuard.Filter)
             .WithSummary("Say whether I can play a match (until the end of match day)")
-            .Produces<MyAvailability>().Produces(400).Produces(401).Produces(404).Produces(409);
+            .Produces<MyAvailability>().Produces(400).Produces(401).Produces(403).Produces(404).Produces(409);
         member.MapGet("/fixtures/{id}/lineup", async (string id, MatchAvailability store, CancellationToken ct) =>
                 await store.LineupAsync(id, publishedOnly: true, ct) is { } lineup ? Results.Ok(lineup) : Results.NotFound())
             .WithSummary("The published lineup for a match (status none until an admin publishes it)")
@@ -279,6 +285,7 @@ internal static class MatchAvailabilityEndpoints
         admin.MapGet("/{id}/lineup", async (string id, MatchAvailability store, CancellationToken ct) =>
                 await store.LineupAsync(id, publishedOnly: false, ct) is { } lineup ? Results.Ok(lineup) : Results.NotFound())
             .WithSummary("The lineup for a match, draft or published").Produces<Lineup>().Produces(401).Produces(403).Produces(404);
+        // Admins can see lineups; only coaches (and the super admin) pick them.
         admin.MapPut("/{id}/lineup", async (string id, SaveLineup request, ClaimsPrincipal user, MatchAvailability store,
                 MatchReminders reminders, CancellationToken ct) =>
             {
@@ -291,13 +298,14 @@ internal static class MatchAvailabilityEndpoints
                     case LineupResult.NotFound:
                         return Results.NotFound();
                     case LineupResult.NotMember:
-                        return Results.BadRequest(new { error = "Everyone in a lineup must be a club member who has signed in." });
+                        return Results.BadRequest(new { error = "Everyone in a lineup must be a playing club member who has signed in." });
                     default:
                         return Results.BadRequest(new { error = "Numbers run 1 to 23, each used once, and each player at most once." });
                 }
             })
             .AddEndpointFilter(SameOriginGuard.Filter)
-            .WithSummary("Save a match lineup (1-15 starters, 16-23 replacements) as a draft or publish it")
+            .RequireAuthorization(GoogleSignIn.LineupPolicy)
+            .WithSummary("Save a match lineup (1-15 starters, 16-23 replacements) as a draft or publish it (coaches)")
             .Produces<Lineup>().Produces(400).Produces(401).Produces(403).Produces(404);
     }
 

@@ -296,6 +296,9 @@ internal static class JoinRequestEndpoints
             {
                 if (request?.Role is not { } role || !ClubInvitations.Roles.Contains(role))
                     return InvalidRequest("role");
+                if (ClubRoles.IsStaff(role) && !user.IsInRole(ClubRoles.SuperAdmin))
+                    return Results.Json(new { error = "Only the super admin can make admins and coaches." },
+                        statusCode: StatusCodes.Status403Forbidden);
                 var (result, approved, _) = await store.ApproveAsync(id, role, user.FindFirstValue("email"), ct);
                 return Decision(result, approved);
             })
@@ -441,10 +444,11 @@ internal static class JoinRequestAdminPage
             return ReturnToPage(context, "invalid");
         var form = await context.Request.ReadFormAsync(ct);
         var role = form["role"].ToString();
-        if (!ClubInvitations.Roles.Contains(role))
+        if (!ClubInvitations.Roles.Contains(role) ||
+            (ClubRoles.IsStaff(role) && !context.User.IsInRole(ClubRoles.SuperAdmin)))
             return ReturnToPage(context, "invalid");
         var (result, _, stored) = await store.ApproveAsync(id, role, context.User.FindFirstValue("email"), ct);
-        return ReturnToPage(context, Notice(result, stored == "admin" && role != "admin" ? "approved-admin" : "approved"));
+        return ReturnToPage(context, Notice(result, ClubRoles.IsStaff(stored) && stored != role ? "approved-admin" : "approved"));
     }
 
     private static async Task<IResult> DenyAsync(Guid id, HttpContext context, JoinRequestStore store, CancellationToken ct)
@@ -488,6 +492,7 @@ internal static class JoinRequestAdminPage
                 <label class="admin-field">Role
                   <select name="role">
                     <option value="player" selected>Player</option>
+                    <option value="coach">Coach</option>
                     <option value="admin">Admin</option>
                   </select>
                 </label>
@@ -516,7 +521,7 @@ internal static class JoinRequestAdminPage
         var message = notice switch
         {
             "approved" => "Request approved. They can sign in now.",
-            "approved-admin" => "Request approved. This email was already invited as an admin and stays an admin.",
+            "approved-admin" => "Request approved. This email was already invited as an admin or coach and keeps that role.",
             "denied" => "Request denied. They can ask again after 24 hours.",
             "invalid" => "Choose a role, and keep the reason under 500 characters.",
             "missing" => "This request no longer exists.",

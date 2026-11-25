@@ -83,6 +83,7 @@ class _FixturesPageState extends State<FixturesPage> {
                   fixture: fixture,
                   availability:
                       showAvailability &&
+                      (AppScope.of(context).auth.user?.plays ?? true) &&
                       !history &&
                       takesAvailability(fixture),
                 ),
@@ -110,7 +111,10 @@ class AddToCalendarButton extends StatelessWidget {
     onPressed: () async {
       var opened = false;
       try {
-        opened = await launchUrl(calendar, mode: LaunchMode.externalApplication);
+        opened = await launchUrl(
+          calendar,
+          mode: LaunchMode.externalApplication,
+        );
       } on Exception {
         opened = false;
       }

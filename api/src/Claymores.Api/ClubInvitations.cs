@@ -12,7 +12,8 @@ internal sealed record InvitationRequest(string? Role);
 internal sealed class ClubInvitations(NpgsqlDataSource dataSource, IMemoryCache cache)
 {
     internal static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
-    internal static readonly string[] Roles = ["player", "admin"];
+    /// <summary>Roles an invitation can hold. The super admin is configuration only, never a row.</summary>
+    internal static readonly string[] Roles = [ClubRoles.Player, ClubRoles.Coach, ClubRoles.Admin];
 
     public static string Normalize(string email) => email.Trim().ToLowerInvariant();
 
@@ -59,7 +60,8 @@ internal sealed class ClubInvitations(NpgsqlDataSource dataSource, IMemoryCache 
 
     /// <summary>
     /// The invitation write inside the caller's transaction. With <paramref name="keepAdmin"/>, an
-    /// existing admin invitation is never lowered to player (join request approvals use this). The
+    /// existing admin or coach invitation is never lowered to player (join request approvals and invite
+    /// links use this). The
     /// caller commits, then calls <see cref="Forget"/>.
     /// </summary>
     /// <returns>The email's role afterwards.</returns>
@@ -69,7 +71,8 @@ internal sealed class ClubInvitations(NpgsqlDataSource dataSource, IMemoryCache 
         await using var command = new NpgsqlCommand("""
             INSERT INTO club_invitations (email, role, invited_by) VALUES (@email, @role, @by)
             ON CONFLICT (email) DO UPDATE SET
-                role = CASE WHEN @keepAdmin AND club_invitations.role = 'admin' THEN 'admin' ELSE EXCLUDED.role END,
+                role = CASE WHEN @keepAdmin AND club_invitations.role IN ('admin', 'coach')
+                    THEN club_invitations.role ELSE EXCLUDED.role END,
                 updated_at = now()
             RETURNING role
             """, connection, transaction);
@@ -105,10 +108,58 @@ internal sealed class ClubInvitations(NpgsqlDataSource dataSource, IMemoryCache 
 
 internal static class ClubRoles
 {
+    /// <summary>The configured bootstrap admin: everything, and the only one who can make admins and coaches.</summary>
+    public const string SuperAdmin = "superadmin";
+    /// <summary>Runs the club and picks lineups; doesn't play (no availability, no automatic dues).</summary>
+    public const string Coach = "coach";
+    /// <summary>Runs the club (dues, members, matches); can see lineups but not pick them.</summary>
+    public const string Admin = "admin";
+    public const string Player = "player";
+
     /// <summary>
-    /// Resolves a verified Google identity to "admin", "player", or null (not invited).
-    /// Sources: the configured bootstrap lists (Authentication:Google:AdminEmails and
-    /// PlayerEmails) and the club_invitations table. Admin from either source wins.
+    /// The role claims a member's role carries. "admin" means club admin access, so a coach and the
+    /// super admin have it too; "coach" means picking lineups, so the super admin has that as well.
+    /// </summary>
+    public static string[] Claims(string role) => role switch
+    {
+        SuperAdmin => [SuperAdmin, Admin, Coach],
+        Coach => [Coach, Admin],
+        Admin => [Admin],
+        _ => [Player],
+    };
+
+    /// <summary>Replaces the identity's role claims with the ones <paramref name="role"/> carries.</summary>
+    /// <returns>true if they changed.</returns>
+    public static bool SetClaims(ClaimsIdentity identity, string claimType, string role)
+    {
+        var wanted = Claims(role);
+        var current = identity.FindAll(claimType).ToArray();
+        if (current.Select(c => c.Value).Order().SequenceEqual(wanted.Order())) return false;
+        foreach (var stale in current) identity.RemoveClaim(stale);
+        foreach (var value in wanted) identity.AddClaim(new Claim(claimType, value));
+        return true;
+    }
+
+    /// <summary>The member's own role (the most specific one its claims carry).</summary>
+    public static string Of(ClaimsPrincipal user) =>
+        user.IsInRole(SuperAdmin) ? SuperAdmin
+        : user.IsInRole(Coach) ? Coach
+        : user.IsInRole(Admin) ? Admin
+        : Player;
+
+    /// <summary>Everyone plays except coaches: they aren't asked for availability or picked in lineups.</summary>
+    public static bool Plays(string role) => role != Coach;
+
+    /// <summary>Only the super admin may give or take away the admin and coach roles.</summary>
+    public static bool IsStaff(string? role) => role is Admin or Coach or SuperAdmin;
+
+    public static bool IsSuperAdmin(IConfiguration configuration, string email) =>
+        IsConfigured(configuration, "AdminEmails", email);
+
+    /// <summary>
+    /// Resolves a verified Google identity to "superadmin", "admin", "coach", "player", or null (not
+    /// invited). Sources: the configured bootstrap lists (Authentication:Google:AdminEmails, the super
+    /// admin, and PlayerEmails) and the club_invitations table.
     /// </summary>
     public static async Task<string?> ResolveAsync(ClaimsPrincipal? user, IConfiguration configuration,
         ClubInvitations? invitations, CancellationToken ct)
@@ -120,10 +171,10 @@ internal static class ClubRoles
             !verified)
             return null;
 
-        if (IsConfigured(configuration, "AdminEmails", email)) return "admin";
+        if (IsConfigured(configuration, "AdminEmails", email)) return SuperAdmin;
         var stored = invitations is null ? null : await invitations.FindRoleAsync(email, ct);
-        if (stored == "admin") return "admin";
-        if (stored == "player" || IsConfigured(configuration, "PlayerEmails", email)) return "player";
+        if (stored is Admin or Coach) return stored;
+        if (stored == Player || IsConfigured(configuration, "PlayerEmails", email)) return Player;
         return null;
     }
 
@@ -160,13 +211,19 @@ internal static class InvitationEndpoints
             .Produces<List<ClubInvitation>>().Produces(401).Produces(403);
 
         admin.MapPut("/{email}", async (string email, InvitationRequest request, ClaimsPrincipal user,
-                ClubInvitations invitations, CancellationToken ct) =>
+                ClubInvitations invitations, IConfiguration configuration, CancellationToken ct) =>
             {
                 var normalized = ClubInvitations.Normalize(email);
                 if (!ClubInvitations.IsValidEmail(normalized) || !ClubInvitations.Roles.Contains(request.Role))
-                    return Results.BadRequest(new { error = "Provide a valid email and a role of player or admin." });
-                if (IsSelf(user, normalized) && request.Role != "admin")
-                    return Results.Conflict(new { error = "You can't remove your own admin role." });
+                    return Results.BadRequest(new { error = "Provide a valid email and a role of player, coach or admin." });
+                if (ClubRoles.IsSuperAdmin(configuration, normalized))
+                    return Results.Conflict(new { error = "That's the super admin, set in the API's settings." });
+                var current = await invitations.FindRoleAsync(normalized, ct);
+                if (IsSelf(user, normalized) && request.Role != current)
+                    return Results.Conflict(new { error = "You can't change your own role." });
+                if ((ClubRoles.IsStaff(request.Role) || ClubRoles.IsStaff(current)) && !user.IsInRole(ClubRoles.SuperAdmin))
+                    return Results.Json(new { error = "Only the super admin can make or change admins and coaches." },
+                        statusCode: StatusCodes.Status403Forbidden);
 
                 await invitations.UpsertAsync(normalized, request.Role!, user.FindFirstValue("email"), ct);
                 return Results.Ok(new { email = normalized, role = request.Role });
@@ -181,6 +238,9 @@ internal static class InvitationEndpoints
                 var normalized = ClubInvitations.Normalize(email);
                 if (IsSelf(user, normalized))
                     return Results.Conflict(new { error = "You can't remove your own invitation." });
+                if (ClubRoles.IsStaff(await invitations.FindRoleAsync(normalized, ct)) && !user.IsInRole(ClubRoles.SuperAdmin))
+                    return Results.Json(new { error = "Only the super admin can remove admins and coaches." },
+                        statusCode: StatusCodes.Status403Forbidden);
                 return await invitations.RemoveAsync(normalized, ct) ? Results.NoContent() : Results.NotFound();
             })
             .AddEndpointFilter(SameOrigin)

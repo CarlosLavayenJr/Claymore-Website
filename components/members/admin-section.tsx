@@ -51,7 +51,7 @@ export function AdminSection({ id, title, status, defaultOpen = false, needsActi
                     // Storage blocked: nothing to remember.
                 }
             }}
-            className="group scroll-mt-24 rounded-lg border border-[#EAEAEA] bg-white"
+            className="group/section scroll-mt-24 rounded-lg border border-[#EAEAEA] bg-white"
         >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 marker:hidden sm:p-6 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0">
@@ -60,7 +60,7 @@ export function AdminSection({ id, title, status, defaultOpen = false, needsActi
                 </span>
                 <ChevronDown
                     aria-hidden
-                    className="h-5 w-5 shrink-0 text-[#555555] transition-transform group-open:rotate-180"
+                    className="h-5 w-5 shrink-0 text-[#555555] transition-transform group-open/section:rotate-180"
                 />
             </summary>
             <div className="border-t border-[#EAEAEA] p-5 sm:p-6">{children}</div>

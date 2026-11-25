@@ -396,7 +396,7 @@ app.MapGet("/v1/me", async (ClaimsPrincipal user, IServiceProvider services, Can
             ? await members.NameAsync(sub, ct) : null)
             ?? user.FindFirstValue("name") ?? user.Identity?.Name,
         user.FindFirstValue("email"),
-        user.FindFirstValue(MobileAuth.RoleClaim))))
+        user.HasClaim(c => c.Type == MobileAuth.RoleClaim) ? ClubRoles.Of(user) : null)))
     .RequireAuthorization()
     .WithTags("Identity")
     .WithSummary("Get the current API identity")

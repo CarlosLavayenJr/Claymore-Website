@@ -38,7 +38,11 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     public ValueTask InitializeAsync()
     {
         if (database.ConnectionString is not null)
-            _factory = ApiFactory.With(Settings(database.ConnectionString, 10_000), Fakes);
+        {
+            var settings = Settings(database.ConnectionString, 10_000);
+            settings["Authentication:Google:AdminEmails:0"] = SuperAdminEmail;
+            _factory = ApiFactory.With(settings, Fakes);
+        }
         return ValueTask.CompletedTask;
     }
 
@@ -80,9 +84,16 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         return (await response.Content.ReadFromJsonAsync<Dictionary<string, string>>(Ct))!["status"];
     }
 
-    private async Task<string> AdminTokenAsync(string email)
+    private const string SuperAdminEmail = "owner@example.com";
+
+    private Task<string> AdminTokenAsync(string email) => TokenAsync(email, "admin");
+    private Task<string> CoachTokenAsync(string email) => TokenAsync(email, "coach");
+    /// <summary>The configured bootstrap admin: the only super admin.</summary>
+    private Task<string> SuperAdminTokenAsync() => TokenAsync(SuperAdminEmail, null);
+
+    private async Task<string> TokenAsync(string email, string? role)
     {
-        await InviteAsync(email, "admin");
+        if (role is not null) await InviteAsync(email, role);
         var response = await Client().PostAsJsonAsync("/v1/auth/mobile/google",
             new { idToken = FakeGoogleValidator.Token("sub-" + email, email) }, Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -320,7 +331,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     public async Task Approving_an_apple_request_as_admin_signs_in_with_that_role()
     {
         database.SkipIfUnavailable();
-        var admin = await AdminTokenAsync("approver2@example.com");
+        var admin = await SuperAdminTokenAsync();
         Assert.Equal(HttpStatusCode.Accepted, (await AppleRequestAsync("a-approve", "abc@privaterelay.appleid.com")).StatusCode);
         var id = await RequestIdAsync("apple", "apple|a-approve");
 
@@ -379,7 +390,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     public async Task Approve_requires_a_pending_request()
     {
         database.SkipIfUnavailable();
-        var admin = await AdminTokenAsync("stale-approver@example.com");
+        var admin = await SuperAdminTokenAsync();
         Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-stale", "stale@example.com")).StatusCode);
         var id = await RequestIdAsync("google", "g-stale");
         var path = $"/v1/admin/join-requests/{id}/approve";
@@ -429,7 +440,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         Assert.DoesNotContain((await pending.Content.ReadFromJsonAsync<List<JsonElement>>(Ct))!,
             item => item.GetProperty("id").GetGuid() == id);
         Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Bearer(HttpMethod.Post,
-            $"/v1/admin/join-requests/{id}/approve", admin, new { role = "admin" }), Ct)).StatusCode);
+            $"/v1/admin/join-requests/{id}/approve", admin, new { role = "player" }), Ct)).StatusCode);
         Assert.Equal("player", await InvitedRoleAsync("direct@example.com"));
     }
 
@@ -634,7 +645,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     public async Task Match_reminders_go_out_once_and_skip_players_who_are_out()
     {
         database.SkipIfUnavailable();
-        var admin = await AdminTokenAsync("remind-admin@example.com");
+        var coach = await CoachTokenAsync("remind-coach@example.com");
         var fixture = "remind-" + Guid.NewGuid().ToString("N")[..8];
         var services = _factory!.Services;
         var data = services.GetRequiredService<Npgsql.NpgsqlDataSource>();
@@ -719,7 +730,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
 
         // Publishing a lineup tells the players in it.
         sender.Sent.Clear();
-        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{fixture}/lineup", admin,
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{fixture}/lineup", coach,
             new { slots = new[] { new { number = 10, subject = "sub-remindin" } }, publish = true }), Ct)).StatusCode);
         // (The API itself has push switched off in tests, so the endpoint sent nothing and claimed nothing.)
         Assert.Equal(1, await reminders.LineupPublishedAsync(fixture, Ct));
@@ -735,6 +746,7 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         var played = "avail-" + Guid.NewGuid().ToString("N")[..8];
 
         var admin = await AdminTokenAsync("lineup-admin@example.com");
+        var coach = await CoachTokenAsync("lineup-coach@example.com");
         await using (var data = database.CreateDataSource())
         await using (var seed = data.CreateCommand($$"""
             INSERT INTO teams (name) SELECT n FROM (VALUES ('Claymores'), ('Lakeland Lancers')) v(n) WHERE NOT EXISTS (SELECT 1 FROM teams WHERE name = n);
@@ -782,15 +794,27 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         Assert.Contains("\"email\":\"availplayer@example.com\"", roster);
         Assert.Contains("First half only", roster);
 
+        // Coaches don't play: they can't answer and aren't on the roster.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Put,
+            $"/v1/fixtures/{upcoming}/availability", coach, new { status = "available" }), Ct)).StatusCode);
+        Assert.DoesNotContain("lineup-coach@example.com", roster);
+
+        // Admins see lineups but only coaches pick them.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+            new { slots = new[] { new { number = 9, subject = "sub-availplayer" } }, publish = false }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/fixtures/{upcoming}/lineup", admin), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
+            new { slots = new[] { new { number = 9, subject = "sub-lineup-coach@example.com" } }, publish = false }), Ct)).StatusCode);
+
         // Lineup: invalid ones are refused; a draft is hidden from members until published.
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
             new { slots = new[] { new { number = 24, subject = "sub-availplayer" } }, publish = false }), Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
             new { slots = new[] { new { number = 9, subject = "sub-availplayer" }, new { number = 10, subject = "sub-availplayer" } }, publish = false }), Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
             new { slots = new[] { new { number = 9, subject = "sub-stranger" } }, publish = false }), Ct)).StatusCode);
 
-        var draft = await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+        var draft = await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
             new { slots = new[] { new { number = 9, subject = "sub-availplayer" } }, publish = false }), Ct);
         Assert.Equal(HttpStatusCode.OK, draft.StatusCode);
         Assert.Contains("\"position\":\"Scrum-half\"", await draft.Content.ReadAsStringAsync(Ct));
@@ -798,12 +822,62 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         Assert.Contains("\"status\":\"none\"", hidden);
         Assert.DoesNotContain("sub-availplayer", hidden);
 
-        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", admin,
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/fixtures/{upcoming}/lineup", coach,
             new { slots = new[] { new { number = 9, subject = "sub-availplayer" } }, publish = true }), Ct)).StatusCode);
         var published = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/fixtures/{upcoming}/lineup", player), Ct)).Content.ReadAsStringAsync(Ct);
         Assert.Contains("\"status\":\"published\"", published);
         Assert.Contains("\"name\":\"Avail Player\"", published);
         Assert.Contains("\"number\":9", published);
+    }
+
+    [Fact]
+    public async Task Only_the_super_admin_makes_admins_and_coaches()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("roles-admin@example.com");
+        var coach = await CoachTokenAsync("roles-coach@example.com");
+        var super = await SuperAdminTokenAsync();
+        Task<HttpResponseMessage> Put(string token, string email, string role) =>
+            Client().SendAsync(Bearer(HttpMethod.Put, $"/v1/admin/invitations/{email}", token, new { role }), Ct);
+        Task<HttpResponseMessage> Delete(string token, string email) =>
+            Client().SendAsync(Bearer(HttpMethod.Delete, $"/v1/admin/invitations/{email}", token), Ct);
+        async Task<string?> RoleOf(string token)
+        {
+            using var me = JsonDocument.Parse(await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/me", token), Ct)).Content.ReadAsStringAsync(Ct));
+            return me.RootElement.GetProperty("role").GetString();
+        }
+
+        Assert.Equal("superadmin", await RoleOf(super));
+        Assert.Equal("coach", await RoleOf(coach));
+        Assert.Equal("admin", await RoleOf(admin));
+
+        // Admins and coaches manage players, and both get the admin pages.
+        Assert.Equal(HttpStatusCode.OK, (await Put(admin, "roles-p1@example.com", "player")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(coach, "roles-p2@example.com", "player")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Delete(coach, "roles-p2@example.com")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/join-requests", coach), Ct)).StatusCode);
+
+        // ...but can't make, change or remove admins and coaches.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(admin, "roles-p1@example.com", "coach")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(coach, "roles-p1@example.com", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(admin, "roles-coach@example.com", "player")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Delete(admin, "roles-coach@example.com")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(admin, "roles-admin@example.com", "player")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(super, "roles-p1@example.com", "superadmin")).StatusCode);
+
+        // The super admin can, but not on their own (configured) role.
+        Assert.Equal(HttpStatusCode.OK, (await Put(super, "roles-p1@example.com", "coach")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(super, "roles-coach@example.com", "admin")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Delete(super, "roles-p1@example.com")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(super, SuperAdminEmail, "player")).StatusCode);
+
+        // A join request approval can't hand out admin or coach either, except from the super admin.
+        Assert.Equal(HttpStatusCode.Accepted, (await GoogleRequestAsync("g-roles", "roles-join@example.com")).StatusCode);
+        var id = await RequestIdAsync("google", "g-roles");
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/join-requests/{id}/approve", admin, new { role = "coach" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post,
+            $"/v1/admin/join-requests/{id}/approve", super, new { role = "coach" }), Ct)).StatusCode);
     }
 
     [Fact]

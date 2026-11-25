@@ -23,6 +23,7 @@ import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { checkoutReturnStatus } from '@/lib/claymores/checkout'
 import { memberApi } from '@/lib/claymores/member'
 import { needsFullName } from '@/lib/claymores/member-name'
+import { isClubAdmin, plays } from '@/lib/claymores/roles'
 
 export const metadata: Metadata = {
     title: 'My account',
@@ -171,7 +172,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
     }
 
     const user = me.ok ? me.data : token.api.user
-    const isAdmin = user.role === 'admin'
+    const isAdmin = isClubAdmin(user.role)
     const details = dues.ok
         ? await Promise.all(dues.data.map(async d => {
             const r = await api.myDuesDetail(d.id)
@@ -225,6 +226,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
                 <UpcomingMatches
                     api={api}
                     subject={user.subject}
+                    plays={plays(user.role)}
                     outcome={typeof params.availability === 'string' ? params.availability : undefined}
                 />
 

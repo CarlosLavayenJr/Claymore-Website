@@ -11,6 +11,8 @@ internal static class GoogleSignIn
     internal const string Session = "ClubSession";
     internal const string RolePolicy = "ClubMember";
     internal const string AdminPolicy = "ClubAdmin";
+    /// <summary>Picking lineups: coaches and the super admin.</summary>
+    internal const string LineupPolicy = "ClubLineups";
 
     public static bool Configure(AuthenticationBuilder authentication, IConfiguration configuration)
     {
@@ -51,13 +53,8 @@ internal static class GoogleSignIn
                     await context.HttpContext.SignOutAsync(Session);
                     return;
                 }
-                var storedRole = identity.FindFirst(identity.RoleClaimType);
-                if (storedRole?.Value == currentRole)
-                    return;
-                if (storedRole is not null)
-                    identity.RemoveClaim(storedRole);
-                identity.AddClaim(new Claim(identity.RoleClaimType, currentRole));
-                context.ShouldRenew = true;
+                if (ClubRoles.SetClaims(identity, identity.RoleClaimType, currentRole))
+                    context.ShouldRenew = true;
             };
         });
         authentication.AddOpenIdConnect(Google, options =>
@@ -86,7 +83,7 @@ internal static class GoogleSignIn
                     await context.Response.WriteAsync("This Google account has not been invited.");
                     return;
                 }
-                identity.AddClaim(new Claim(identity.RoleClaimType, role));
+                ClubRoles.SetClaims(identity, identity.RoleClaimType, role);
             };
             options.Events.OnTicketReceived = async context =>
             {
@@ -123,9 +120,11 @@ internal static class GoogleSignIn
         authentication.Services.AddAuthorization(options =>
         {
             options.AddPolicy(RolePolicy, policy => policy
-                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole("player", "admin"));
+                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole(ClubRoles.Player, ClubRoles.Admin));
             options.AddPolicy(AdminPolicy, policy => policy
-                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole("admin"));
+                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole(ClubRoles.Admin));
+            options.AddPolicy(LineupPolicy, policy => policy
+                .AddAuthenticationSchemes(schemes).RequireAuthenticatedUser().RequireRole(ClubRoles.Coach));
         });
         return true;
     }
@@ -152,7 +151,13 @@ internal static class GoogleSignIn
                 SetPageHeaders(context, checkoutEnabled);
                 var name = HtmlEncoder.Default.Encode(
                     context.User.FindFirstValue("name") ?? context.User.FindFirstValue("email") ?? "Club member");
-                var role = context.User.IsInRole("admin") ? "Admin" : "Player";
+                var role = ClubRoles.Of(context.User) switch
+                {
+                    ClubRoles.SuperAdmin => "Super admin",
+                    ClubRoles.Coach => "Coach",
+                    ClubRoles.Admin => "Admin",
+                    _ => "Player",
+                };
                 var ledger = context.RequestServices.GetService<DuesLedger>();
                 var dues = ledger is null
                     ? ""
@@ -196,7 +201,7 @@ internal static class GoogleSignIn
                     subject = context.User.FindFirstValue("sub"),
                     name = context.User.FindFirstValue("name"),
                     email = context.User.FindFirstValue("email"),
-                    role = context.User.IsInRole("admin") ? "admin" : "player"
+                    role = ClubRoles.Of(context.User)
                 });
             })
             .RequireAuthorization(RolePolicy)

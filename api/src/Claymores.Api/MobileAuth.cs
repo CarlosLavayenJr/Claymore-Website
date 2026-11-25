@@ -64,9 +64,7 @@ internal static class MobileAuth
                         context.Fail("This account is no longer invited.");
                         return;
                     }
-                    foreach (var stale in identity.FindAll(RoleClaim).ToArray())
-                        identity.RemoveClaim(stale);
-                    identity.AddClaim(new Claim(RoleClaim, role));
+                    ClubRoles.SetClaims(identity, RoleClaim, role);
                 }
             };
         });

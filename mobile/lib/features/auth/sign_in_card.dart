@@ -34,7 +34,7 @@ class SignInCard extends StatelessWidget {
                 BrandHeader(
                   eyebrow: user.role == null
                       ? 'Signed in'
-                      : 'Signed in · ${user.role}',
+                      : 'Signed in · ${user.roleLabel}',
                   title: user.displayName,
                   titleSize: 22,
                 ),
