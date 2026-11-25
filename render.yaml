@@ -79,10 +79,9 @@ services:
       # Where Stripe sends the app back (deep link, see mobile/lib/app/deep_links.dart).
       - key: Stripe__AppReturnUrl
         value: claymores://dues
-      # Where Stripe returns website checkouts (returnTo "web"). Points at the dev preview while
-      # dues are tested there; set back to https://www.claymoresrfc.com/account at release.
+      # Where Stripe returns website checkouts (returnTo "web").
       - key: Stripe__WebReturnUrl
-        value: https://claymore-website-git-dev-carlos-lavayens-projects.vercel.app/account
+        value: https://www.claymoresrfc.com/account
 
   # rugbyfl.com scraper: writes Postgres only. The web service serves these rows
   # (Fixtures__Source=scraper, Standings__Source=postgres above).
