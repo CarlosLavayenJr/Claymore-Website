@@ -383,24 +383,30 @@ class _AdminBodyState extends State<_AdminBody>
           ),
         ),
         const SizedBox(height: 12),
-        row(
-          _tile<_DuesBoard>(
-            key: const Key('tile-dues-outstanding'),
-            label: 'Dues outstanding',
-            future: dues,
-            describe: (board) => (formatCents(board.outstandingCents), false),
-            onTap: () => go(AdminTab.dues),
-          ),
-          _tile<List<ClubMember>>(
-            key: const Key('tile-missing-last-name'),
-            label: 'Missing last name',
-            future: members,
-            describe: (list) {
-              final missing = missingLastNames(list);
-              return ('$missing', missing > 0);
-            },
-            onTap: () => go(AdminTab.people, toMembers: true),
-          ),
+        // The missing-last-name tile only shows while someone is missing one.
+        FutureBuilder<List<ClubMember>>(
+          future: members,
+          builder: (context, snapshot) {
+            final duesTile = _tile<_DuesBoard>(
+              key: const Key('tile-dues-outstanding'),
+              label: 'Dues outstanding',
+              future: dues,
+              describe: (board) => (formatCents(board.outstandingCents), false),
+              onTap: () => go(AdminTab.dues),
+            );
+            final missing = snapshot.hasData ? missingLastNames(snapshot.data!) : 0;
+            if (missing == 0) return duesTile;
+            return row(
+              duesTile,
+              _tile<List<ClubMember>>(
+                key: const Key('tile-missing-last-name'),
+                label: 'Missing last name',
+                future: members,
+                describe: (list) => ('${missingLastNames(list)}', true),
+                onTap: () => go(AdminTab.people, toMembers: true),
+              ),
+            );
+          },
         ),
       ],
     );

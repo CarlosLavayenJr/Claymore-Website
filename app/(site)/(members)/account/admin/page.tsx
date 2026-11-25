@@ -318,12 +318,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 {notice && <Notice tone="success" title={notice} />}
                 {error && <Notice tone="error" title={error} />}
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className={cn('grid grid-cols-2 gap-3', missingNames > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
                     <Tile href="?tab=matches" label={nextMatch ? `Next · ${shortMatchDate(nextMatch.date).replace(/^\w+, /, '')}` : 'Next match'}
                         value={!nextMatch ? 'None scheduled' : nextAvailability?.ok ? `${nextAvailability.data.counts.available} available` : `${isHomeMatch(nextMatch) ? 'vs' : 'at'} ${opponentOf(nextMatch)}`} />
                     <Tile href="?tab=people" label="Join requests" value={waiting === 0 ? 'None waiting' : `${waiting} waiting`} tone={waiting > 0 ? 'alert' : undefined} />
                     <Tile href="?tab=dues" label="Dues outstanding" value={outstanding === null ? '—' : formatCents(outstanding)} />
-                    <Tile href="?tab=people#members" label="Missing last name" value={missingNames} tone={missingNames > 0 ? 'alert' : undefined} />
+                    {missingNames > 0 && (
+                        <Tile href="?tab=people#members" label="Missing last name" value={missingNames} tone="alert" />
+                    )}
                 </div>
 
                 <nav aria-label="Club admin" className="flex gap-1 border-b border-[#EAEAEA]">
