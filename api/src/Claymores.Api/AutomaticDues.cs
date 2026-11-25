@@ -42,7 +42,7 @@ internal sealed class AutomaticDues(NpgsqlDataSource dataSource, ILogger<Automat
 
     /// <summary>Assigns the automatic dues to <paramref name="user"/> if they are a player without them.</summary>
     public Task EnsureAsync(ClaimsPrincipal user, CancellationToken ct) =>
-        EnsureAsync(user.FindFirstValue("sub"), user.IsInRole("player") ? "player" : user.IsInRole("admin") ? "admin" : null, ct);
+        EnsureAsync(user.FindFirstValue("sub"), ClubRoles.Of(user), ct);
 
     public async Task EnsureAsync(string? subject, string? role, CancellationToken ct)
     {

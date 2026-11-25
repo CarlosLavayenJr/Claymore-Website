@@ -46,10 +46,12 @@ type MatchState = {
  * Maybe / Out + note), the club's counts, and the lineup once an admin publishes it.
  * Renders nothing when the API doesn't have availability yet (every match 404s).
  */
-export async function UpcomingMatches({ api, subject, outcome }: {
+/** `plays` false (a coach): shows who can play, with no answer buttons. */
+export async function UpcomingMatches({ api, subject, outcome, plays = true }: {
     api: ClaymoresApiClient
     subject: string
     outcome?: string
+    plays?: boolean
 }) {
     let matches: SanityMatch[]
     let teams: SanityTeam[] = []
@@ -69,13 +71,17 @@ export async function UpcomingMatches({ api, subject, outcome }: {
     if (allMissing) return null
     const notice = outcome ? outcomes[outcome] : undefined
     // The next match still waiting for an answer starts open; the rest fold to one line.
-    const firstUnanswered = states.find(s => s.availability.ok && s.availability.data.open && !s.availability.data.status)?.match._id
+    const firstUnanswered = plays
+        ? states.find(s => s.availability.ok && s.availability.data.open && !s.availability.data.status)?.match._id
+        : undefined
 
     return (
         <MemberCard aria-labelledby="matches-heading" id="matches" className="scroll-mt-24">
             <CardHeading id="matches-heading">Upcoming matches</CardHeading>
             <p className="mt-2 text-sm text-[#555555]">
-                Let the coaches know if you can play. You can change your answer until match day.
+                {plays
+                    ? 'Let the coaches know if you can play. You can change your answer until match day.'
+                    : <>How many players can make each match. See names and pick lineups in <Link href="/account/admin?tab=matches" className={linkClass}>Club Admin</Link>.</>}
             </p>
             {notice && <Notice tone={notice.tone} title={notice.title} className="mt-4" />}
             <div className="mt-5 space-y-4">
@@ -88,7 +94,7 @@ export async function UpcomingMatches({ api, subject, outcome }: {
                 ) : (
                     states.map(s => (
                         <MatchCard key={s.match._id} state={s} subject={subject} teams={teams}
-                            open={s.match._id === firstUnanswered} />
+                            open={s.match._id === firstUnanswered} plays={plays} />
                     ))
                 )}
             </div>
@@ -96,7 +102,7 @@ export async function UpcomingMatches({ api, subject, outcome }: {
     )
 }
 
-function MatchCard({ state, subject, teams, open }: { state: MatchState; subject: string; teams: SanityTeam[]; open: boolean }) {
+function MatchCard({ state, subject, teams, open, plays }: { state: MatchState; subject: string; teams: SanityTeam[]; open: boolean; plays: boolean }) {
     const { match, availability, lineup } = state
     const home = isHomeMatch(match)
     const opponent = opponentOf(match)
@@ -125,17 +131,19 @@ function MatchCard({ state, subject, teams, open }: { state: MatchState; subject
                     <span
                         className={cn(
                             'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
-                            !mine?.status
+                            plays && !mine?.status
                                 ? 'bg-[#fd80b5]/15 text-[#b02a64]'
                                 : 'bg-[#fafafa] text-[#111111] ring-1 ring-[#EAEAEA]',
                         )}
                     >
-                        {mine?.status ? availabilityLabel(mine.status) : mine?.open ? 'Answer' : 'No reply'}
+                        {!plays
+                            ? mine ? `${mine.counts.available} available` : 'Match'
+                            : mine?.status ? availabilityLabel(mine.status) : mine?.open ? 'Answer' : 'No reply'}
                     </span>
                 </span>
             }
         >
-            {!availability.ok ? (
+            {!plays ? null : !availability.ok ? (
                 <p className="mt-3 text-sm text-[#555555]">
                     {availability.status === 404
                         ? 'Answers aren’t open for this match yet.'
@@ -198,7 +206,7 @@ function MatchCard({ state, subject, teams, open }: { state: MatchState; subject
     )
 }
 
-function LineupDetails({ lineup, subject }: { lineup: Lineup; subject: string }) {
+export function LineupDetails({ lineup, subject }: { lineup: Lineup; subject: string }) {
     const me = lineup.slots.find(s => s.subject === subject)
     const starters = lineup.slots.filter(s => s.number <= STARTERS)
     const bench = lineup.slots.filter(s => s.number > STARTERS)

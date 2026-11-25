@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { LineupEditor, type FormerMember } from './lineup-editor'
+import { LineupDetails } from '../upcoming-matches'
 import { AdminSection } from '@/components/members/admin-section'
 import { formatDate, linkClass, Notice } from '@/components/members/member-ui'
 import type { ApiResult, ClaymoresApiClient, FixtureAvailability, Lineup } from '@/lib/claymores/api-client'
@@ -35,7 +36,13 @@ function title(match: SanityMatch) {
  * Club Admin "Matches & lineups": who can play the next matches (Available / Maybe / Out /
  * No reply, with notes) and the lineup editor for each. `openFixture` is the match just saved.
  */
-export async function MatchesSection({ api, openFixture, alwaysOpen = false }: { api: ClaymoresApiClient; openFixture?: string; alwaysOpen?: boolean }) {
+/** `canPickLineups` (coaches and the super admin) shows the lineup editor; admins see the lineup read-only. */
+export async function MatchesSection({ api, openFixture, alwaysOpen = false, canPickLineups = true }: {
+    api: ClaymoresApiClient
+    openFixture?: string
+    alwaysOpen?: boolean
+    canPickLineups?: boolean
+}) {
     let matches: SanityMatch[]
     try {
         matches = upcomingMatches(await getMatches(), todayInOrlando())
@@ -72,11 +79,12 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false }: {
             ) : (
                 <>
                     <p className="mb-4 text-sm text-[#555555]">
-                        Members answer on their account page or in the app until match day. Build the lineup from who can play,
-                        save it as a draft, then publish it: members see it, and the players in it get a notification.
+                        {canPickLineups
+                            ? 'Members answer on their account page or in the app until match day. Build the lineup from who can play, save it as a draft, then publish it: members see it, and the players in it get a notification.'
+                            : 'Members answer on their account page or in the app until match day. The coach picks the lineup; you can see it here.'}
                     </p>
                     <div className="space-y-3">
-                        {states.map(s => <MatchPanel key={s.match._id} state={s} open={s.match._id === openFixture} />)}
+                        {states.map(s => <MatchPanel key={s.match._id} state={s} open={s.match._id === openFixture} canPickLineups={canPickLineups} />)}
                     </div>
                 </>
             )}
@@ -84,7 +92,7 @@ export async function MatchesSection({ api, openFixture, alwaysOpen = false }: {
     )
 }
 
-function MatchPanel({ state, open }: { state: MatchAdmin; open: boolean }) {
+function MatchPanel({ state, open, canPickLineups }: { state: MatchAdmin; open: boolean; canPickLineups: boolean }) {
     const { match, availability, lineup } = state
     const anchor = matchAnchor(match._id)
     const chip = lineup.ok ? lineupChip[lineup.data.status] ?? lineupChip.none : null
@@ -123,7 +131,15 @@ function MatchPanel({ state, open }: { state: MatchAdmin; open: boolean }) {
                         )}
                     </div>
                     <div className="mt-3">
-                        {!lineup.ok || !availability.ok ? (
+                        {!canPickLineups ? (
+                            !lineup.ok ? (
+                                <Notice tone="error" title="The lineup couldn't load">The club server didn’t respond. Refresh in a minute.</Notice>
+                            ) : lineup.data.slots.length === 0 ? (
+                                <p className="text-sm text-[#555555]">The coach hasn’t picked a lineup yet.</p>
+                            ) : (
+                                <LineupDetails lineup={lineup.data} subject="" />
+                            )
+                        ) : !lineup.ok || !availability.ok ? (
                             <Notice tone="error" title="The lineup editor couldn't load">
                                 The club server didn’t respond. Refresh in a minute.
                             </Notice>

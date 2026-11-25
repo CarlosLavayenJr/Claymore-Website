@@ -25,6 +25,36 @@ class AuthUser {
   /// Google sometimes sends only a first name and Apple sends it once, so
   /// the Club tab asks for a full name when this is true.
   bool get needsFullName => needsFullMemberName(name);
+
+  // Club roles, as on the website (lib/claymores/roles.ts):
+  // - superadmin: the club owner (set in the API's settings). Everything, and
+  //   the only one who can make or change admins and coaches.
+  // - coach: admin access plus picking lineups. Doesn't play, so isn't asked
+  //   for availability.
+  // - admin: admin access; sees lineups but doesn't pick them.
+  // - player.
+  String? get _role => role?.toLowerCase();
+
+  /// Can open Club Admin.
+  bool get isClubAdmin =>
+      _role == 'admin' || _role == 'coach' || _role == 'superadmin';
+
+  /// Picks lineups.
+  bool get canPickLineups => _role == 'coach' || _role == 'superadmin';
+
+  /// Gives out (and takes away) the coach and admin roles.
+  bool get isSuperAdmin => _role == 'superadmin';
+
+  /// Is asked whether they can play. Everyone but coaches.
+  bool get plays => _role != 'coach';
+
+  String get roleLabel => switch (_role) {
+    'superadmin' => 'Super admin',
+    'coach' => 'Coach',
+    'admin' => 'Admin',
+    'player' => 'Player',
+    _ => role ?? 'Member',
+  };
 }
 
 // Member names, as in the website's lib/claymores/member-name.ts: the club

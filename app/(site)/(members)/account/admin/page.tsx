@@ -27,6 +27,7 @@ import { memberAuthEnabled } from '@/lib/claymores/auth-env'
 import { memberApi } from '@/lib/claymores/member'
 import { shortMatchDate, todayInOrlando, upcomingMatches } from '@/lib/claymores/match-availability'
 import { needsFullName } from '@/lib/claymores/member-name'
+import { canPickLineups, isClubAdmin, isStaffRole, isSuperAdmin } from '@/lib/claymores/roles'
 import { getMatches } from '@/lib/claymores-api'
 import { isHomeMatch, opponentOf } from '@/lib/seo'
 import { cn } from '@/lib/utils'
@@ -56,10 +57,10 @@ const notices: Record<string, string> = {
 
 const errors: Record<string, string> = {
     invalid: 'Check the details and try again.',
-    forbidden: 'Only club admins can do that.',
+    forbidden: 'You can’t do that. Only the super admin can make or change admins and coaches.',
     not_found: 'That item no longer exists. It may have been handled already.',
     not_pending: 'This request was already decided. Refresh to see its current status.',
-    conflict: 'That change isn’t allowed. Admins can’t remove or demote themselves.',
+    conflict: 'That change isn’t allowed. You can’t change your own role, or the super admin’s.',
     unavailable: 'The club server didn’t respond. Try again in a minute.',
     undo_reason: 'Say why the payment is being undone.',
     payment_invalid: 'Notes are at most 500 characters, and volunteer or waived credits need one.',
@@ -71,16 +72,18 @@ const selectClass = `${inputClass} pr-8`
 const dangerClass =
     'inline-flex items-center justify-center rounded-md border border-[#fd80b5] px-4 py-2 text-sm font-semibold text-[#b02a64] transition-colors hover:bg-[#fd80b5] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111] disabled:opacity-60'
 
+/** Only the super admin sees this: the coach and admin roles are theirs to give. */
 function RoleSelect({ id, defaultValue = 'player' }: { id: string; defaultValue?: string }) {
     return (
         <select id={id} name="role" defaultValue={defaultValue} className={selectClass}>
             <option value="player">Player</option>
+            <option value="coach">Coach</option>
             <option value="admin">Admin</option>
         </select>
     )
 }
 
-function JoinRequestRow({ request }: { request: JoinRequest }) {
+function JoinRequestRow({ request, canSetRoles }: { request: JoinRequest; canSetRoles: boolean }) {
     const when = formatDate(request.createdAt ?? request.requestedAt ?? null, true)
     return (
         <li className="rounded-lg border border-[#EAEAEA] p-4 sm:p-5">
@@ -112,14 +115,16 @@ function JoinRequestRow({ request }: { request: JoinRequest }) {
                 <summary className="cursor-pointer list-none text-sm font-semibold text-[#fd80b5] marker:hidden hover:text-[#111111] [&::-webkit-details-marker]:hidden">
                     More options
                 </summary>
-                <div className="mt-3 grid gap-4 rounded-lg bg-[#fafafa] p-4 md:grid-cols-2">
-                    <form action={approveJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                        <div className="sm:w-40">
-                            <label htmlFor={`approve-role-${request.id}`} className={labelClass}>Approve as</label>
-                            <div className="mt-1"><RoleSelect id={`approve-role-${request.id}`} /></div>
-                        </div>
-                        <button type="submit" className={`${secondaryCtaClass} py-2`}>Approve</button>
-                    </form>
+                <div className={`mt-3 grid gap-4 rounded-lg bg-[#fafafa] p-4 ${canSetRoles ? 'md:grid-cols-2' : ''}`}>
+                    {canSetRoles && (
+                        <form action={approveJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="sm:w-40">
+                                <label htmlFor={`approve-role-${request.id}`} className={labelClass}>Approve as</label>
+                                <div className="mt-1"><RoleSelect id={`approve-role-${request.id}`} /></div>
+                            </div>
+                            <button type="submit" className={`${secondaryCtaClass} py-2`}>Approve</button>
+                        </form>
+                    )}
                     <form action={denyJoinRequest.bind(null, request.id)} className="flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div className="flex-1">
                             <label htmlFor={`deny-reason-${request.id}`} className={labelClass}>
@@ -135,7 +140,9 @@ function JoinRequestRow({ request }: { request: JoinRequest }) {
     )
 }
 
-function InvitationRow({ invitation, self }: { invitation: ClubInvitation; self: boolean }) {
+function InvitationRow({ invitation, self, canSetRoles }: { invitation: ClubInvitation; self: boolean; canSetRoles: boolean }) {
+    // Admins and coaches manage players; admin and coach invitations are the super admin's.
+    const editable = !self && (canSetRoles || !isStaffRole(invitation.role))
     return (
         <li className="flex flex-col gap-3 border-b border-[#EAEAEA] py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -149,14 +156,16 @@ function InvitationRow({ invitation, self }: { invitation: ClubInvitation; self:
                     )}
                 </div>
             </div>
-            {!self && (
+            {editable && (
                 <div className="flex flex-wrap items-end gap-2">
-                    <form action={saveInvitation} className="flex items-end gap-2">
-                        <input type="hidden" name="email" value={invitation.email} />
-                        <label htmlFor={`role-${invitation.email}`} className="sr-only">Role for {invitation.email}</label>
-                        <div className="w-32"><RoleSelect id={`role-${invitation.email}`} defaultValue={invitation.role} /></div>
-                        <button type="submit" className={`${secondaryCtaClass} py-2 text-sm`}>Save</button>
-                    </form>
+                    {canSetRoles && (
+                        <form action={saveInvitation} className="flex items-end gap-2">
+                            <input type="hidden" name="email" value={invitation.email} />
+                            <label htmlFor={`role-${invitation.email}`} className="sr-only">Role for {invitation.email}</label>
+                            <div className="w-32"><RoleSelect id={`role-${invitation.email}`} defaultValue={invitation.role} /></div>
+                            <button type="submit" className={`${secondaryCtaClass} py-2 text-sm`}>Save</button>
+                        </form>
+                    )}
                     <form action={removeInvitation.bind(null, invitation.email)}>
                         <ConfirmSubmit
                             message={`Remove ${invitation.email}? They will lose access within 30 seconds.`}
@@ -273,7 +282,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     const me = await api.me()
     if (!me.ok && me.status === 401) redirect('/sign-in?error=expired&callbackUrl=/account/admin')
     const role = me.ok ? me.data.role : session.token.api.user.role
-    if (role !== 'admin') {
+    if (!isClubAdmin(role)) {
         return (
             <>
                 <MemberHeader eyebrow="Claymores RFC · Admin" title="Club admin" />
@@ -291,6 +300,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     const notice = typeof params.notice === 'string' ? notices[params.notice] : undefined
     const error = typeof params.error === 'string' ? errors[params.error] ?? errors.unavailable : undefined
     const selfEmail = (me.ok ? me.data.email : session.token.api.user.email)?.toLowerCase()
+    const canSetRoles = isSuperAdmin(role)
 
     const tab = tabFor(params)
     const [requests, invitations, links, members, dues, nextMatch] = await Promise.all([
@@ -359,7 +369,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 </nav>
 
                 {tab === 'matches' && (
-                    <MatchesSection api={api} alwaysOpen openFixture={typeof params.fixture === 'string' ? params.fixture : undefined} />
+                    <MatchesSection api={api} canPickLineups={canPickLineups(role)} alwaysOpen openFixture={typeof params.fixture === 'string' ? params.fixture : undefined} />
                 )}
 
                 {tab === 'people' && <>
@@ -379,7 +389,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         <p className="text-[#555555]">No requests waiting. Nice work.</p>
                     ) : (
                         <ul className="space-y-4">
-                            {requests.data.map(r => <JoinRequestRow key={r.id} request={r} />)}
+                            {requests.data.map(r => <JoinRequestRow key={r.id} request={r} canSetRoles={canSetRoles} />)}
                         </ul>
                     )}
                 </AdminSection>
@@ -396,18 +406,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
 
                     <h3 className="mt-6 text-lg font-semibold text-[#111111]">Invite by email</h3>
                     <p className="mt-1 text-sm text-[#555555]">
-                        For one person, or to make someone an admin. Role changes take effect within 30 seconds.
+                        {canSetRoles
+                            ? 'For one person, or to make someone a coach or admin. Role changes take effect within 30 seconds.'
+                            : 'For one person. Only the super admin can make someone a coach or admin.'}
                     </p>
 
-                    <form action={saveInvitation} className="mt-5 grid gap-3 rounded-lg bg-[#fafafa] p-4 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
+                    <form action={saveInvitation} className={`mt-5 grid gap-3 rounded-lg bg-[#fafafa] p-4 sm:items-end ${canSetRoles ? 'sm:grid-cols-[minmax(0,1fr)_10rem_auto]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
                         <div>
                             <label htmlFor="invite-email" className={labelClass}>Google email</label>
                             <input id="invite-email" name="email" type="email" required autoComplete="off" className={`${inputClass} mt-1`} placeholder="player@gmail.com" />
                         </div>
-                        <div>
-                            <label htmlFor="invite-role" className={labelClass}>Role</label>
-                            <div className="mt-1"><RoleSelect id="invite-role" /></div>
-                        </div>
+                        {canSetRoles ? (
+                            <div>
+                                <label htmlFor="invite-role" className={labelClass}>Role</label>
+                                <div className="mt-1"><RoleSelect id="invite-role" /></div>
+                            </div>
+                        ) : (
+                            <input type="hidden" name="role" value="player" />
+                        )}
                         <button type="submit" className={`${ctaClass} py-2 text-base`}>Invite</button>
                     </form>
 
@@ -423,7 +439,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                         ) : (
                             <ul>
                                 {invitations.data.map(inv => (
-                                    <InvitationRow key={inv.email} invitation={inv} self={inv.email.toLowerCase() === selfEmail} />
+                                    <InvitationRow key={inv.email} invitation={inv} self={inv.email.toLowerCase() === selfEmail} canSetRoles={canSetRoles} />
                                 ))}
                             </ul>
                         )}

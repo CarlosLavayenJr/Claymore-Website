@@ -19,7 +19,7 @@ import 'player_dues_page.dart';
 const adminPath = '$profilePath/admin';
 
 /// Whether [user] can open the club admin screens.
-bool isClubAdmin(AuthUser? user) => user?.role?.toLowerCase() == 'admin';
+bool isClubAdmin(AuthUser? user) => user?.isClubAdmin ?? false;
 
 /// The Club Admin tabs, as on the website (`?tab=`).
 enum AdminTab {
@@ -275,8 +275,11 @@ class _AdminBodyState extends State<_AdminBody>
     String role = 'player',
     String reason = '',
   }) async {
-    if (approve && role == 'admin') {
-      if (!await confirmApproveAdmin(context, request) || !mounted) return;
+    if (approve && role != 'player') {
+      if (!await confirmApproveAdmin(context, request, role: role) ||
+          !mounted) {
+        return;
+      }
     }
     if (!approve) {
       final answer = await showDenyDialog(context, request, reason: reason);
@@ -290,9 +293,10 @@ class _AdminBodyState extends State<_AdminBody>
     try {
       if (approve) {
         await widget.admin.approveJoinRequest(request.id, role: role);
-        message = role == 'admin'
-            ? 'Approved ${request.label} as an admin. They can sign in now.'
-            : 'Approved ${request.label}. They can sign in now.';
+        message = role == 'player'
+            ? 'Approved ${request.label}. They can sign in now.'
+            : 'Approved ${request.label} as ${role == 'coach' ? 'a coach' : 'an admin'}. '
+                  'They can sign in now.';
       } else {
         await widget.admin.denyJoinRequest(request.id, reason: reason);
         message = 'Denied the request from ${request.label}.';
@@ -405,7 +409,9 @@ class _AdminBodyState extends State<_AdminBody>
               describe: (board) => (formatCents(board.outstandingCents), false),
               onTap: () => go(AdminTab.dues),
             );
-            final missing = snapshot.hasData ? missingLastNames(snapshot.data!) : 0;
+            final missing = snapshot.hasData
+                ? missingLastNames(snapshot.data!)
+                : 0;
             if (missing == 0) return duesTile;
             return row(
               duesTile,
@@ -573,6 +579,8 @@ class _AdminBodyState extends State<_AdminBody>
                   key: ValueKey('request-${request.id}'),
                   request: request,
                   busy: deciding.contains(request.id),
+                  canSetRoles:
+                      AppScope.of(context).auth.user?.isSuperAdmin ?? false,
                   onApprove: (role) =>
                       decide(request, approve: true, role: role),
                   onDeny: (reason) =>
@@ -677,6 +685,7 @@ class AdminTile extends StatelessWidget {
   });
 
   final String label, value;
+
   /// A smaller line under the value, e.g. "1 can play · 27 no reply".
   final String? detail;
   final bool alert;

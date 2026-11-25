@@ -36,7 +36,10 @@ class HomePage extends StatelessWidget {
               FixtureCard(
                 key: ValueKey(next.id),
                 fixture: next,
-                availability: showAvailability && takesAvailability(next),
+                availability:
+                    showAvailability &&
+                    (AppScope.of(context).auth.user?.plays ?? true) &&
+                    takesAvailability(next),
                 featured: true,
               ),
             const SizedBox(height: 24),

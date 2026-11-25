@@ -34,13 +34,17 @@ class JoinRequestCard extends StatefulWidget {
     required this.busy,
     required this.onApprove,
     required this.onDeny,
+    this.canSetRoles = false,
   });
 
   final AdminJoinRequest request;
   final bool busy;
 
-  /// Called with `player` or `admin`.
+  /// Called with `player`, `coach` or `admin`.
   final void Function(String role) onApprove;
+
+  /// Only the super admin can approve someone as a coach or admin.
+  final bool canSetRoles;
 
   /// Called with the reason typed under More options ('' for none).
   final void Function(String reason) onDeny;
@@ -156,36 +160,35 @@ class _JoinRequestCardState extends State<JoinRequestCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Approve as', style: textTheme.labelMedium),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final (value, label) in [
-                        ('player', 'Player'),
-                        ('admin', 'Admin'),
-                      ])
-                        ChoiceChip(
-                          key: Key('role-$value-${request.id}'),
-                          label: Text(label),
-                          selected: role == value,
-                          onSelected: busy
-                              ? null
-                              : (_) => setState(() => role = value),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    key: Key('approve-as-${request.id}'),
-                    onPressed: busy ? null : () => widget.onApprove(role),
-                    child: Text(
-                      role == 'admin'
-                          ? 'APPROVE AS ADMIN'
-                          : 'APPROVE AS PLAYER',
+                  if (widget.canSetRoles) ...[
+                    Text('Approve as', style: textTheme.labelMedium),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final (value, label) in [
+                          ('player', 'Player'),
+                          ('coach', 'Coach'),
+                          ('admin', 'Admin'),
+                        ])
+                          ChoiceChip(
+                            key: Key('role-$value-${request.id}'),
+                            label: Text(label),
+                            selected: role == value,
+                            onSelected: busy
+                                ? null
+                                : (_) => setState(() => role = value),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      key: Key('approve-as-${request.id}'),
+                      onPressed: busy ? null : () => widget.onApprove(role),
+                      child: Text('APPROVE AS ${role.toUpperCase()}'),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   TextField(
                     key: Key('deny-reason-${request.id}'),
                     controller: reason,
@@ -283,14 +286,20 @@ class _DenyDialogState extends State<_DenyDialog> {
 /// Confirms approving [request] as an admin. True to go ahead.
 Future<bool> confirmApproveAdmin(
   BuildContext context,
-  AdminJoinRequest request,
-) async =>
+  AdminJoinRequest request, {
+  String role = 'admin',
+}) async =>
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Make ${request.label} an admin?'),
-        content: const Text(
-          'Admins can approve members, record dues and publish lineups.',
+        title: Text(
+          'Make ${request.label} ${role == 'coach' ? 'a coach' : 'an admin'}?',
+        ),
+        content: Text(
+          role == 'coach'
+              ? 'Coaches can approve members, record dues and pick lineups. '
+                    'They aren’t asked whether they can play.'
+              : 'Admins can approve members, record dues and see lineups.',
         ),
         actions: [
           TextButton(
@@ -300,7 +309,7 @@ Future<bool> confirmApproveAdmin(
           TextButton(
             key: const Key('confirm-admin'),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('APPROVE AS ADMIN'),
+            child: Text('APPROVE AS ${role.toUpperCase()}'),
           ),
         ],
       ),
