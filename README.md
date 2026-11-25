@@ -1,92 +1,162 @@
-# Claymores
+<p align="center">
+  <img src="public/assets/logo.png" alt="Claymores RFC" width="520">
+</p>
 
-This repository holds the Central Florida Claymores website, API, and mobile app.
+<p align="center">
+  <b>Central Florida Claymores RFC</b> · Orlando's rugby club since 2018<br>
+  The website, the API and the iPhone app, in one repository.
+</p>
 
-| Folder | What it is | Deploys to |
+<p align="center">
+  <a href="https://www.claymoresrfc.com"><img alt="Website" src="https://img.shields.io/badge/website-claymoresrfc.com-77c3ef?style=for-the-badge"></a>
+  <a href="https://claymores-api-4zm4.onrender.com/swagger"><img alt="API" src="https://img.shields.io/badge/API-swagger-fd80b5?style=for-the-badge"></a>
+  <a href="https://github.com/CarlosLavayenJr/Claymore-Website/actions/workflows/ios-testflight.yml"><img alt="iOS TestFlight" src="https://img.shields.io/github/actions/workflow/status/CarlosLavayenJr/Claymore-Website/ios-testflight.yml?style=for-the-badge&label=iOS%20TestFlight&color=111111"></a>
+</p>
+
+---
+
+## Where everything lives
+
+| | What | Link |
 | --- | --- | --- |
-| `/` (root) | Next.js website and Sanity Studio | Vercel |
-| [`api/`](api/README.md) | ASP.NET Core 10 API for the website and app | Render, through `render.yaml` |
-| [`mobile/`](mobile/README.md) | Flutter app | Not released yet |
+| 🌐 | **Website** (Next.js on Vercel) | [claymoresrfc.com](https://www.claymoresrfc.com) · [Vercel project](https://vercel.com/carlos-lavayens-projects/claymore-website) |
+| ✏️ | **CMS** (Sanity Studio, inside the site) | [claymoresrfc.com/studio](https://www.claymoresrfc.com/studio) |
+| 🛡️ | **Club Admin** (join requests, invitations, dues) | [claymoresrfc.com/account/admin](https://www.claymoresrfc.com/account/admin) · in the app: Club → Profile → Club Admin |
+| ⚙️ | **API** (ASP.NET Core on Render) | [Swagger](https://claymores-api-4zm4.onrender.com/swagger) · [health](https://claymores-api-4zm4.onrender.com/health/ready) · [Render dashboard](https://dashboard.render.com) (`claymores-api-4zm4`) |
+| 🗄️ | **Database** (Postgres on Render) | Render dashboard → `claymores-db-4zm4`. See [Looking at the database](#looking-at-the-database) |
+| 📱 | **iPhone app** (Flutter) | TestFlight · [App Store Connect](https://appstoreconnect.apple.com) · [cloud build](https://github.com/CarlosLavayenJr/Claymore-Website/actions/workflows/ios-testflight.yml) |
+| 💳 | **Payments** | [Stripe dashboard](https://dashboard.stripe.com) (test mode until the account is verified) |
+| 🔑 | **Google sign-in** | [Google Cloud](https://console.cloud.google.com/auth/clients?project=claymores-rfc) project `claymores-rfc` |
+| 🗓️ | **Scheduled jobs** | Render cron jobs (scrapers, CMS sync) · Vercel crons (CMS copies) · [GitHub Actions](https://github.com/CarlosLavayenJr/Claymore-Website/actions) (Sanity backup, iOS builds) |
 
-Vercel builds the website only when files outside `api/` and `mobile/` change, through the `ignoreCommand` in `vercel.json`. Both folders are also listed in `.vercelignore`, so they aren't uploaded with the site.
+## How it fits together
 
-## Website
+```mermaid
+flowchart LR
+    rfl["rugbyfl.com<br/>fixtures & standings"]
+    cms["Sanity CMS<br/>(Studio)"]
+    api["Claymores API<br/>Render"]
+    db[("Postgres<br/>Render")]
+    web["Website<br/>Vercel"]
+    app["iPhone app"]
+    stripe["Stripe"]
 
-Next.js 16 (App Router) with an embedded Sanity Studio at `/studio`. See [CLAUDE.md](CLAUDE.md) for the pages and SEO goals and [STYLING.md](STYLING.md) for the design system.
+    rfl -- "weekly scrape" --> api
+    rfl -- "weekly scrape (copies to edit)" --> cms
+    cms -- "hourly sync: Manual Override & Hide" --> api
+    api <--> db
+    api --> web
+    api --> app
+    cms -- "blog, players, pages" --> web
+    web -- "dues checkout" --> stripe
+    app -- "dues checkout" --> stripe
+    stripe -- "webhook" --> api
 
-```sh
-npm ci
-npm run dev
+    classDef pink fill:#fd80b5,stroke:#fd80b5,color:#111111
+    classDef blue fill:#77c3ef,stroke:#77c3ef,color:#111111
+    classDef plain fill:#ffffff,stroke:#EAEAEA,color:#111111
+    class api,db blue
+    class web,app pink
+    class rfl,cms,stripe plain
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The site needs `NEXT_PUBLIC_SANITY_PROJECT_ID` and `NEXT_PUBLIC_SANITY_DATASET`; `vercel env pull` fetches the rest.
+- **Fixtures and standings** come from rugbyfl.com into the API's database. When rugbyfl.com is wrong, fix the match in **Studio**: tick **Manual Override** (scores, teams, dates) or **Hide this match** (games that never happened). The hourly `claymores-sync-cms` job copies the fix to the API. More in [api/README.md](api/README.md#fixing-scraped-data-in-the-cms).
+- **Everything else on the site** (blog, players, coaches, practices, pages) is edited in Studio as before.
+- **Members** sign in with Google (website and app) or Apple (app). One person is one member: the same email, or an Apple ID linked on the app's profile, opens the same account.
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Development server |
-| `npm run build` | Production build |
-| `npm run lint` | Lint (`next lint` was removed in Next 16, so this script currently fails) |
-| `npm run test:graphics` | Match-graphic tests |
-| `npm run test:auth` | Member sign-in, token refresh and API client tests |
+## The app
 
-### Reading data from the API
+<p align="center">
+  <img src="mobile/store/screenshots/1-home.png" alt="Home" width="180">
+  <img src="mobile/store/screenshots/2-fixtures.png" alt="Fixtures" width="180">
+  <img src="mobile/store/screenshots/3-standings.png" alt="Standings" width="180">
+  <img src="mobile/store/screenshots/4-club.png" alt="Club" width="180">
+</p>
 
-Public sports data (fixtures, standings, teams, players and practices) reads Sanity unless both of these server-only variables are set:
+Public for everyone: next match, fixtures and results, standings, practice times. Members sign in for their dues; admins get Club Admin. Releasing is in [mobile/store/APP_STORE.md](mobile/store/APP_STORE.md).
 
-| Variable | Value |
-| --- | --- |
-| `CLAYMORES_API_BASE_URL` | Claymores API origin. Member sign-in needs it too; on its own it does **not** change where sports data comes from. |
-| `CLAYMORES_DATA_SOURCE` | `api` reads sports data from the API. `sanity`, unset, or anything else reads Sanity (the default). |
+## Common tasks
 
-With `CLAYMORES_DATA_SOURCE=api`, each API read has an 8-second timeout. A network error, timeout, 5xx or unreadable response logs a `[claymores-api] … Falling back to Sanity.` warning and that read comes from Sanity instead, so pages and the build (`generateStaticParams`, sitemap) keep working while the API is down. The practice schedule falls back to the built-in defaults if both fail.
+<details>
+<summary><b>Fix a game rugbyfl.com got wrong</b></summary>
 
-Production reads Sanity. The Preview deployment of `codex/claymores-api-integration` reads the API: it needs `CLAYMORES_DATA_SOURCE=api` (not a secret) added next to its existing `CLAYMORES_API_BASE_URL`, or it reads Sanity after this change.
+1. Open [Studio](https://www.claymoresrfc.com/studio) → Match → find the game.
+2. Wrong details: correct them and tick **Manual Override**. A game that never happened: tick **Hide this match** (don't delete it).
+3. Publish. The website and app update within the hour.
+</details>
 
-### Member sign-in (`/sign-in`, `/sign-up`, `/account`, `/account/admin`)
+<details>
+<summary><b>Invite a member or approve a request to join</b></summary>
 
-The site stays public. Sign-in exists only for member features (dues and payments). Only `/account` and `/account/admin` are protected (`proxy.ts`). All member pages are `noindex`, are not in the sitemap, and `/account` is disallowed in `robots.txt`.
+Club Admin (website or app) → **Join requests** → Approve, or **Invitations** → invite by email as player or admin. They sign in with that Google account or Apple ID.
+</details>
 
-**Feature gate.** Sign-in turns on only when all four of these are set. With any missing, the navbar hides **Sign in** and the pages show "Sign-in is coming soon", so production keeps working without them.
+<details>
+<summary><b>Dues: assign, see who has paid, record cash</b></summary>
 
-| Variable | Value |
-| --- | --- |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google **Web application** OAuth client. Use the API's `Authentication:Google:ClientId` client, or add this client ID to the API's `Authentication:Google:MobileClientIds`, or the API rejects the id_token's audience. |
-| `AUTH_SECRET` | `openssl rand -base64 32`. Encrypts the session and pending-request cookies. |
-| `CLAYMORES_API_BASE_URL` | Claymores API origin. Turning on sign-in does not move sports data to the API; that takes `CLAYMORES_DATA_SOURCE=api` (see above). |
-| `CLAYMORES_WEB_CHECKOUT_ENABLED` | Optional kill switch, `true` shows **Pay now**. Turn it on once the API has `Stripe:WebReturnUrl` set (see **Web dues checkout** below). |
+Club Admin → **Manage dues**:
+- assign to one player or **Everyone who has signed in**, or turn on **Automatic dues** so every player gets them on first sign-in;
+- the summary shows, per dues item, who has paid in full, partly or not at all;
+- record cash, Venmo, Zelle or check payments with a note (also in the app, at practice).
 
-Authorized redirect URIs to register on the Google client: `https://www.claymoresrfc.com/api/auth/callback/google`, plus a stable preview host such as `https://<project>-git-<branch>-<team>.vercel.app/api/auth/callback/google` (each preview hostname must be listed exactly; Google doesn't accept wildcards), and `http://localhost:3000/api/auth/callback/google` for local work.
+Card payments go through Stripe Checkout (test mode until the Stripe account is verified; going live is in [api/README.md](api/README.md#going-live-with-stripe)).
+</details>
 
-**Flow.**
+<details>
+<summary><b>Ship a new version of the app</b></summary>
 
-1. `/sign-in` → **Continue with Google** (Auth.js v5, Google provider) → Google → `/api/auth/callback/google`.
-2. In the Auth.js `signIn` callback the server posts Google's `id_token` to `POST /v1/auth/mobile/google`.
-   - `200`: the API access token, refresh token and user go into the Auth.js session JWT: an encrypted, httpOnly cookie. The session object returned to the browser never contains tokens, and no client `SessionProvider` is used. A token-free `claymores_member=1` cookie lets the navbar say **Account**.
-   - `403 not_invited`: the id_token is stored for 10 minutes in an encrypted httpOnly cookie scoped to `/sign-up`, and the person lands on `/sign-up`. The form posts `request-access` with that id_token; the page shows `request-status` (pending, approved, denied). When the cookie expires, they confirm with Google again.
-   - `401`: back to `/sign-in?error=invalid`. API down: `?error=unavailable`.
-3. Every `/account*` request goes through `proxy.ts`. When the access token expires within two minutes, the proxy calls `POST /v1/auth/mobile/refresh` once per refresh token (single-flight, and the rotated result is remembered for two minutes so a parallel request carrying the old cookie reuses it instead of replaying the old token and revoking the family). The new session is written to the response cookie and into the request so the page rendered in the same request already uses it. A `401`/`403` from refresh signs the member out.
-4. Pages and server actions call the API server-side with the bearer token (`/v1/me`, `/v1/dues/mine`, checkout, and admin join requests and invitations).
-5. **Sign out** posts `POST /v1/auth/mobile/logout` and clears the cookies.
-6. **Delete my account** (bottom of `/account`, confirmed by typing `DELETE`) calls `DELETE /v1/me`. On `204` the API has ended access, revoked sessions and removed the member and join-request records (dues and payments are kept); the site clears its cookies and redirects to `/?accountDeleted=1`, which shows a notice. `409 last_admin` tells the only admin to promote someone first; any other failure deletes nothing and says so.
+GitHub → **Actions → iOS TestFlight → Run workflow** (on `main`). About 20 minutes later the build is in TestFlight; the build number goes up on its own. To release it, pick the build on the version page in App Store Connect and submit.
+</details>
 
-`callbackUrl` on `/sign-in` is accepted only as a same-origin path (`lib/claymores/callback-url.ts`): no scheme or host, no `//`, no backslashes, no control characters.
+<details>
+<summary><b>Release website or API changes</b></summary>
 
-While a checkout is open for a dues item (`pendingCheckoutCents > 0`), the amount field is replaced by **Resume payment** for that amount, because the API reuses the open session. A checkout started in the app returns to the app.
+Work lands on `dev` first (its preview: `claymore-website-git-dev-carlos-lavayens-projects.vercel.app`), then a pull request `dev` → `main`. Merging to `main` deploys the website (Vercel) and the API (Render) automatically. Vercel skips builds that only touch `api/` or `mobile/`.
+</details>
 
-The single-flight guard is per server instance. Two requests on two different instances in the same instant can still race; the member is then asked to sign in again.
+## Looking at the database
 
-**Web dues checkout.** **Pay now** posts `POST /v1/dues/{id}/checkout-session` with `{"amountCents", "returnTo": "web"}` and redirects to the Stripe-hosted URL the API returns (only `https://` URLs are followed). Stripe then sends the member to the API's `Stripe:WebReturnUrl`, which must be `https://www.claymoresrfc.com/account`; the API appends `?checkout=returned` or `?checkout=cancelled` and `/account` shows the matching banner (a signed-out member goes through sign-in and lands back on the same URL). Set `Stripe:WebReturnUrl` on the API first, then `CLAYMORES_WEB_CHECKOUT_ENABLED=true` on the website. If the flag is on but the API isn't configured, the API answers `400 web_checkout_unavailable` and the member sees "Online payment isn't available yet" instead of a generic error. Other errors: `400 invalid_request` (amount), `404` (not their dues), `409` (over the balance or the session is no longer open), `502` (Stripe). The error mapping lives in `lib/claymores/checkout.ts`.
+The database only accepts connections from Render's own network, on purpose. To look around:
 
-**Local testing with the mock API.**
+- **Render dashboard** → `claymores-db-4zm4`: size, metrics, backups.
+- **From your computer:** Render dashboard → `claymores-db-4zm4` → **Networking / Access Control** → add your IP, then `render psql claymores-db-4zm4` (or paste the *External Database URL* into TablePlus/Postico). Remove your IP when done.
 
-```sh
-MOCK_API_PORT=5399 node scripts/mock-claymores-api.mjs
-CLAYMORES_DEV_SIGN_IN=1 AUTH_GOOGLE_ID=dev AUTH_GOOGLE_SECRET=dev AUTH_SECRET="$(openssl rand -base64 32)" \
-  CLAYMORES_API_BASE_URL=http://127.0.0.1:5399 CLAYMORES_WEB_CHECKOUT_ENABLED=true npm run dev
+Main tables: `fixtures`, `standings`, `teams`, `club_members` and `member_identities` (who can sign in, as one member), `club_invitations`, `join_requests`, `dues_assessments`, `dues_payments`, `dues_checkouts`, `dues_auto_assign`. Schema changes are the numbered files in [`api/src/Claymores.Api/sql`](api/src/Claymores.Api/sql), applied automatically on deploy.
+
+## Repository layout
+
+| Folder | What | Deploys to | Docs |
+| --- | --- | --- | --- |
+| `/` | Next.js 16 website + Sanity Studio (`/studio`) | Vercel | [docs/website.md](docs/website.md) · [CLAUDE.md](CLAUDE.md) (pages, SEO) · [STYLING.md](STYLING.md) (design) |
+| `api/` | ASP.NET Core 10 API, scrapers, tests | Render ([`render.yaml`](render.yaml)) | [api/README.md](api/README.md) |
+| `mobile/` | Flutter app | TestFlight / App Store | [mobile/README.md](mobile/README.md) · [mobile/store/APP_STORE.md](mobile/store/APP_STORE.md) |
+| `backups/` | Weekly Sanity dataset backups | (GitHub Action) | |
+| `scripts/` | One-off Sanity scripts and the local mock API | | |
+
+## Running it locally
+
+```bash
+npm ci && npm run dev                       # website on http://localhost:3000
 ```
 
-`CLAYMORES_DEV_SIGN_IN=1` adds a development-only email form on `/sign-in` (never in a production build). The mock's checkout returns a fake Stripe URL; set `MOCK_WEB_CHECKOUT=off` to see the `web_checkout_unavailable` message or `MOCK_STRIPE_DOWN=1` for the `502` message, and open `/account?checkout=returned` to see the return banner. Use `player@example.com`, `admin@example.com`, or any other email to try request-to-join. Set `MOCK_ACCESS_TTL_SECONDS=150` to see a token refresh after 30 seconds.
+```bash
+cd api && dotnet test                       # API tests (set CLAYMORES_TEST_DATABASE for the Postgres ones)
+```
 
-### Scheduled jobs
+```bash
+cd mobile && flutter run --dart-define-from-file=dart_defines/production.json
+```
 
-`vercel.json` runs `/api/scrape-rugby` and `/api/scrape-standings` weekly. They write match and standings data into Sanity and need `CRON_SECRET`.
+Details, environment variables and test commands are in each folder's docs above.
+
+## Secrets: where they live
+
+Never in the repository. Names only:
+
+| Where | Secrets |
+| --- | --- |
+| **Render** (`claymores-api-4zm4` → Environment) | `Authentication__Google__ClientSecret`, `Stripe__SecretKey`, `Stripe__WebhookSecret`, `Authentication__Tokens__SigningKey` (generated), `Authentication__Apple__PrivateKey` (optional) |
+| **Vercel** (claymore-website → Settings → Environment Variables) | `AUTH_SECRET`, `AUTH_GOOGLE_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `SANITY_API_TOKEN`, `SANITY_REVALIDATE_SECRET`, `CRON_SECRET` |
+| **GitHub** (Settings → Secrets → Actions) | `APP_STORE_CONNECT_KEY`, `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `SANITY_API_TOKEN`, `SANITY_PROJECT_ID` |
+
+<p align="center"><sub>Built for the Claymores · <a href="https://www.claymoresrfc.com/contact">come to a practice</a></sub></p>

@@ -12,6 +12,8 @@ import {
     paymentMethodLabel,
     recordableCents,
     sortMembers,
+    summarizeDues,
+    formatSummaryCents,
 } from './admin-dues'
 import { ClaymoresApiClient, UNREACHABLE, type ApiResult, type FetchLike } from './api-client'
 
@@ -274,4 +276,70 @@ test('automatic dues and remove: client routes and write outcomes', async () => 
     assert.equal(invalid.kind === 'error' && invalid.message, 'Description must be 1-120 characters.')
     const down = duesWriteOutcome(fail(503), 'remove')
     assert.equal(down.kind === 'error' && down.message, 'The club server didn’t respond. Try again in a minute.')
+})
+
+const dues = (playerSubject: string, description: string, amountCents: number, paidCents: number, pendingCheckoutCents = 0) => ({
+    playerSubject, description, amountCents, paidCents, balanceCents: amountCents - paidCents, pendingCheckoutCents,
+})
+const names = new Map([['a', 'Alice'], ['b', 'bob'], ['c', 'Cara'], ['d', 'Dan']])
+
+test('summarizeDues: empty input gives no groups', () => {
+    assert.deepEqual(summarizeDues([], names), [])
+})
+
+test('summarizeDues: groups by description, counts each status, and sorts names', () => {
+    const [season, ...rest] = summarizeDues([
+        dues('c', '2026-27 Season dues', 12500, 0),
+        dues('a', '2026-27 Season dues', 12500, 12500),
+        dues('b', '2026-27 Season dues', 12500, 5000, 2500),
+        dues('d', '2026-27 Season dues', 12500, 0),
+        dues('x', '2026-27 Season dues', 12500, 13000), // overpaid, former member
+    ], names)
+    assert.equal(rest.length, 0)
+    assert.equal(season.description, '2026-27 Season dues')
+    assert.equal(season.amountCents, 12500)
+    assert.equal(season.count, 5)
+    assert.deepEqual([season.paidInFull, season.partlyPaid, season.unpaid], [2, 1, 2])
+    assert.equal(season.totalCents, 62500)
+    assert.equal(season.collectedCents, 30500)
+    assert.equal(season.outstandingCents, 7500 + 12500 + 12500)
+    assert.equal(season.pendingCheckoutCents, 2500)
+    assert.equal(season.paidInFullCents, 25000) // the overpayment is capped at the amount
+    assert.equal(season.partlyPaidCents, 5000)
+    assert.deepEqual(season.members.paid.map(m => m.label), ['Alice', 'Former member'])
+    assert.deepEqual(season.members.partly, [{ label: 'bob', balanceCents: 7500 }])
+    assert.deepEqual(season.members.unpaid.map(m => m.label), ['Cara', 'Dan'])
+})
+
+test('summarizeDues: merges descriptions case-insensitively and shows the most common spelling', () => {
+    const groups = summarizeDues([
+        dues('a', 'season dues', 10000, 0),
+        dues('b', '  Season Dues ', 10000, 0),
+        dues('c', 'Season Dues', 10000, 0),
+    ], names)
+    assert.equal(groups.length, 1)
+    assert.equal(groups[0].description, 'Season Dues')
+    assert.equal(groups[0].count, 3)
+})
+
+test('summarizeDues: mixed amounts have no single amount; most outstanding first; fully paid groups last', () => {
+    const groups = summarizeDues([
+        dues('a', 'Kit fee', 4000, 4000),
+        dues('b', 'Kit fee', 4000, 4000),
+        dues('a', 'Tour', 30000, 0),
+        dues('b', 'Tour', 25000, 10000),
+    ], names)
+    assert.deepEqual(groups.map(g => g.description), ['Tour', 'Kit fee'])
+    assert.equal(groups[0].amountCents, null)
+    assert.equal(groups[0].outstandingCents, 45000)
+    const kit = groups[1]
+    assert.equal(kit.amountCents, 4000)
+    assert.deepEqual([kit.paidInFull, kit.partlyPaid, kit.unpaid, kit.outstandingCents, kit.collectedCents], [2, 0, 0, 0, 8000])
+    // A label function works too.
+    assert.equal(summarizeDues([dues('z', 'Kit fee', 4000, 0)], s => `#${s}`)[0].members.unpaid[0].label, '#z')
+})
+
+test('formatSummaryCents drops cents only for whole dollars', () => {
+    assert.equal(formatSummaryCents(195000), '$1,950')
+    assert.equal(formatSummaryCents(2550), '$25.50')
 })
