@@ -243,6 +243,8 @@ internal static class DuesAdminPage
                     <option value="zelle">Zelle</option>
                     <option value="check">Check</option>
                     <option value="other">Other</option>
+                    <option value="volunteer">Volunteered (time, not money)</option>
+                    <option value="waived">Waived</option>
                   </select>
                 </label>
                 <label class="admin-field">Note (optional)
@@ -278,7 +280,7 @@ internal static class DuesAdminPage
             "recorded" => "Payment recorded.",
             "invalid-assignment" => "Choose a member and enter a description and a valid USD amount.",
             "invalid-date" => "Enter a due date between 1900 and 2200.",
-            "invalid-payment" => "Enter a positive USD amount with up to two decimal places, a method, and a note of at most 500 characters.",
+            "invalid-payment" => "Enter a positive USD amount with up to two decimal places, a method, and a note of at most 500 characters (required for volunteered or waived).",
             "missing-member" => "Choose a member from the current list.",
             "missing-assessment" => "This assessment is no longer available.",
             "overpayment" => "The payment exceeds the available balance after pending checkout.",
@@ -302,6 +304,8 @@ internal static class DuesAdminPage
         "venmo" => "Venmo",
         "zelle" => "Zelle",
         "check" => "Check",
+        "volunteer" => "Volunteered",
+        "waived" => "Waived",
         _ => "Other",
     };
 

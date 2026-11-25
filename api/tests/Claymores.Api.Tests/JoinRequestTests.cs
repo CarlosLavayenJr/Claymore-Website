@@ -587,6 +587,39 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Volunteering_and_waivers_count_toward_dues_but_not_as_money()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("credits-admin@example.com");
+        var dues = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.Created, (await Client().SendAsync(Bearer(HttpMethod.Post, "/v1/admin/dues", admin,
+            new { id = dues, playerSubject = "sub-credits", description = "Season dues", amountCents = 12500 }), Ct)).StatusCode);
+
+        // A credit needs a note saying what they did, or why.
+        foreach (var method in new[] { "volunteer", "waived" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Post,
+                $"/v1/admin/dues/{dues}/payments", admin, new { id = Guid.NewGuid(), amountCents = 1000, method }), Ct)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin,
+            new { id = Guid.NewGuid(), amountCents = 5000, method = "cash" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin,
+            new { id = Guid.NewGuid(), amountCents = 5000, method = "volunteer", note = "Highland Games cleanup" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments", admin,
+            new { id = Guid.NewGuid(), amountCents = 2500, method = "Waived", note = "Injured half the season" }), Ct)).StatusCode);
+
+        var detail = await (await Client().SendAsync(Bearer(HttpMethod.Get, $"/v1/admin/dues/{dues}", admin), Ct))
+            .Content.ReadAsStringAsync(Ct);
+        // Paid in full, of which $75 is credit (volunteered $50 + waived $25) and $50 is money.
+        Assert.Contains("\"paidCents\":12500", detail);
+        Assert.Contains("\"balanceCents\":0", detail);
+        Assert.Contains("\"creditedCents\":7500", detail);
+        Assert.Contains("\"method\":\"volunteer\"", detail);
+        Assert.Contains("\"method\":\"waived\"", detail);
+        var list = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/dues", admin), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"creditedCents\":7500", list);
+    }
+
+    [Fact]
     public async Task Dues_can_be_assigned_to_every_member_once()
     {
         database.SkipIfUnavailable();

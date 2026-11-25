@@ -135,14 +135,19 @@ class _DuesDetailPageState extends State<DuesDetailPage> {
                                     fontFeatures: tabularFigures,
                                   ),
                                 ),
-                                subtitle: payment.recordedAt == null
-                                    ? null
-                                    : Text(
-                                        localizations.formatMediumDate(
-                                          payment.recordedAt!.toLocal(),
-                                        ),
-                                        style: textTheme.bodySmall,
-                                      ),
+                                subtitle: switch ([
+                                  if (payment.recordedAt != null)
+                                    localizations.formatMediumDate(
+                                      payment.recordedAt!.toLocal(),
+                                    ),
+                                  ?payment.methodLabel,
+                                ]) {
+                                  [] => null,
+                                  final parts => Text(
+                                    parts.join(' · '),
+                                    style: textTheme.bodySmall,
+                                  ),
+                                },
                               ),
                           ],
                         ),

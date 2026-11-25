@@ -48,15 +48,36 @@ class AdminJoinRequest {
 }
 
 /// How an admin can record a payment by hand (everything except Stripe).
+/// [volunteer] and [waived] are credits, not money, and need a note.
 enum ManualPaymentMethod {
   cash('Cash'),
   venmo('Venmo'),
   zelle('Zelle'),
   check('Check'),
-  other('Other');
+  other('Other'),
+  volunteer(
+    'Volunteered',
+    credit: true,
+    noteHint: 'What did they do? e.g. Reffed U12 game',
+  ),
+  waived('Waived', credit: true, noteHint: 'Why? e.g. Scholarship, injury');
 
-  const ManualPaymentMethod(this.label);
+  const ManualPaymentMethod(this.label, {this.credit = false, this.noteHint});
   final String label;
+
+  /// Time or work for the club, or forgiven: not money. The API requires a
+  /// note for these.
+  final bool credit;
+
+  /// Placeholder for the note when it's required.
+  final String? noteHint;
+
+  bool get requiresNote => credit;
+
+  static Iterable<ManualPaymentMethod> get money =>
+      values.where((m) => !m.credit);
+  static Iterable<ManualPaymentMethod> get credits =>
+      values.where((m) => m.credit);
 }
 
 /// What the admin typed into the "Record payment" sheet.
