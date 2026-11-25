@@ -387,9 +387,9 @@ class _MemberRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (member.staffLabel case final label?) ...[
+                if (member.roleBadge case final label?) ...[
                   const SizedBox(width: 8),
-                  FixtureBadge(label: label),
+                  FixtureBadge(label: label, accent: member.isStaff),
                 ],
                 if (missing) ...[
                   const SizedBox(width: 8),
