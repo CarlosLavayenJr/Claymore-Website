@@ -161,6 +161,16 @@ internal sealed class DuesCheckout(
             logger.LogWarning("Stripe {Mode} checkout request failed with status {Status} for attempt {Attempt}: " +
                 "{Code} {Param} {Message}", settings.ModeName, error.HttpStatusCode, attempt.Id,
                 error.StripeError?.Code, error.StripeError?.Param, error.StripeError?.Message ?? error.Message);
+
+            // Stripe refused to create the session (a 4xx other than a conflict or rate limit): no
+            // session exists, and Stripe would replay the same error for this idempotency key for a
+            // day. Release the reservation so the next try is a new attempt with a new key, instead
+            // of the member being locked out until an admin releases it.
+            var status = (int)error.HttpStatusCode;
+            // Not for an idempotency error: a session may exist under this key with other parameters.
+            if (attempt.SessionId is null && status is >= 400 and < 500 and not 409 and not 429 &&
+                error.StripeError?.Type != "idempotency_error")
+                await store.ReleaseAsync(attempt.Id, "stripe-rejected", CancellationToken.None);
             return CheckoutOutcome.Failed(502, settings.Mode == StripeMode.Live
                 ? "Checkout is temporarily unavailable. Try again to resume the same payment."
                 : "Test checkout is temporarily unavailable. Try again to resume the same payment.");

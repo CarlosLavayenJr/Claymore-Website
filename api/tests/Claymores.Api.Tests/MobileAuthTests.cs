@@ -60,6 +60,9 @@ internal sealed class FakeStripe : HttpMessageHandler
     /// <summary>Process creates but answer 500, as if the response were lost.</summary>
     public bool DropResponses { get; set; }
 
+    /// <summary>Stripe refuses to create sessions (400), e.g. an account without a business name.</summary>
+    public bool RejectCreates { get; set; }
+
     public int SessionCount => _sessions.Count;
 
     public ConcurrentQueue<string> ListQueries { get; } = new();
@@ -84,6 +87,9 @@ internal sealed class FakeStripe : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var path = request.RequestUri!.AbsolutePath;
+        if (request.Method == HttpMethod.Post && path == "/v1/checkout/sessions" && RejectCreates)
+            return Error(HttpStatusCode.BadRequest, "invalid_request_error",
+                "In order to use Checkout, you must set an account or business name.");
         if (request.Method == HttpMethod.Post && path == "/v1/checkout/sessions")
         {
             var body = await request.Content!.ReadAsStringAsync(ct);
