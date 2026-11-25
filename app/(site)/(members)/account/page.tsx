@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { signOutMember } from '../actions'
 import { DeleteAccountForm } from './delete-account-form'
+import { FullNameCard } from './full-name-card'
 import { PayForm } from './pay-form'
 import { UpcomingMatches } from './upcoming-matches'
 import {
@@ -21,6 +22,7 @@ import { formatCents, type DuesAssessment, type DuesDetail } from '@/lib/claymor
 import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { checkoutReturnStatus } from '@/lib/claymores/checkout'
 import { memberApi } from '@/lib/claymores/member'
+import { needsFullName } from '@/lib/claymores/member-name'
 
 export const metadata: Metadata = {
     title: 'My account',
@@ -185,6 +187,21 @@ export default async function AccountPage({ searchParams }: { searchParams: Sear
             </MemberHeader>
 
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+                {params.name === 'saved' && <Notice tone="success" title={`Thanks, ${user.name ?? 'your name is saved'}.`} />}
+                {(needsFullName(user.name) || params.editName === '1') && (
+                    <FullNameCard
+                        name={user.name ?? null}
+                        editing={!needsFullName(user.name)}
+                        error={params.name === 'invalid' ? 'Enter both a first and a last name.'
+                            : params.name === 'failed' ? 'Your name couldn’t be saved. Try again in a minute.' : null}
+                    />
+                )}
+                {!needsFullName(user.name) && params.editName !== '1' && (
+                    <p className="text-sm text-[#555555]">
+                        Signed in as <span className="font-semibold text-[#111111]">{user.name}</span>
+                        {' · '}<Link href="/account?editName=1" className={linkClass}>Change name</Link>
+                    </p>
+                )}
                 {params.joined === '1' && (
                     <Notice tone="success" title="Welcome to the Claymores">
                         You’re in as a player. Your dues show here once the club assigns them, and you can sign in to the

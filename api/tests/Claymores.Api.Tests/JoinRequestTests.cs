@@ -845,6 +845,44 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public async Task Members_and_admins_set_names_that_sign_in_keeps()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminTokenAsync("names-admin@example.com");
+        await InviteAsync("anthony@example.com", "player");
+        var idToken = FakeGoogleValidator.Token("sub-anthony", "anthony@example.com", name: "Anthony");
+        var first = await Client().PostAsJsonAsync("/v1/auth/mobile/google", new { idToken }, Ct);
+        using var tokens = JsonDocument.Parse(await first.Content.ReadAsStringAsync(Ct));
+        var player = tokens.RootElement.GetProperty("accessToken").GetString()!;
+        var refresh = tokens.RootElement.GetProperty("refreshToken").GetString()!;
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/me/name", player,
+            new { name = "   " }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/me/name", player,
+            new { name = "  Anthony   Rossi " }), Ct)).StatusCode);
+
+        // /v1/me shows it right away, even on the token issued before the change.
+        Assert.Contains("\"name\":\"Anthony Rossi\"", await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/me", player), Ct)).Content.ReadAsStringAsync(Ct));
+        // The admin list shows it, a token refresh carries it, and signing in with Google again keeps it.
+        var members = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/members", admin), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"name\":\"Anthony Rossi\"", members);
+        var refreshed = await (await Client().PostAsJsonAsync("/v1/auth/mobile/refresh", new { refreshToken = refresh }, Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("Anthony Rossi", refreshed);
+        var again = await (await Client().PostAsJsonAsync("/v1/auth/mobile/google", new { idToken }, Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("Anthony Rossi", again);
+
+        // Admins can set anyone's name; players can't.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/admin/members/sub-anthony/name", player,
+            new { name = "Tony" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/admin/members/nobody/name", admin,
+            new { name = "Tony" }), Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Bearer(HttpMethod.Put, "/v1/admin/members/sub-anthony/name", admin,
+            new { name = "Tony Rossi" }), Ct)).StatusCode);
+        members = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/members", admin), Ct)).Content.ReadAsStringAsync(Ct);
+        Assert.Contains("\"name\":\"Tony Rossi\"", members);
+    }
+
+    [Fact]
     public async Task Admin_can_undo_a_payment_and_edit_its_note()
     {
         database.SkipIfUnavailable();
