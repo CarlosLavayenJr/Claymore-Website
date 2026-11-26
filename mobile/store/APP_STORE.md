@@ -71,7 +71,7 @@ Check on your phone:
 
 Copy each value into App Store Connect → the app → **App Store** tab (version 1.0). Character limits are in brackets; every value fits.
 
-**Screenshots:** `mobile/store/screenshots/` — four 1320 × 2868 PNGs (the 6.9" iPhone size; Apple scales them for smaller iPhones). Drag them in this order:
+**Screenshots:** upload `mobile/store/screenshots/6.3-inch/` (1206 × 2622) to **App Previews and Screenshots → iPhone with Dynamic Island (medium display)** on the version page; App Store Connect now requires that size and scales it for every iPhone. (The Asset Library uploader rejects both sizes; the 1320 × 2868 originals are kept beside them.) Order:
 1. `1-home.png` — next match, standings, practice
 2. `2-fixtures.png` — upcoming fixtures and club events
 3. `3-results.png` — match history with scores
