@@ -270,7 +270,7 @@ class _Summary extends StatelessWidget {
           BrandHeader(eyebrow: description, title: memberLabel, titleSize: 22),
           const SizedBox(height: 14),
           Text(
-            owes ? '${formatCents(dues.balanceCents)} due' : 'Paid in full',
+            owes ? '${formatCents(dues.balanceCents)} due' : dues.settledLabel,
             key: const Key('player-balance'),
             style: textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
@@ -279,14 +279,13 @@ class _Summary extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Paid ${formatCents(dues.paidCents)} of '
+            'Paid ${formatCents(dues.moneyPaidCents)} of '
             '${formatCents(dues.amountCents)}',
             style: small,
           ),
           if (dues.creditedCents > 0)
             Text(
-              'Includes ${formatCents(dues.creditedCents)} credited '
-              '(volunteer/waived)',
+              '${dues.creditLabel} ${formatCents(dues.creditedCents)}',
               style: small,
             ),
           if (dues.hasPendingCheckout)

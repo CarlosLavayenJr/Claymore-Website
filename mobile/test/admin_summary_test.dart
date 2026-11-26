@@ -12,6 +12,7 @@ DuesAssessment dues({
   int amount = 12500,
   int paid = 0,
   int credited = 0,
+  int waived = 0,
   int pending = 0,
   String? subject,
   String? dueDate,
@@ -22,6 +23,7 @@ DuesAssessment dues({
   'amountCents': amount,
   'dueDate': dueDate,
   'paidCents': paid,
+  'waivedCents': waived,
   'creditedCents': credited,
   'balanceCents': amount - paid,
   'pendingCheckoutCents': pending,
@@ -126,10 +128,28 @@ void main() {
         g.moneyLine,
         '\$1,880 collected · \$250 credited · \$620 outstanding',
       );
-      // Status still follows the balance: credit counts as paid.
+      // Settled by credit alone isn't "paid in full": it's volunteered.
       expect(
         g.progressLine,
-        '16 of 22 paid in full · 3 partly paid · 3 unpaid',
+        '15 of 22 paid in full · 1 volunteered · 3 partly paid · 3 unpaid',
+      );
+    });
+
+    test('a waiver is not a payment', () {
+      final waived = dues(paid: 12500, credited: 12500, waived: 12500);
+      final volunteered = dues(paid: 12500, credited: 12500);
+      final mixed = dues(paid: 12500, credited: 7500, waived: 7500);
+      expect(DuesStanding.of(waived), DuesStanding.waived);
+      expect(waived.settledLabel, 'Waived');
+      expect(waived.creditLabel, 'Waived');
+      expect(DuesStanding.of(volunteered), DuesStanding.volunteered);
+      expect(volunteered.settledLabel, 'Volunteered');
+      expect(DuesStanding.of(mixed), DuesStanding.paid);
+      expect(mixed.settledLabel, 'Paid · rest waived');
+      expect(dues(paid: 12500).settledLabel, 'Paid in full');
+      expect(
+        summarizeDues([waived, volunteered, mixed]).single.progressLine,
+        '1 of 3 paid in full · 1 waived · 1 volunteered',
       );
     });
 

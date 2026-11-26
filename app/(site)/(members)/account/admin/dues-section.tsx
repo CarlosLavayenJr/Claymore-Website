@@ -9,6 +9,8 @@ import {
     canRemoveDues,
     centsToDollarsInput,
     creditedCentsOf,
+    creditLabel,
+    duesStatus,
     DUES_LIMITS,
     isCreditMethod,
     mapWithConcurrency,
@@ -133,6 +135,8 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
     const current = detail?.assessment ?? dues
     const due = formatDate(current.dueDate)
     const paidInFull = current.balanceCents <= 0
+    const status = duesStatus(current)
+    const credited = creditedCentsOf(current)
     const pending = current.pendingCheckoutCents > 0
     const recordable = recordableCents(current)
     const context = `${player}, ${current.description}`
@@ -150,24 +154,20 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
                         </span>
                         <span
                             className={
-                                paidInFull
-                                    ? 'rounded-full bg-[#77c3ef]/15 px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
+                                status.kind === 'paid' ? 'rounded-full bg-[#77c3ef]/15 px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
+                                    : status.kind === 'waived' || status.kind === 'volunteered' ? 'rounded-full border border-dashed border-[#77c3ef] px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
                                     : 'rounded-full bg-[#fd80b5]/15 px-3 py-1 text-xs font-semibold text-[#b02a64]'
                             }
                         >
-                            {paidInFull ? 'Paid in full' : 'Balance due'}
+                            {status.label}
                         </span>
                     </span>
-                    <span className="grid grid-cols-3 gap-2">
+                    <span className={credited > 0 ? 'grid grid-cols-4 gap-2' : 'grid grid-cols-3 gap-2'}>
                         <Money label="Amount" cents={current.amountCents} />
-                        <Money label="Paid" cents={current.paidCents} />
+                        <Money label="Paid" cents={Math.max(0, current.paidCents - credited)} />
+                        {credited > 0 && <Money label={creditLabel(current)} cents={credited} />}
                         <Money label="Balance" cents={current.balanceCents} emphasis />
                     </span>
-                    {creditedCentsOf(current) > 0 && (
-                        <span className="block text-sm text-[#555555]">
-                            Includes {formatCents(creditedCentsOf(current))} credited (volunteer/waived)
-                        </span>
-                    )}
                     {pending && (
                         <span className="block text-sm text-[#555555]">
                             Card checkout in progress: <span className="font-semibold text-[#111111]">{formatCents(current.pendingCheckoutCents)}</span>
@@ -255,7 +255,9 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
     })
     const summary = summarizeDues(list, playerLabel)
     const outstanding = list.reduce((sum, d) => sum + Math.max(0, d.balanceCents), 0)
-    const paidCount = list.filter(d => d.balanceCents <= 0).length
+    const kinds = list.map(d => duesStatus(d).kind)
+    const paidCount = kinds.filter(k => k === 'paid').length
+    const waivedCount = kinds.filter(k => k === 'waived' || k === 'volunteered').length
     const auto = automatic.ok ? normalizeAutomaticDues(automatic.data) : null
 
     return (
@@ -266,7 +268,7 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
                 title="Who has paid"
                 status={!dues.ok ? 'Couldn’t load' : list.length === 0
                     ? 'No dues assigned yet'
-                    : <>{paidCount} of {list.length} paid in full · <span className="font-semibold text-[#111111]">{formatCents(outstanding)}</span> outstanding</>}
+                    : <>{paidCount} of {list.length} paid in full{waivedCount > 0 && <> · {waivedCount} waived</>} · <span className="font-semibold text-[#111111]">{formatCents(outstanding)}</span> outstanding</>}
             >
                 {summary.length > 0
                     ? <DuesSummary groups={summary} />

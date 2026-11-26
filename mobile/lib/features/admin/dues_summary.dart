@@ -3,8 +3,14 @@ import '../profile/payment_amount.dart';
 
 /// Where one player's dues stand.
 enum DuesStanding {
-  /// Nothing left to pay.
+  /// Nothing left to pay, and money paid toward it.
   paid,
+
+  /// Nothing left to pay, waived (some may have been volunteered).
+  waived,
+
+  /// Nothing left to pay, all of it volunteered.
+  volunteered,
 
   /// Some paid, some still owed.
   partial,
@@ -13,7 +19,11 @@ enum DuesStanding {
   unpaid;
 
   static DuesStanding of(DuesAssessment dues) => dues.balanceCents <= 0
-      ? paid
+      ? (dues.settledByVolunteering
+            ? volunteered
+            : dues.settledByCredit
+            ? waived
+            : paid)
       : dues.paidCents > 0
       ? partial
       : unpaid;
@@ -26,6 +36,14 @@ class DuesGroup {
     : paid = [
         for (final d in items)
           if (DuesStanding.of(d) == DuesStanding.paid) d,
+      ],
+      waived = [
+        for (final d in items)
+          if (DuesStanding.of(d) == DuesStanding.waived) d,
+      ],
+      volunteered = [
+        for (final d in items)
+          if (DuesStanding.of(d) == DuesStanding.volunteered) d,
       ],
       partial = [
         for (final d in items)
@@ -48,7 +66,7 @@ class DuesGroup {
   /// The description as first written (trimmed).
   final String description;
   final List<DuesAssessment> items;
-  final List<DuesAssessment> paid, partial, unpaid;
+  final List<DuesAssessment> paid, waived, volunteered, partial, unpaid;
 
   /// Money actually paid (volunteer and waived credit left out).
   final int collectedCents;
@@ -75,10 +93,12 @@ class DuesGroup {
   /// "2026-27 Season dues · $125 each".
   String get title => '$description · $amountLabel';
 
-  /// "14 of 22 paid in full · 5 partly paid · 3 unpaid"; zero counts after
-  /// the first are left out.
+  /// "14 of 22 paid in full · 1 waived · 5 partly paid · 3 unpaid"; zero
+  /// counts after the first are left out.
   String get progressLine => [
     '${paid.length} of $count paid in full',
+    if (waived.isNotEmpty) '${waived.length} waived',
+    if (volunteered.isNotEmpty) '${volunteered.length} volunteered',
     if (partial.isNotEmpty) '${partial.length} partly paid',
     if (unpaid.isNotEmpty) '${unpaid.length} unpaid',
   ].join(' · ');

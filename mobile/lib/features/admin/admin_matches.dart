@@ -18,11 +18,7 @@ List<Fixture> upcomingClaymoresMatches(
   int limit = 6,
 }) =>
     (fixtures
-            .where(
-              (f) =>
-                  f.status == 'upcoming' &&
-                  !f.date.isBefore(today),
-            )
+            .where((f) => f.status == 'upcoming' && !f.date.isBefore(today))
             .toList()
           ..sort((a, b) => a.date.compareTo(b.date)))
         .take(limit)
@@ -50,8 +46,9 @@ class AdminMatch {
   String get opponent => home ? fixture.away : fixture.home;
 
   /// "vs Tampa Bay" at home, "at Tampa Bay" away.
-  String get title =>
-      fixture.isClubEvent ? fixture.eventName : '${home ? 'vs' : 'at'} $opponent';
+  String get title => fixture.isClubEvent
+      ? fixture.eventName
+      : '${home ? 'vs' : 'at'} $opponent';
 
   /// The upcoming matches with each one's availability and lineup.
   static Future<List<AdminMatch>> load(

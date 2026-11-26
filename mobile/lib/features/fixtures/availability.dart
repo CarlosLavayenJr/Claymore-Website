@@ -110,8 +110,7 @@ class AvailabilityStore extends ChangeNotifier {
 /// Upcoming Claymores matches take answers, club events (the Highland
 /// Games) too since the club plays there; past matches don't.
 bool takesAvailability(Fixture fixture) =>
-    fixture.status == 'upcoming' &&
-    !fixture.date.isBefore(clubToday());
+    fixture.status == 'upcoming' && !fixture.date.isBefore(clubToday());
 
 Color _tint(AvailabilityStatus status) => switch (status) {
   AvailabilityStatus.available => Brand.blueTint,

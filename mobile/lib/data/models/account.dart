@@ -187,6 +187,7 @@ class DuesAssessment {
           : null,
       paidCents = _cents(json['paidCents']),
       creditedCents = _cents(json['creditedCents']),
+      waivedCents = _cents(json['waivedCents']),
       balanceCents = _cents(json['balanceCents']),
       pendingCheckoutCents = _cents(json['pendingCheckoutCents']);
 
@@ -197,10 +198,48 @@ class DuesAssessment {
   final int creditedCents;
   final DateTime? dueDate;
 
+  /// The waived part of [creditedCents]; the rest was volunteered.
+  final int waivedCents;
+
   /// What was actually paid in money: [paidCents] less [creditedCents].
   int get moneyPaidCents {
     final cents = paidCents - creditedCents;
     return cents > 0 ? cents : 0;
+  }
+
+  int get _waived =>
+      waivedCents.clamp(0, creditedCents < 0 ? 0 : creditedCents);
+  int get _volunteered => creditedCents - _waived;
+
+  /// Settled by credit alone (waived or volunteered), with no money paid.
+  bool get settledByCredit =>
+      settled && creditedCents > 0 && moneyPaidCents == 0;
+
+  /// Settled by volunteering alone (nothing paid or waived).
+  bool get settledByVolunteering => settledByCredit && _waived == 0;
+
+  /// "waived", "volunteered" or "waived & volunteered".
+  String get _creditWord => _waived > 0 && _volunteered > 0
+      ? 'waived & volunteered'
+      : _volunteered > 0
+      ? 'volunteered'
+      : 'waived';
+
+  /// Heading for the credit amount: "Waived", "Volunteered" or "Credited".
+  String get creditLabel => _waived > 0 && _volunteered > 0
+      ? 'Credited'
+      : _volunteered > 0
+      ? 'Volunteered'
+      : 'Waived';
+
+  /// Where a settled item stands. A waiver never reads as a payment:
+  /// "Paid in full", "Paid · rest waived", "Waived", "Volunteered".
+  String get settledLabel {
+    if (moneyPaidCents > 0) {
+      return creditedCents > 0 ? 'Paid · rest $_creditWord' : 'Paid in full';
+    }
+    final word = _creditWord;
+    return word[0].toUpperCase() + word.substring(1);
   }
 
   bool get hasPendingCheckout => pendingCheckoutCents > 0;
