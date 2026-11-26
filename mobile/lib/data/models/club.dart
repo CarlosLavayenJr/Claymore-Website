@@ -45,8 +45,14 @@ class Fixture {
   bool get isClubEvent =>
       TeamResolver.isClaymores(home) && TeamResolver.isClaymores(away);
 
-  /// What to call a club event: its competition name, or "Club event".
-  String get eventName => competition.isNotEmpty ? competition : 'Club event';
+  /// What to call a club event: its competition name in title case
+  /// ("Annual Highland Games"), or "Club event", as on the website.
+  String get eventName => competition.isEmpty
+      ? 'Club event'
+      : competition.replaceAllMapped(
+          RegExp(r'\b[a-z]'),
+          (m) => m[0]!.toUpperCase(),
+        );
 
   String get title => isClubEvent ? eventName : '$home vs $away';
 

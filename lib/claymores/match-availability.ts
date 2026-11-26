@@ -1,7 +1,6 @@
 // Pure helpers for match availability and lineups (member account and Club Admin).
 // No `server-only` import so they can be unit tested.
 
-import { isClubEvent } from '../seo'
 import type { AvailabilityCounts, AvailabilityStatus, Lineup, MemberAvailability, SaveLineupInput } from './api-client'
 
 export const AVAILABILITY_CHOICES: readonly { status: AvailabilityStatus; label: string }[] = [
@@ -44,12 +43,12 @@ export function todayInOrlando(now: Date = new Date()): string {
 type MatchLike = { _id: string; date: string; homeTeam: string; awayTeam: string; status: string }
 
 /**
- * The next Claymores matches members can answer for: upcoming, from today on, not club events
- * (the Highland Games are listed as Claymores vs Claymores). Sorted by date.
+ * The next Claymores matches members can answer for: upcoming, from today on, sorted by date.
+ * Club events (the Highland Games, listed as Claymores vs Claymores) count: the club plays there.
  */
 export function upcomingMatches<T extends MatchLike>(matches: readonly T[], today: string, limit = 6): T[] {
     return matches
-        .filter(m => m.status === 'upcoming' && m.date.slice(0, 10) >= today && !isClubEvent(m))
+        .filter(m => m.status === 'upcoming' && m.date.slice(0, 10) >= today)
         .sort((a, b) => a.date.localeCompare(b.date))
         .slice(0, limit)
 }

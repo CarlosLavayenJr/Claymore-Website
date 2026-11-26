@@ -112,6 +112,11 @@ export function isHomeMatch(m: { homeTeam: string }): boolean {
     return isClaymores(m.homeTeam)
 }
 
+/** A members' match row title: "vs Lakeland", "at Daytona", or a club event's name ("Annual Highland Games"). */
+export function matchLabel(m: { homeTeam: string; awayTeam: string; competition?: string | null }): string {
+    return isClubEvent(m) ? clubEventName(m) : `${isHomeMatch(m) ? 'vs' : 'at'} ${opponentOf(m)}`
+}
+
 export function claymoresScore(m: SanityMatch): { ours: number; theirs: number } {
     return isHomeMatch(m)
         ? { ours: m.homeScore ?? 0, theirs: m.awayScore ?? 0 }
