@@ -66,7 +66,7 @@ function MemberRow({ member, canSetRole }: { member: ClubMember; canSetRole: boo
                 <summary className="flex cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-[#111111]">{member.name ?? member.email}</span>
-                        <span className="block truncate text-sm text-[#555555]">{member.email}</span>
+
                     </span>
                     {missing && (
                         <span className="shrink-0 rounded-full bg-[#fd80b5]/15 px-2.5 py-0.5 text-xs font-semibold text-[#b02a64]">No last name</span>
