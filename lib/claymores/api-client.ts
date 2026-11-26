@@ -31,6 +31,8 @@ export type DuesAssessment = {
      * Missing from older API versions: treat as 0.
      */
     creditedCents?: number
+    /** The waived part of `creditedCents` (the rest was volunteered). Missing from older API versions. */
+    waivedCents?: number
     balanceCents: number
     pendingCheckoutCents: number
 }

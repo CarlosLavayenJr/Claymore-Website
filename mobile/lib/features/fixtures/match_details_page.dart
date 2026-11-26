@@ -78,10 +78,7 @@ class _DetailsState extends State<_Details> {
         final user = auth.user;
         final members = services.members;
         final admin = services.admin;
-        final memberView =
-            gate.value &&
-            members != null &&
-            user != null;
+        final memberView = gate.value && members != null && user != null;
         return PageList(
           children: [
             Eyebrow(localizations.formatFullDate(fixture.date)),

@@ -15,6 +15,8 @@ import {
     summarizeDues,
     formatSummaryCents,
     creditedCentsOf,
+    creditLabel,
+    duesStatus,
     duesMoneyLine,
     duesSummaryTotals,
     isCreditMethod,
@@ -412,7 +414,8 @@ test('summarizeDues: collected is money only; credit is split out but still coun
         dues('d', 'Season dues', 10000, 3000),            // partly, money (no creditedCents from older API)
         dues('x', 'Season dues', 10000, 0),
     ], names)
-    assert.deepEqual([g.paidInFull, g.partlyPaid, g.unpaid], [2, 2, 1])
+    // A waiver is not a payment: a is counted as waived, only b as paid.
+    assert.deepEqual([g.paidInFull, g.waived, g.volunteered, g.partlyPaid, g.unpaid], [1, 1, 0, 2, 1])
     assert.equal(g.collectedCents, 7500 + 3000)
     assert.equal(g.creditedCents, 10000 + 2500 + 4000)
     assert.equal(g.outstandingCents, 6000 + 7000 + 10000)
@@ -420,7 +423,24 @@ test('summarizeDues: collected is money only; credit is split out but still coun
     assert.equal(g.paidInFullCreditedCents, 12500)
     assert.equal(g.partlyPaidCents, 3000)
     assert.equal(g.partlyPaidCreditedCents, 4000)
-    assert.deepEqual(g.members.paid.map(m => m.label), ['Alice', 'bob'])
+    assert.deepEqual(g.members.paid.map(m => m.label), ['bob'])
+    assert.deepEqual(g.members.waived.map(m => m.label), ['Alice'])
+})
+
+test('duesStatus: a waiver or volunteering never reads as paid in full', () => {
+    const d = (paidCents: number, creditedCents: number, waivedCents: number | undefined, balanceCents: number) =>
+        duesStatus({ paidCents, creditedCents, waivedCents, balanceCents })
+    assert.deepEqual(d(12500, 0, 0, 0), { kind: 'paid', label: 'Paid in full' })
+    assert.deepEqual(d(12500, 12500, 12500, 0), { kind: 'waived', label: 'Waived' })
+    assert.deepEqual(d(12500, 12500, 0, 0), { kind: 'volunteered', label: 'Volunteered' })
+    assert.deepEqual(d(12500, 12500, 5000, 0), { kind: 'waived', label: 'Waived & volunteered' })
+    assert.deepEqual(d(12500, 7500, 7500, 0), { kind: 'paid', label: 'Paid · rest waived' })
+    assert.deepEqual(d(12500, 12500, undefined, 0), { kind: 'waived', label: 'Waived' }) // older API: no split
+    assert.deepEqual(d(5000, 0, 0, 7500), { kind: 'partly', label: 'Balance due' })
+    assert.deepEqual(d(0, 0, 0, 12500), { kind: 'unpaid', label: 'Balance due' })
+    assert.equal(creditLabel({ paidCents: 12500, creditedCents: 12500, waivedCents: 12500 }), 'Waived')
+    assert.equal(creditLabel({ paidCents: 12500, creditedCents: 5000, waivedCents: 0 }), 'Volunteered')
+    assert.equal(creditLabel({ paidCents: 12500, creditedCents: 5000, waivedCents: 2000 }), 'Credited')
 })
 
 test('summary money line splits collected and credited, and omits credited when 0', () => {

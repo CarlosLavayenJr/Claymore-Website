@@ -777,12 +777,9 @@ void main() {
       ),
     );
     await tester.pumpWidget(tile(2500));
-    expect(
-      find.text('Includes \$25.00 credited (volunteer/waived)'),
-      findsOneWidget,
-    );
+    expect(find.text('Volunteered \$25.00'), findsOneWidget);
     await tester.pumpWidget(tile(0));
-    expect(find.textContaining('credited'), findsNothing);
+    expect(find.textContaining('Volunteered'), findsNothing);
   });
 
   testWidgets('dues switched off, and a join request approved', (tester) async {
@@ -1590,7 +1587,8 @@ void main() {
     ) async {
       final services = await openAlex(tester);
       expect(find.text('PLAYER DUES'), findsOneWidget);
-      expect(find.text('Paid in full'), findsOneWidget);
+      // \$100 money + \$25 volunteered: settled, but not all of it paid.
+      expect(find.text('Paid · rest volunteered'), findsOneWidget);
       expect(find.byKey(const Key('record-payment')), findsNothing);
       expect(find.text('\$100.00'), findsOneWidget);
       expect(find.textContaining(RegExp(r'^Card · .*Nov 2')), findsOneWidget);
