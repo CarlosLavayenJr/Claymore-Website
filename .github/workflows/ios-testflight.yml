@@ -115,9 +115,11 @@ jobs:
           codesign -dvv "$app" 2>&1 | grep -E "Authority|TeamIdentifier"
           grep -q "com.apple.developer.applesignin" entitlements.plist \
             || { echo "::error::Sign in with Apple entitlement missing from the signed app"; exit 1; }
+          grep -A1 "aps-environment" entitlements.plist | grep -q "production" \
+            || { echo "::error::Push (aps-environment production) missing from the signed app"; exit 1; }
           grep -q "Apple Distribution" <(codesign -dvv "$app" 2>&1) \
             || { echo "::error::Not signed with an Apple Distribution certificate"; exit 1; }
-          echo "Signed for distribution with Sign in with Apple."
+          echo "Signed for distribution with Sign in with Apple and push."
 
       - name: Upload to TestFlight
         run: >
