@@ -359,7 +359,6 @@ class _MemberRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final missing = needsFullMemberName(member.name);
-    final hasEmailLine = member.name != null && member.email.isNotEmpty;
     return Semantics(
       button: true,
       onTapHint: 'edit name',
@@ -376,8 +375,6 @@ class _MemberRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(member.label, style: textTheme.bodyLarge),
-                      if (hasEmailLine)
-                        Text(member.email, style: textTheme.bodySmall),
                     ],
                   ),
                 ),

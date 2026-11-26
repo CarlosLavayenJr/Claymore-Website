@@ -14,7 +14,7 @@ import {
     DUES_LIMITS,
     isCreditMethod,
     mapWithConcurrency,
-    memberLabel,
+    memberDisplayNames,
     normalizeAutomaticDues,
     notePlaceholder,
     paymentMethodLabel,
@@ -238,8 +238,8 @@ export async function DuesSection({ api }: { api: ClaymoresApiClient }) {
     }
 
     const sortedMembers = members.ok ? sortMembers(members.data) : []
-    const labels = new Map(sortedMembers.map(m => [m.subject, memberLabel(m)]))
-    const options: MemberOption[] = sortedMembers.map(m => ({ subject: m.subject, label: memberLabel(m) }))
+    const labels = memberDisplayNames(sortedMembers)
+    const options: MemberOption[] = sortedMembers.map(m => ({ subject: m.subject, label: labels.get(m.subject)! }))
     const playerLabel = (subject: string) => labels.get(subject) ?? (members.ok ? 'Former member' : 'Member names unavailable')
 
     // Outstanding first, then by player, then by due date.

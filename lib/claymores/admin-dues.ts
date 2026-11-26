@@ -127,6 +127,22 @@ export function memberLabel(member: Pick<ClubMember, 'email' | 'name'>): string 
     return name ? `${name} (${member.email})` : member.email
 }
 
+/**
+ * What to call each member in dues lists: their name, or their email when they have no name.
+ * Two members with the same name get their email added, so they can be told apart.
+ */
+export function memberDisplayNames<T extends Pick<ClubMember, 'email' | 'name'> & { subject: string }>(
+    members: readonly T[],
+): Map<string, string> {
+    const names = members.map(m => m.name?.trim() || m.email)
+    const counts = new Map<string, number>()
+    for (const n of names) counts.set(n.toLowerCase(), (counts.get(n.toLowerCase()) ?? 0) + 1)
+    return new Map(members.map((m, i) => {
+        const n = names[i]
+        return [m.subject, (counts.get(n.toLowerCase()) ?? 0) > 1 && n !== m.email ? `${n} (${m.email})` : n]
+    }))
+}
+
 /** Members sorted for the picker: by label, case-insensitive. */
 export function sortMembers<T extends Pick<ClubMember, 'email' | 'name'>>(members: T[]): T[] {
     return [...members].sort((a, b) => memberLabel(a).localeCompare(memberLabel(b), 'en', { sensitivity: 'base' }))
