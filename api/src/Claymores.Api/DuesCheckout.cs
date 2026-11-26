@@ -260,6 +260,91 @@ internal sealed class DuesCheckout(
         return new(ReleaseResult.Bound, live.Id, live.Status);
     }
 
+    /// <summary>
+    /// Treasurer action: cancel the player's pending card checkout so the balance can be waived or
+    /// recorded another way (Stripe otherwise keeps an abandoned session open for 24 hours). An open
+    /// Stripe session is expired first, so it can no longer be paid. If Stripe says the player did
+    /// pay, the payment is recorded instead. A checkout with no Stripe session goes through
+    /// <see cref="ReleaseAsync"/> (which waits an hour and checks Stripe).
+    /// </summary>
+    public async Task<CancelOutcome> CancelAsync(Guid assessmentId, string cancelledBy, CancellationToken ct)
+    {
+        if (await store.FindPendingAsync(assessmentId, ct) is not { } checkout)
+            return new(CancelResult.NotPending);
+        if (checkout.Mode != settings.Mode)
+            return new(CancelResult.OtherMode);
+
+        var sessionId = checkout.SessionId;
+        if (sessionId is null)
+        {
+            var released = await ReleaseAsync(assessmentId, checkout.Id, cancelledBy, ct);
+            switch (released.Result)
+            {
+                case ReleaseResult.Released:
+                    return new(CancelResult.Cancelled);
+                case ReleaseResult.Bound:
+                    sessionId = released.SessionId!;
+                    break;
+                case ReleaseResult.TooRecent:
+                    return new(CancelResult.TooRecent);
+                case ReleaseResult.NotPending:
+                    return new(CancelResult.NotPending);
+                default:
+                    return new(CancelResult.StripeUnavailable);
+            }
+        }
+
+        Session session;
+        try
+        {
+            session = await stripe.GetAsync(sessionId, cancellationToken: ct);
+            if (session.Status == "open")
+            {
+                try
+                {
+                    session = await stripe.ExpireAsync(sessionId, cancellationToken: ct);
+                }
+                catch (StripeException)
+                {
+                    // Paid (or expired) between the two calls: read what happened.
+                    session = await stripe.GetAsync(sessionId, cancellationToken: ct);
+                }
+            }
+        }
+        catch (StripeException error)
+        {
+            logger.LogWarning("Stripe {Mode} cancel failed with status {Status} for checkout {Attempt}.",
+                settings.ModeName, error.HttpStatusCode, checkout.Id);
+            return new(CancelResult.StripeUnavailable);
+        }
+
+        if (!MatchesAttempt(session, checkout.Id, checkout.AmountCents))
+        {
+            logger.LogError("Stripe session {Session} doesn't match checkout {Attempt}.", session.Id, checkout.Id);
+            return new(CancelResult.StripeUnavailable);
+        }
+
+        var paid = session.Status == "complete" && session.PaymentStatus == "paid";
+        if (!paid && session.Status != "expired")
+            return new(CancelResult.Processing);
+        if (!await store.ApplyEventAsync(checkout.Id, session.Id, checkout.AmountCents, paid, settings.Mode, ct))
+            return new(CancelResult.NotPending);
+        logger.LogInformation("Checkout {Attempt} {Outcome} by {Admin}.", checkout.Id,
+            paid ? "found paid when cancelled" : "cancelled", cancelledBy);
+        return new(paid ? CancelResult.Paid : CancelResult.Cancelled, checkout.AmountCents);
+    }
+
+    internal static IResult CancelResponse(CancelOutcome outcome) => outcome.Result switch
+    {
+        CancelResult.Cancelled => Results.Ok(new { status = "cancelled" }),
+        CancelResult.Paid => Results.Ok(new { status = "paid", amountCents = outcome.AmountCents }),
+        CancelResult.NotPending => Results.Conflict(new { error = "not_pending" }),
+        CancelResult.OtherMode => Results.Conflict(new { error = "other_mode" }),
+        CancelResult.TooRecent => Results.Conflict(new { error = "too_recent" }),
+        CancelResult.Processing => Results.Conflict(new { error = "processing" }),
+        _ => Results.Json(new { error = "stripe_unavailable" }, statusCode: 502),
+    };
+
     internal static IResult ReleaseResponse(ReleaseOutcome outcome) => outcome.Result switch
     {
         ReleaseResult.Released => Results.Ok(new { status = "released" }),
@@ -396,6 +481,18 @@ internal sealed class DuesCheckout(
                 "Stripe has no session for it, or only expired ones; otherwise binds the session and reports it.")
             .Produces(200).Produces(401).Produces(403).Produces(404).Produces(409).Produces(502);
 
+        app.MapPost("/v1/admin/dues/{assessmentId:guid}/checkout/cancel",
+                async (Guid assessmentId, ClaimsPrincipal user, DuesCheckout checkout, CancellationToken ct) =>
+                    CancelResponse(await checkout.CancelAsync(assessmentId, AdminName(user), ct)))
+            .RequireAuthorization(GoogleSignIn.AdminPolicy)
+            .AddEndpointFilter(SameOriginGuard.Filter)
+            .WithTags("Dues")
+            .WithSummary("Cancel a player's pending card checkout so the balance can be waived or recorded")
+            .WithDescription("Expires the open Stripe session so it can't be paid, then frees the balance. If Stripe " +
+                "says the player already paid, records that payment and answers status \"paid\". A checkout with no " +
+                "Stripe session must be an hour old (see release).")
+            .Produces(200).Produces(401).Produces(403).Produces(409).Produces(502);
+
         app.MapPost(DuesAdminPage.Path + "/{assessmentId:guid}/checkouts/{checkoutId:guid}/release",
                 async (Guid assessmentId, Guid checkoutId, HttpContext context, DuesCheckout checkout, CancellationToken ct) =>
                 {
@@ -424,6 +521,10 @@ internal sealed class DuesCheckout(
 internal enum CheckoutReturn { Account, App, Web }
 
 internal enum ReleaseResult { Released, Bound, NotFound, NotPending, AlreadyBound, OtherMode, TooRecent, Mismatch, StripeUnavailable }
+
+internal enum CancelResult { Cancelled, Paid, NotPending, OtherMode, TooRecent, Processing, StripeUnavailable }
+
+internal sealed record CancelOutcome(CancelResult Result, long AmountCents = 0);
 
 internal sealed record ReleaseOutcome(ReleaseResult Result, string? SessionId = null, string? SessionStatus = null);
 
