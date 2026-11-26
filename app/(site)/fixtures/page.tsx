@@ -2,6 +2,7 @@ import { getMatches, getTeams, getPractices } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import { type SanityMatch, type SanityTeam, type SanityPractice } from '@/sanity/lib/queries'
 import FixturesSchedule from '@/components/fixtures-schedule'
+import { withoutFestivalDuplicates } from '@/lib/festivals'
 import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
@@ -39,7 +40,7 @@ export default async function Fixtures() {
                 </a>
             </div>
 
-            <FixturesSchedule matches={matches} teams={teams} practices={practices} />
+            <FixturesSchedule matches={withoutFestivalDuplicates(matches, practices)} teams={teams} practices={practices} />
         </div>
     )
 }
