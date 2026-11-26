@@ -708,6 +708,24 @@ public sealed class LiveCheckoutTests(PostgresDatabase database) : IClassFixture
         Assert.Equal("https://api.example.test/auth/account?checkout=returned", create["success_url"]);
         Assert.StartsWith("claymores-dues-live-account-", Assert.Single(fake.IdempotencyKeys));
     }
+
+    [Fact]
+    public async Task Cancel_clears_a_leftover_sandbox_checkout_after_going_live()
+    {
+        database.SkipIfUnavailable();
+        var (checkout, data) = await CreateAsync();
+        await using var _ = data;
+        var attempt = await SeedAsync(data, "test", "cs_test_left" + Guid.NewGuid().ToString("N"), 2500);
+        await using var find = data.CreateCommand("SELECT assessment_id FROM dues_checkouts WHERE id = @id");
+        find.Parameters.AddWithValue("id", attempt);
+        var dues = (Guid)(await find.ExecuteScalarAsync(Ct))!;
+
+        var outcome = await checkout.CancelAsync(dues, "treasurer@example.com", Ct);
+        Assert.Equal(CancelResult.Cancelled, outcome.Result);
+        await using var status = data.CreateCommand("SELECT status FROM dues_checkouts WHERE id = @id");
+        status.Parameters.AddWithValue("id", attempt);
+        Assert.Equal("expired", await status.ExecuteScalarAsync(Ct));
+    }
 }
 
 /// <summary>Startup validation and page copy that need no database.</summary>

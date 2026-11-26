@@ -272,7 +272,12 @@ internal sealed class DuesCheckout(
         if (await store.FindPendingAsync(assessmentId, ct) is not { } checkout)
             return new(CancelResult.NotPending);
         if (checkout.Mode != settings.Mode)
+        {
+            // A sandbox checkout left over from before going live: no real money, just clear it.
+            if (checkout.Mode == StripeMode.Test && await store.ReleaseTestAsync(checkout.Id, cancelledBy, ct))
+                return new(CancelResult.Cancelled);
             return new(CancelResult.OtherMode);
+        }
 
         var sessionId = checkout.SessionId;
         if (sessionId is null)

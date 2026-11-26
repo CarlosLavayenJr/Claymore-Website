@@ -136,6 +136,21 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         return await cmd.ExecuteNonQueryAsync(ct) == 1;
     }
 
+    /// <summary>
+    /// Clears a pending Stripe <em>test</em> checkout after the API went live: test sessions never
+    /// move money and can't be expired with a live key.
+    /// </summary>
+    public async Task<bool> ReleaseTestAsync(Guid checkoutId, string releasedBy, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            UPDATE dues_checkouts SET status = 'expired', released_by = @by, released_at = now()
+            WHERE id = @id AND status = 'pending' AND COALESCE(stripe_mode, 'test') = 'test'
+            """);
+        cmd.Parameters.AddWithValue("id", checkoutId);
+        cmd.Parameters.AddWithValue("by", releasedBy);
+        return await cmd.ExecuteNonQueryAsync(ct) == 1;
+    }
+
     private static CheckoutReturn ParseReturn(string value) => value switch
     {
         "app" => CheckoutReturn.App,
