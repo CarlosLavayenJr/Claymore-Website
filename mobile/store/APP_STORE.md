@@ -69,31 +69,51 @@ Check on your phone:
 
 ## 5. The listing
 
-**Screenshots:** `mobile/store/screenshots/` (1320 × 2868, the 6.9" iPhone size; Apple scales them down for smaller phones). Upload in order 1–4.
+Copy each value into App Store Connect → the app → **App Store** tab (version 1.0). Character limits are in brackets; every value fits.
 
-| Field | Text |
+**Screenshots:** upload `mobile/store/screenshots/6.3-inch/` (1206 × 2622) to **App Previews and Screenshots → iPhone with Dynamic Island (medium display)** on the version page; App Store Connect now requires that size and scales it for every iPhone. (The Asset Library uploader rejects both sizes; the 1320 × 2868 originals are kept beside them.) Order:
+1. `1-home.png` — next match, standings, practice
+2. `2-fixtures.png` — upcoming fixtures and club events
+3. `3-results.png` — match history with scores
+4. `4-standings.png` — Florida Rugby Union table
+
+They show the app signed out, as a visitor from the App Store sees it: no member names, emails or dues.
+
+| Field | Value |
 | --- | --- |
+| Name (30) | Claymores RFC |
 | Subtitle (30) | Orlando rugby, in your pocket |
-| Category | Sports |
+| Category | Sports (secondary: none) |
 | Support URL | https://www.claymoresrfc.com/contact |
 | Marketing URL | https://www.claymoresrfc.com |
 | Privacy Policy URL | https://www.claymoresrfc.com/privacy |
 | Copyright | 2026 Central Florida Claymores RFC |
-| Age rating | Answer "None" to everything → 4+ |
+| Age rating | Answer "None"/"No" to everything → 4+ |
 | Keywords (100) | rugby,orlando,central florida,claymores,rugby union,florida rugby,fixtures,standings,club,D3 |
 
 **Promotional text (170):**
-> Next match, standings and practice times for the Central Florida Claymores — Orlando's rugby club since 2018.
+> Next match, results, standings and practice times for the Central Florida Claymores, Orlando's rugby club since 2018. New players welcome, no experience needed.
 
-**Description:**
+**Description (4000):**
 > The official app of the Central Florida Claymores RFC, Orlando's rugby club competing in Florida Rugby Union Division 3.
 >
-> • Next match, kickoff time and venue, with directions
-> • Full fixture list and match history with scores
+> FOR FANS AND NEW PLAYERS
+> • Next match: date, kickoff time and venue, with directions
+> • Full fixture list, including tournaments and club events
+> • Match history with final scores, season by season
 > • Live Florida Rugby Union standings
 > • Weekly practice times and location
+> • Add every match to your phone's calendar in one tap
 >
-> Club members can sign in with Apple or Google to see and pay their dues. New to rugby? Come to a practice — no experience needed.
+> FOR CLUB MEMBERS
+> Invited members sign in with Apple or Google to:
+> • Tell the coaches whether they can play each match
+> • See their club dues and pay them securely by card
+>
+> New to rugby? Come to a Thursday practice at Barnett Park in Orlando — no experience needed. Find out more at claymoresrfc.com.
+
+**What's New (version 1.0):**
+> First release.
 
 ## 6. App Privacy (App Store Connect → App Privacy)
 
@@ -102,7 +122,7 @@ Data collected, all **linked to the user**, **not used for tracking**, purpose *
 - **Purchases** (dues payment history; card details are handled by Stripe and never reach the app)
 - Identifiers → **User ID** (the sign-in account ID)
 - User content → **Other user content** (match availability answers and their notes)
-- Identifiers → **Device ID**: only once push reminders ship (the device's push token, used to send match reminders)
+- Identifiers → **Device ID** (the device's push token, saved only when a signed-in member turns on Match updates; used to send match reminders and lineup notices)
 
 Nothing else (no analytics, no ads, no location). Push reminders are off until the member turns on "Match updates", and iOS asks permission then.
 
@@ -111,7 +131,9 @@ Nothing else (no analytics, no ads, no location). Push reminders are off until t
 1. Under the version, pick the TestFlight build.
 2. **App Review Information → Sign-in required: yes.** Membership is invite-only, so create a spare Google account for Apple (e.g. `claymores.review@gmail.com`), invite it as a **player** in Club Admin, and give Apple its email and password here.
 3. **Notes for the reviewer:**
-   > Claymores RFC is the app of an amateur rugby club in Orlando, FL. Fixtures, results, standings and practice times are public and need no account. Sign-in (Apple or Google) is for invited club members and shows their club dues, which are paid by card through Stripe Checkout; dues are a membership fee for a real-world sports club, not digital content. Use the Google account below (Club tab → Sign in with Google) to see the member area. The reviewer account has no dues assigned, so no payment is needed to review the app. Accounts can be deleted in the app: Club tab → gear (Account settings) → Delete account. Push notifications are optional match reminders the member turns on; they never carry advertising.
+   > Claymores RFC is the app of an amateur rugby club in Orlando, FL. Fixtures, results, standings and practice times are public and need no account. Sign-in (Apple or Google) is for invited club members and shows their club dues, which are paid by card through Stripe Checkout; dues are a membership fee for a real-world sports club, not digital content. Use the Google account below (Club tab → Sign in with Google) to see the member area, where members tell the coaches whether they can play each match. The reviewer account has no dues assigned, so no payment is needed to review the app. Accounts can be deleted in the app: Club tab → gear (Account settings) → Delete account. Push notifications are optional match reminders the member turns on; they never carry advertising.
 4. **Submit for Review.** Usually 1–3 days.
 
-Stripe is **live** (real cards, real money) as of 2026-11-25. Don't assign dues to the reviewer's Google account: remove any it gets (Club Admin → Dues → the reviewer → Remove these dues), and keep automatic dues in mind, since they're added when the reviewer signs in. The reviewer then sees "No dues assigned to you" and never reaches a real checkout. If Apple asks to see payment, say dues are a real-world club membership fee paid through Stripe Checkout (guideline 3.1.3(e) / 3.1.5), and offer a screen recording instead of a live charge.
+**Before you submit:** finish push setup (APNs key in Firebase, `Push__FirebaseServiceAccount` on Render). The app shows Match/Practice update switches, and App Review rejects switches that do nothing.
+
+Stripe is **live** (real cards, real money) as of 2026-11-26. Don't assign dues to the reviewer's Google account: remove any it gets (Club Admin → Dues → the reviewer → Remove these dues), and keep automatic dues in mind, since they're added when the reviewer signs in. The reviewer then sees "No dues assigned to you" and never reaches a real checkout. If Apple asks to see payment, say dues are a real-world club membership fee paid through Stripe Checkout (guideline 3.1.3(e) / 3.1.5), and offer a screen recording instead of a live charge.
