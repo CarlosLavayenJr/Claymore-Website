@@ -84,9 +84,35 @@ internal sealed class FakeStripe : HttpMessageHandler
         _sessions[sessionId] = JsonSerializer.Serialize(session);
     }
 
+    /// <summary>Marks a stored session paid, as if the player finished checkout.</summary>
+    public void Pay(string sessionId) => SetStatus(sessionId, "complete", "paid");
+
+    private void SetStatus(string sessionId, string status, string paymentStatus)
+    {
+        var session = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(_sessions[sessionId])!;
+        session["status"] = JsonSerializer.SerializeToElement(status);
+        session["payment_status"] = JsonSerializer.SerializeToElement(paymentStatus);
+        session["url"] = JsonSerializer.SerializeToElement<string?>(null);
+        _sessions[sessionId] = JsonSerializer.Serialize(session);
+    }
+
+    public ConcurrentQueue<string> Expires { get; } = new();
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var path = request.RequestUri!.AbsolutePath;
+        if (request.Method == HttpMethod.Post && path.StartsWith("/v1/checkout/sessions/", StringComparison.Ordinal) &&
+            path.EndsWith("/expire", StringComparison.Ordinal))
+        {
+            var id = path["/v1/checkout/sessions/".Length..^"/expire".Length];
+            Expires.Enqueue(id);
+            if (!_sessions.TryGetValue(id, out var current))
+                return Error(HttpStatusCode.NotFound, "invalid_request_error", "No such session");
+            if (JsonDocument.Parse(current).RootElement.GetProperty("status").GetString() != "open")
+                return Error(HttpStatusCode.BadRequest, "invalid_request_error", "Only open sessions can be expired.");
+            SetStatus(id, "expired", "unpaid");
+            return Json(_sessions[id]);
+        }
         if (request.Method == HttpMethod.Post && path == "/v1/checkout/sessions" && RejectCreates)
             return Error(HttpStatusCode.BadRequest, "invalid_request_error",
                 "In order to use Checkout, you must set an account or business name.");

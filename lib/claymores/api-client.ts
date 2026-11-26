@@ -425,6 +425,16 @@ export class ClaymoresApiClient {
         return this.request<null>('DELETE', `/v1/admin/dues/${encodeURIComponent(id)}`)
     }
 
+    /**
+     * Cancels the player's pending card checkout (expires the Stripe session) so the balance can be
+     * waived or recorded. `{ status: 'paid' }` when Stripe says the player already paid (recorded);
+     * 409 `{ error: 'not_pending' | 'too_recent' | 'processing' | 'other_mode' }`.
+     */
+    cancelDuesCheckout(assessmentId: string) {
+        return this.request<{ status: 'cancelled' | 'paid'; amountCents?: number }>('POST',
+            `/v1/admin/dues/${encodeURIComponent(assessmentId)}/checkout/cancel`)
+    }
+
     /** Records a cash/Venmo/Zelle/check/other payment. Idempotent on `input.id`. */
     /** 204; 400 without a reason; 409 when it was already undone with another reason. */
     voidDuesPayment(assessmentId: string, paymentId: string, reason: string) {

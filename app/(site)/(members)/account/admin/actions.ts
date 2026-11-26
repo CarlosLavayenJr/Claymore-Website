@@ -223,6 +223,23 @@ export async function undoDuesPayment(formData: FormData) {
     redirect(`${ADMIN}?notice=${formData.get('method') === 'stripe' ? 'payment_undone_card' : 'payment_undone'}#all-dues`)
 }
 
+export async function cancelDuesCheckout(formData: FormData) {
+    const assessmentId = String(formData.get('assessmentId') ?? '').trim()
+    if (!isUuid(assessmentId)) redirect(`${ADMIN}?error=invalid&tab=dues#all-dues`)
+    const result = await (await admin()).cancelDuesCheckout(assessmentId)
+    if (!result.ok) {
+        if (result.status === 401) redirect(`/sign-in?error=expired&callbackUrl=${ADMIN}`)
+        const code = result.status === 409
+            ? result.error === 'too_recent' ? 'checkout_too_recent'
+                : result.error === 'processing' ? 'checkout_processing'
+                : 'checkout_not_pending'
+            : result.status === 403 ? 'forbidden' : 'unavailable'
+        redirect(`${ADMIN}?error=${code}&tab=dues#all-dues`)
+    }
+    revalidatePath(ADMIN)
+    redirect(`${ADMIN}?notice=${result.data?.status === 'paid' ? 'checkout_paid' : 'checkout_cancelled'}&tab=dues#all-dues`)
+}
+
 export async function editDuesPaymentNote(formData: FormData) {
     const ids = paymentIds(formData)
     const note = String(formData.get('note') ?? '').trim()

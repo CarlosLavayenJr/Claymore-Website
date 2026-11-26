@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ChevronDown } from 'lucide-react'
-import { editDuesPaymentNote, undoDuesPayment } from './actions'
+import { cancelDuesCheckout, editDuesPaymentNote, undoDuesPayment } from './actions'
 import { DuesSummary } from './dues-summary'
 import { AdminSection } from '@/components/members/admin-section'
 import { AssignDuesForm, AutomaticDuesForm, RecordPaymentForm, RemoveDuesButton, type MemberOption } from './dues-forms'
@@ -195,9 +195,20 @@ function AssessmentRow({ dues, player, detail }: { dues: AdminDuesAssessment; pl
                         />
                     ) : (
                         <Notice tone="info" title="A card payment covers the rest of this balance">
-                            Wait for the {formatCents(current.pendingCheckoutCents)} Stripe checkout to finish or expire
-                            before recording another payment.
+                            The player started a {formatCents(current.pendingCheckoutCents)} card checkout. Wait for it to
+                            finish, or cancel it below to waive or record the balance.
                         </Notice>
+                    )}
+                    {pending && (
+                        <form action={cancelDuesCheckout} className="flex flex-wrap items-center gap-3 rounded-lg bg-[#fafafa] p-4">
+                            <input type="hidden" name="assessmentId" value={current.id} />
+                            <button type="submit" className="inline-flex items-center justify-center rounded-md border border-[#fd80b5] px-4 py-2 text-sm font-semibold text-[#b02a64] transition-colors hover:bg-[#fd80b5] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]">
+                                Cancel card checkout
+                            </button>
+                            <span className="text-xs text-[#555555]">
+                                {formatCents(current.pendingCheckoutCents)} is held by a card checkout the player started. Cancel it to waive or record that amount; if they actually paid, the payment gets recorded instead.
+                            </span>
+                        </form>
                     )}
                     {canRemoveDues(current) && (
                         <div className="border-t border-[#EAEAEA] pt-4">
