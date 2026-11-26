@@ -190,7 +190,7 @@ export default async function MatchPage({ params, searchParams }: Params) {
                 items={[
                     { name: 'Home', path: '/' },
                     { name: 'Fixtures', path: '/fixtures' },
-                    { name: `vs ${opp}`, path: `/fixtures/${slug}` },
+                    { name: isClubEvent(match) ? clubEventName(match) : `vs ${opp}`, path: `/fixtures/${slug}` },
                 ]}
             />
 

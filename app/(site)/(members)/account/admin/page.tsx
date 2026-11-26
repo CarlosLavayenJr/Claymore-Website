@@ -29,7 +29,7 @@ import { shortMatchDate, todayInOrlando, upcomingMatches } from '@/lib/claymores
 import { needsFullName } from '@/lib/claymores/member-name'
 import { canPickLineups, isClubAdmin, isStaffRole, isSuperAdmin } from '@/lib/claymores/roles'
 import { getMatches } from '@/lib/claymores-api'
-import { isHomeMatch, opponentOf } from '@/lib/seo'
+import { matchLabel } from '@/lib/seo'
 import { cn } from '@/lib/utils'
 import { SITE_URL } from '@/lib/seo'
 
@@ -332,7 +332,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                     <Tile
                         href="?tab=matches"
                         label={nextMatch ? `Next match · ${shortMatchDate(nextMatch.date)}` : 'Next match'}
-                        value={!nextMatch ? 'None scheduled' : `${isHomeMatch(nextMatch) ? 'vs' : 'at'} ${opponentOf(nextMatch)}`}
+                        value={!nextMatch ? 'None scheduled' : matchLabel(nextMatch)}
                         detail={nextAvailability?.ok
                             ? [
                                 `${nextAvailability.data.counts.available} can play`,
