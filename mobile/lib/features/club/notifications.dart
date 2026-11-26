@@ -177,13 +177,16 @@ class ClubNotifications {
     if (!await messaging.requestPermission()) {
       throw StateError('Allow notifications in your device settings first.');
     }
-    // iOS hands out the APNs token a moment after permission is granted.
+    // Turns on FCM auto-init, which is what asks iOS for an APNs token
+    // (FirebaseMessagingAutoInitEnabled is off until the member opts in), so
+    // it must come before waiting for that token.
+    await messaging.prepareForeground();
+    // iOS hands out the APNs token a moment after registering.
     if (!await _waitForApns()) {
       throw StateError(
         'The device is still setting up push. Try again shortly.',
       );
     }
-    await messaging.prepareForeground();
     await messaging.subscribeToTopic(alert.topic);
     if (alert == ClubAlert.matches) {
       await _quietly(() => _register(force: true));
