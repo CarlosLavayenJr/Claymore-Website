@@ -647,6 +647,52 @@ void main() {
     await finish(tester, services);
   });
 
+  testWidgets('waiving with the amount blank waives the whole balance', (
+    tester,
+  ) async {
+    respond = (request) => switch (request.url.path) {
+      '/v1/admin/dues' => http.Response(
+        jsonEncode([assessment('d1', 'alex', paid: 5000)]),
+        200,
+      ),
+      '/v1/admin/dues/d1' => http.Response(
+        detail(assessment('d1', 'alex', paid: 5000)),
+        200,
+      ),
+      '/v1/admin/dues/d1/payments' => http.Response('{}', 200),
+      _ => http.Response('[]', 200),
+    };
+    final services = await pump(
+      tester,
+      const AdminPage(initialTab: AdminTab.dues),
+    );
+    await tester.tap(find.text('2026-27 Season dues · \$125 each'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Former member'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('record-payment')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Waived'));
+    await tester.pump();
+    expect(
+      find.text('Leave blank to waive the whole \$75.00.'),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byKey(const Key('payment-amount')), '');
+    await tester.enterText(find.byKey(const Key('payment-note')), 'Injury');
+    await tester.tap(find.byKey(const Key('save-payment')));
+    await tester.pumpAndSettle();
+    final post = jsonDecode(
+      requests
+          .lastWhere((r) => r.url.path == '/v1/admin/dues/d1/payments')
+          .body,
+    ) as Map<String, dynamic>;
+    expect(post['amountCents'], 7500);
+    expect(post['method'], 'waived');
+    expect(post['note'], 'Injury');
+    await finish(tester, services);
+  });
+
   testWidgets('a volunteer credit needs a note before it is sent', (
     tester,
   ) async {

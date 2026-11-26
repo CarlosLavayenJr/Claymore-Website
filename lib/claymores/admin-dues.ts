@@ -193,8 +193,11 @@ export function parseRecordPaymentForm(form: FormLike): Parsed<{ assessmentId: s
     if (!isUuid(id) || !assessmentId || assessmentId.length > 100) {
         return { ok: false, message: 'The form expired. Refresh the page and try again.', values }
     }
-    const amount = parsePositiveDollars(values.amount)
-    if (!amount.ok) return { ok: false, message: amount.message, values }
+    // Waiving with no amount waives everything still owed (`recordable`: the balance minus
+    // any card checkout in progress, carried by the form).
+    const waiveAll = values.method === 'waived' && !values.amount
+    const amount = parsePositiveDollars(waiveAll ? text(form, 'recordable') : values.amount)
+    if (!amount.ok) return { ok: false, message: waiveAll ? 'Nothing is left to waive.' : amount.message, values }
     if (!isManualPaymentMethod(values.method)) return { ok: false, message: 'Choose how they paid.', values }
     const noteNeeded = noteRequiredMessage(values.method)
     if (noteNeeded && !values.note) return { ok: false, message: noteNeeded, values }
