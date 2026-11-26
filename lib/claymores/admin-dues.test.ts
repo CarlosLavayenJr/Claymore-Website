@@ -5,6 +5,7 @@ import {
     duesWriteOutcome,
     isIsoDate,
     mapWithConcurrency,
+    memberDisplayNames,
     memberLabel,
     parseAssignDuesForm,
     parsePositiveDollars,
@@ -62,6 +63,13 @@ test('labels payment methods and members', () => {
     assert.equal(memberLabel({ name: 'Pat Player', email: 'pat@example.com' }), 'Pat Player (pat@example.com)')
     assert.equal(memberLabel({ name: '  ', email: 'pat@example.com' }), 'pat@example.com')
     assert.equal(memberLabel({ name: null, email: 'pat@example.com' }), 'pat@example.com')
+    const shown = memberDisplayNames([
+        { subject: 'a', name: 'Pat Player', email: 'pat@example.com' },
+        { subject: 'b', name: null, email: 'sam@example.com' },
+        { subject: 'c', name: 'Jo Smith', email: 'jo1@example.com' },
+        { subject: 'd', name: 'jo smith', email: 'jo2@example.com' },
+    ])
+    assert.deepEqual([...shown.values()], ['Pat Player', 'sam@example.com', 'Jo Smith (jo1@example.com)', 'jo smith (jo2@example.com)'])
     assert.deepEqual(
         sortMembers([
             { name: 'zed', email: 'z@x.com' },
