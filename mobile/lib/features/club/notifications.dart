@@ -177,7 +177,8 @@ class ClubNotifications {
     if (!await messaging.requestPermission()) {
       throw StateError('Allow notifications in your device settings first.');
     }
-    if (!await messaging.apnsReady()) {
+    // iOS hands out the APNs token a moment after permission is granted.
+    if (!await _waitForApns()) {
       throw StateError(
         'The device is still setting up push. Try again shortly.',
       );
@@ -188,6 +189,19 @@ class ClubNotifications {
       await _quietly(() => _register(force: true));
     }
   }
+
+  /// Polls for the APNs token for up to [attempts] half-second waits.
+  Future<bool> _waitForApns({int attempts = 20}) async {
+    for (var i = 0; i < attempts; i++) {
+      if (await messaging.apnsReady()) return true;
+      await Future<void>.delayed(apnsPollInterval);
+    }
+    return messaging.apnsReady();
+  }
+
+  /// How long to wait between APNs token checks; tests shorten it.
+  @visibleForTesting
+  Duration apnsPollInterval = const Duration(milliseconds: 500);
 
   void dispose() {
     for (final subscription in _subscriptions) {
