@@ -39,8 +39,18 @@ class FakePushMessaging implements PushMessaging {
 
   @override
   Future<bool> hasPermission() async => permission;
+
+  /// How many apnsReady() checks answer false before the token arrives.
+  int apnsDelayChecks = 0;
   @override
-  Future<bool> apnsReady() async => true;
+  Future<bool> apnsReady() async {
+    if (apnsDelayChecks > 0) {
+      apnsDelayChecks--;
+      return false;
+    }
+    return true;
+  }
+
   @override
   Future<String?> token() async => currentToken;
   @override
@@ -185,6 +195,30 @@ void main() {
       expect(deviceCalls().last, '/v1/me/devices/remove {"token":"fcm-1"}');
     },
   );
+
+  test('waits for a slow APNs token instead of failing', () async {
+    final notifications = await attached();
+    notifications.apnsPollInterval = Duration.zero;
+    await auth.signIn();
+    messaging.apnsDelayChecks = 5;
+    await notifications.subscribe(ClubAlert.matches, true);
+    expect(messaging.calls, contains('subscribe claymores_matches'));
+    expect(deviceCalls(), [
+      '/v1/me/devices {"token":"fcm-1","platform":"ios"}',
+    ]);
+  });
+
+  test('still explains when the APNs token never arrives', () async {
+    final notifications = await attached();
+    notifications.apnsPollInterval = Duration.zero;
+    await auth.signIn();
+    messaging.apnsDelayChecks = 1000;
+    await expectLater(
+      notifications.subscribe(ClubAlert.matches, true),
+      throwsA(isA<StateError>()),
+    );
+    expect(messaging.calls, isNot(contains('subscribe claymores_matches')));
+  });
 
   test('practice updates only use the topic', () async {
     final notifications = await attached();
