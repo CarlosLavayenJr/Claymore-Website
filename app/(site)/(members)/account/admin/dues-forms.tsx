@@ -232,6 +232,7 @@ export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, 
         if (values?.method) setMethod(values.method)
     }
     const credit = isCreditMethod(method)
+    const waiving = method === 'waived'
 
     return (
         <form
@@ -249,16 +250,25 @@ export function RecordPaymentForm({ assessmentId, recordableDollars, initialId, 
         >
             <input type="hidden" name="id" value={state.nextId ?? initialId} />
             <input type="hidden" name="assessmentId" value={assessmentId} />
+            <input type="hidden" name="recordable" value={recordableDollars} />
             <p className="text-sm font-semibold text-[#111111]">Record payment</p>
             <div className="grid gap-3 sm:grid-cols-[12rem_10rem_minmax(0,1fr)] sm:items-start">
                 <div>
-                    <label htmlFor={`${id}-amount`} className={labelClass}>Amount (USD)</label>
+                    <label htmlFor={`${id}-amount`} className={labelClass}>
+                        Amount (USD){waiving && <span className="font-normal text-[#555555]"> (optional)</span>}
+                    </label>
                     <DollarInput
                         id={`${id}-amount`}
                         inputRef={amountRef}
                         defaultValue={values?.amount ?? ''}
-                        describedBy={`${id}-full`}
+                        describedBy={waiving ? `${id}-waive ${id}-full` : `${id}-full`}
+                        required={!waiving}
                     />
+                    {waiving && (
+                        <p id={`${id}-waive`} className="mt-1 text-xs text-[#555555]">
+                            Leave blank to waive the whole ${recordableDollars}.
+                        </p>
+                    )}
                     <button
                         type="button"
                         id={`${id}-full`}

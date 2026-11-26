@@ -84,9 +84,18 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
 
   Future<void> save() async {
     final balance = widget.dues.balanceCents;
-    final cents = parseDollars(amount.text);
+    // Waiving with the amount left blank waives everything still owed.
+    final waiveAll =
+        method == ManualPaymentMethod.waived && amount.text.trim().isEmpty;
+    final cents = waiveAll
+        ? suggestedPaymentCents(widget.dues)
+        : parseDollars(amount.text);
     if (cents == null || cents <= 0) {
-      setState(() => error = 'Enter an amount, like 25.00.');
+      setState(
+        () => error = waiveAll
+            ? 'Nothing is left to waive.'
+            : 'Enter an amount, like 25.00.',
+      );
       return;
     }
     if (cents > balance) {
@@ -202,9 +211,15 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
+              decoration: InputDecoration(
+                labelText: method == ManualPaymentMethod.waived
+                    ? 'Amount (optional)'
+                    : 'Amount',
                 prefixText: r'$',
+                helperText: method == ManualPaymentMethod.waived
+                    ? 'Leave blank to waive the whole '
+                          '${formatCents(suggestedPaymentCents(dues))}.'
+                    : null,
               ),
             ),
             const SizedBox(height: 16),
