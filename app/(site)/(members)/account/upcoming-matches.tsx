@@ -17,7 +17,7 @@ import {
 } from '@/lib/claymores/match-availability'
 import { getMatches, getTeams } from '@/lib/claymores-api'
 import { findTeamLogo } from '@/lib/team-logo'
-import { isHomeMatch, matchSlug, opponentOf } from '@/lib/seo'
+import { isHomeMatch, matchLabel, matchSlug, opponentOf } from '@/lib/seo'
 import { cn } from '@/lib/utils'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
@@ -106,6 +106,7 @@ function MatchCard({ state, subject, teams, open, plays }: { state: MatchState; 
     const { match, availability, lineup } = state
     const home = isHomeMatch(match)
     const opponent = opponentOf(match)
+    const label = matchLabel(match)
     const details = [shortMatchDate(match.date), match.kickoffTime, match.venue ?? (home ? 'Barnett Park, Orlando' : null)]
         .filter(Boolean).join(' · ')
     const mine = availability.ok ? availability.data : null
@@ -124,7 +125,7 @@ function MatchCard({ state, subject, teams, open, plays }: { state: MatchState; 
                         : <span aria-hidden className="h-10 w-10 shrink-0 rounded-full bg-[#EAEAEA]" />}
                     <span className="min-w-0 flex-1">
                         <span id={`${anchor}-title`} className="block truncate text-base font-semibold text-[#111111]">
-                            {home ? 'vs' : 'at'} {opponent}
+                            {label}
                         </span>
                         <span className="block truncate text-sm text-[#555555]">{details}</span>
                     </span>
@@ -155,7 +156,7 @@ function MatchCard({ state, subject, teams, open, plays }: { state: MatchState; 
                     {/* Enter in the note field would press the first button (Available): block implicit submit. */}
                     <button type="submit" disabled hidden aria-hidden tabIndex={-1} />
                     <fieldset>
-                        <legend className="sr-only">Can you play {home ? 'vs' : 'at'} {opponent}?</legend>
+                        <legend className="sr-only">Can you play: {label}?</legend>
                         <div className="flex flex-wrap gap-2">
                             {AVAILABILITY_CHOICES.map(choice => {
                                 const on = mine.status === choice.status

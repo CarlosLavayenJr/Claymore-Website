@@ -81,8 +81,7 @@ class _DetailsState extends State<_Details> {
         final memberView =
             gate.value &&
             members != null &&
-            user != null &&
-            !fixture.isClubEvent;
+            user != null;
         return PageList(
           children: [
             Eyebrow(localizations.formatFullDate(fixture.date)),

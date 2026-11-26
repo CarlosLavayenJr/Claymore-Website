@@ -642,6 +642,17 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
     }
 
     [Fact]
+    public void Club_event_reminders_use_the_event_name()
+    {
+        var games = new UpcomingMatch("games", new DateOnly(2027, 1, 16), MatchReminders.EventName("Annual Highland games"),
+            true, null, null, Event: true);
+        Assert.Equal("Annual Highland Games", MatchReminders.Title(games));
+        Assert.Equal("Club event", MatchReminders.EventName("  "));
+        Assert.Equal("Claymores vs Lakeland", MatchReminders.Title(new("m", games.Date, "Lakeland", true, null, null)));
+        Assert.Equal("Daytona vs Claymores", MatchReminders.Title(new("m", games.Date, "Daytona", false, null, null)));
+    }
+
+    [Fact]
     public async Task Match_reminders_go_out_once_and_skip_players_who_are_out()
     {
         database.SkipIfUnavailable();

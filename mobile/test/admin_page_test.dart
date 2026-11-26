@@ -806,6 +806,7 @@ void main() {
       String home,
       String away, {
       String status = 'upcoming',
+      String? competition,
     }) => {
       'id': id,
       'date': day(days),
@@ -813,6 +814,7 @@ void main() {
       'awayTeam': away,
       'status': status,
       'kickoffTime': '2pm',
+      'competition': ?competition,
     };
 
     const us = 'Central Florida Claymores';
@@ -820,7 +822,8 @@ void main() {
       match('m1', 10, us, 'Tampa Bay Krewe'),
       match('m2', 3, 'Jacksonville RFC', us),
       match('m3', 20, us, 'Orlando Griffins'),
-      match('event', 5, us, us), // the Highland Games: no squad
+      // The Highland Games: a club event, but the club plays there.
+      match('event', 5, us, us, competition: 'Annual Highland games'),
       match('past', -3, us, 'Old Opponent'),
       match('played', 1, us, 'Played Opponent', status: 'played'),
     ]);
@@ -887,6 +890,14 @@ void main() {
           ),
           '/v1/admin/fixtures/m1/availability' => http.Response(
             jsonEncode(availability('m1', {'available': 2, 'unavailable': 1})),
+            200,
+          ),
+          '/v1/admin/fixtures/event/availability' => http.Response(
+            jsonEncode(availability('event', {'available': 4})),
+            200,
+          ),
+          '/v1/admin/fixtures/event/lineup' => http.Response(
+            jsonEncode({'fixtureId': 'event', 'status': 'none'}),
             200,
           ),
           '/v1/admin/fixtures/m3/availability' => http.Response(
@@ -1093,16 +1104,22 @@ void main() {
         find.descendant(of: row('m2'), matching: find.byType(TeamLogo)),
         findsOneWidget,
       );
-      // Soonest first; club events, past and played matches left out.
+      // Soonest first, club events included by name; past and played
+      // matches left out.
+      expect(inRow('event', 'Annual Highland Games'), findsOneWidget);
+      expect(inRow('event', '4 available'), findsOneWidget);
       expect(
         tester.getTopLeft(row('m2')).dy,
+        lessThan(tester.getTopLeft(row('event')).dy),
+      );
+      expect(
+        tester.getTopLeft(row('event')).dy,
         lessThan(tester.getTopLeft(row('m1')).dy),
       );
       expect(
         tester.getTopLeft(row('m1')).dy,
         lessThan(tester.getTopLeft(row('m3')).dy),
       );
-      expect(row('event'), findsNothing);
       expect(row('past'), findsNothing);
       expect(row('played'), findsNothing);
 

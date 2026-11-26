@@ -164,7 +164,9 @@ class _MatchRowState extends State<_MatchRow> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${home ? 'vs' : 'at'} $opponent',
+                            fixture.isClubEvent
+                                ? fixture.eventName
+                                : '${home ? 'vs' : 'at'} $opponent',
                             style: textTheme.titleMedium,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
