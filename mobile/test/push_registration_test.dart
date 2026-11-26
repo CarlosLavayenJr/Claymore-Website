@@ -42,8 +42,13 @@ class FakePushMessaging implements PushMessaging {
 
   /// How many apnsReady() checks answer false before the token arrives.
   int apnsDelayChecks = 0;
+
+  /// Like iOS with FirebaseMessagingAutoInitEnabled off: no APNs token until
+  /// auto-init is turned on (prepareForeground).
+  bool apnsNeedsAutoInit = false;
   @override
   Future<bool> apnsReady() async {
+    if (apnsNeedsAutoInit && !calls.contains('foreground')) return false;
     if (apnsDelayChecks > 0) {
       apnsDelayChecks--;
       return false;
@@ -201,6 +206,18 @@ void main() {
     notifications.apnsPollInterval = Duration.zero;
     await auth.signIn();
     messaging.apnsDelayChecks = 5;
+    await notifications.subscribe(ClubAlert.matches, true);
+    expect(messaging.calls, contains('subscribe claymores_matches'));
+    expect(deviceCalls(), [
+      '/v1/me/devices {"token":"fcm-1","platform":"ios"}',
+    ]);
+  });
+
+  test('turns on auto-init before waiting for the APNs token', () async {
+    final notifications = await attached();
+    notifications.apnsPollInterval = Duration.zero;
+    await auth.signIn();
+    messaging.apnsNeedsAutoInit = true;
     await notifications.subscribe(ClubAlert.matches, true);
     expect(messaging.calls, contains('subscribe claymores_matches'));
     expect(deviceCalls(), [
