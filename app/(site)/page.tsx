@@ -7,6 +7,7 @@ import InstagramFeed from '@/components/instafeed'
 import JsonLd from '@/components/json-ld'
 import { organizationSchema } from '@/lib/schema'
 import TeamPhotoStrip from '@/components/team-photo-strip'
+import { withoutFestivalDuplicates } from '@/lib/festivals'
 import UpcomingEvents from '@/components/upcoming-events'
 import LeagueTable from '@/components/league-table'
 import { ogImage } from '@/lib/og'
@@ -50,6 +51,7 @@ export default async function Home() {
         getPractices(),
         getTeams(),
     ])
+    const scheduleMatches = withoutFestivalDuplicates(matches, practices)
 
     return (
         <main className="min-h-screen">
@@ -104,7 +106,7 @@ export default async function Home() {
 
                         {/* Upcoming events widget — desktop only */}
                         <div className="hidden xl:block w-80 min-[1700px]:w-96 shrink-0">
-                            <UpcomingEvents matches={matches} practices={practices} teams={teams} />
+                            <UpcomingEvents matches={scheduleMatches} practices={practices} teams={teams} />
                         </div>
                     </div>
                 </div>
@@ -121,7 +123,7 @@ export default async function Home() {
             {/* Mobile-only upcoming events placement */}
             <section className="lg:hidden px-4 mb-12">
                 <div className="max-w-sm mx-auto">
-                    <UpcomingEvents matches={matches} practices={practices} teams={teams} />
+                    <UpcomingEvents matches={scheduleMatches} practices={practices} teams={teams} />
                 </div>
             </section>
 
