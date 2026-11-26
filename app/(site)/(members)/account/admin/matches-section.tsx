@@ -17,7 +17,7 @@ import {
 } from '@/lib/claymores/match-availability'
 import { getMatches, getTeams } from '@/lib/claymores-api'
 import { findTeamLogo } from '@/lib/team-logo'
-import { isHomeMatch, matchSlug, opponentOf } from '@/lib/seo'
+import { isHomeMatch, matchLabel, matchSlug, opponentOf } from '@/lib/seo'
 import { cn } from '@/lib/utils'
 import type { SanityMatch, SanityTeam } from '@/sanity/lib/queries'
 
@@ -30,7 +30,7 @@ const lineupChip: Record<string, { label: string; className: string }> = {
 }
 
 function title(match: SanityMatch) {
-    return `${isHomeMatch(match) ? 'vs' : 'at'} ${opponentOf(match)}`
+    return matchLabel(match)
 }
 
 /**

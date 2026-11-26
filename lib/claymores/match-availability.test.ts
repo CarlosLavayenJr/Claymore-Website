@@ -39,17 +39,17 @@ test('today is the Orlando date, not UTC', () => {
     assert.equal(todayInOrlando(new Date('2026-07-04T03:59:00Z')), '2026-07-03')
 })
 
-test('picks the next Claymores matches: upcoming, from today, no club events, by date', () => {
+test('picks the next Claymores matches: upcoming, from today, club events too, by date', () => {
     const m = (id: string, date: string, home: string, away: string, status = 'upcoming') => ({ _id: id, date, homeTeam: home, awayTeam: away, status })
     const all = [
         m('later', '2027-02-06', 'Claymores', 'Tampa'),
         m('past', '2027-01-09', 'Claymores', 'Daytona', 'played'),
         m('stale', '2027-01-16', 'Claymores', 'Sarasota'), // still "upcoming" but before today
-        m('games', '2027-01-30', 'Claymores', 'Claymores'), // Highland Games
+        m('games', '2027-01-30', 'Claymores', 'Claymores'), // Highland Games: the club plays, so it counts
         m('today', '2027-01-23', 'Lakeland (D3)', 'Claymores'),
         m('cancelled', '2027-01-25', 'Claymores', 'Miami', 'cancelled'),
     ]
-    assert.deepEqual(upcomingMatches(all, '2027-01-23').map(x => x._id), ['today', 'later'])
+    assert.deepEqual(upcomingMatches(all, '2027-01-23').map(x => x._id), ['today', 'games', 'later'])
     assert.deepEqual(upcomingMatches(all, '2027-01-23', 1).map(x => x._id), ['today'])
     assert.equal(shortMatchDate('2027-01-23'), 'Sat, Jan 23')
 })

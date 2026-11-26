@@ -9,9 +9,9 @@ import '../../data/teams.dart';
 import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
 
-/// The next [limit] Claymores matches still to play, soonest first. Club
-/// events (the Highland Games) have no squad, so they're left out, as on the
-/// website's Club Admin.
+/// The next [limit] Claymores matches still to play, soonest first, as on
+/// the website's Club Admin. Club events (the Highland Games) count: the
+/// club plays there.
 List<Fixture> upcomingClaymoresMatches(
   Iterable<Fixture> fixtures,
   DateTime today, {
@@ -21,8 +21,7 @@ List<Fixture> upcomingClaymoresMatches(
             .where(
               (f) =>
                   f.status == 'upcoming' &&
-                  !f.date.isBefore(today) &&
-                  !f.isClubEvent,
+                  !f.date.isBefore(today),
             )
             .toList()
           ..sort((a, b) => a.date.compareTo(b.date)))
@@ -51,7 +50,8 @@ class AdminMatch {
   String get opponent => home ? fixture.away : fixture.home;
 
   /// "vs Tampa Bay" at home, "at Tampa Bay" away.
-  String get title => '${home ? 'vs' : 'at'} $opponent';
+  String get title =>
+      fixture.isClubEvent ? fixture.eventName : '${home ? 'vs' : 'at'} $opponent';
 
   /// The upcoming matches with each one's availability and lineup.
   static Future<List<AdminMatch>> load(

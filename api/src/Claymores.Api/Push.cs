@@ -167,7 +167,10 @@ internal sealed class PushDevices(NpgsqlDataSource dataSource)
     }
 }
 
-internal sealed record UpcomingMatch(string Id, DateOnly Date, string Opponent, bool Home, string? Kickoff, string? Venue);
+/// <param name="Opponent">The other team, or a club event's name when <paramref name="Event"/>.</param>
+/// <param name="Event">A club event (the Highland Games): listed as Claymores vs Claymores, no opponent.</param>
+internal sealed record UpcomingMatch(string Id, DateOnly Date, string Opponent, bool Home, string? Kickoff, string? Venue,
+    bool Event = false);
 
 /// <summary>
 /// Match reminders, run hourly by the claymores-send-reminders cron (--send-reminders). On 21, 14,
@@ -196,7 +199,14 @@ internal sealed class MatchReminders(NpgsqlDataSource dataSource, FixtureDatabas
         _ => $"in {days} days",
     } + (days > 1 ? $" ({date:ddd MMM d})" : "");
 
-    internal static string Title(UpcomingMatch m) => m.Home ? $"Claymores vs {m.Opponent}" : $"{m.Opponent} vs Claymores";
+    internal static string Title(UpcomingMatch m) =>
+        m.Event ? m.Opponent : m.Home ? $"Claymores vs {m.Opponent}" : $"{m.Opponent} vs Claymores";
+
+    /// <summary>A club event's name: its competition in title case ("Annual Highland Games"), as on the website.</summary>
+    internal static string EventName(string? competition) =>
+        string.IsNullOrWhiteSpace(competition)
+            ? "Club event"
+            : System.Text.RegularExpressions.Regex.Replace(competition.Trim(), @"\b[a-z]", m => m.Value.ToUpperInvariant());
 
     /// <returns>How many messages were sent.</returns>
     public async Task<int> RunAsync(DateTimeOffset now, CancellationToken ct)
@@ -358,9 +368,10 @@ internal sealed class MatchReminders(NpgsqlDataSource dataSource, FixtureDatabas
             var claymoresHome = IsClaymores(home);
             if (!claymoresHome && !IsClaymores(away)) continue;
             var opponent = claymoresHome ? away : home;
-            if (IsClaymores(opponent)) continue; // club events like the Highland Games aren't matches
-            matches.Add(new(id.GetString()!, date, opponent, claymoresHome,
-                Text(payload, "kickoffTime") ?? Text(payload, "kickoff"), Text(payload, "venue")));
+            // Club events like the Highland Games are Claymores vs Claymores; the club plays there, so ask too.
+            var clubEvent = IsClaymores(opponent);
+            matches.Add(new(id.GetString()!, date, clubEvent ? MatchReminders.EventName(Text(payload, "competition")) : opponent,
+                claymoresHome, Text(payload, "kickoffTime") ?? Text(payload, "kickoff"), Text(payload, "venue"), clubEvent));
         }
         return matches;
     }
