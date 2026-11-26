@@ -17,7 +17,7 @@ import {
     RoleBadge,
     secondaryCtaClass,
 } from '@/components/members/member-ui'
-import { creditedCentsOf, paymentMethodLabel } from '@/lib/claymores/admin-dues'
+import { creditedCentsOf, creditLabel, duesStatus, paymentMethodLabel } from '@/lib/claymores/admin-dues'
 import { formatCents, type DuesAssessment, type DuesDetail } from '@/lib/claymores/api-client'
 import { memberAuthEnabled, webCheckoutEnabled } from '@/lib/claymores/auth-env'
 import { checkoutReturnStatus } from '@/lib/claymores/checkout'
@@ -56,6 +56,7 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
     const paidInFull = dues.balanceCents <= 0
     const pending = dues.pendingCheckoutCents > 0
     const credited = creditedCentsOf(dues)
+    const status = duesStatus(dues)
     return (
         <article className="rounded-lg border border-[#EAEAEA] p-4 sm:p-5" aria-labelledby={`dues-${dues.id}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -65,22 +66,20 @@ function DuesItem({ dues, detail }: { dues: DuesAssessment; detail: DuesDetail |
                 </div>
                 <span
                     className={
-                        paidInFull
-                            ? 'rounded-full bg-[#77c3ef]/15 px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
+                        status.kind === 'paid' ? 'rounded-full bg-[#77c3ef]/15 px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
+                            : status.kind === 'waived' || status.kind === 'volunteered' ? 'rounded-full border border-dashed border-[#77c3ef] px-3 py-1 text-xs font-semibold text-[#1f6f9c]'
                             : 'rounded-full bg-[#fd80b5]/15 px-3 py-1 text-xs font-semibold text-[#b02a64]'
                     }
                 >
-                    {paidInFull ? 'Paid in full' : 'Balance due'}
+                    {status.label}
                 </span>
             </div>
-            <dl className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+            <dl className={credited > 0 ? 'mt-4 grid grid-cols-4 gap-2 sm:gap-3' : 'mt-4 grid grid-cols-3 gap-2 sm:gap-3'}>
                 <Amount label="Amount" cents={dues.amountCents} />
-                <Amount label="Paid" cents={dues.paidCents} />
+                <Amount label="Paid" cents={Math.max(0, dues.paidCents - credited)} />
+                {credited > 0 && <Amount label={creditLabel(dues)} cents={credited} />}
                 <Amount label="Balance" cents={dues.balanceCents} emphasis />
             </dl>
-            {credited > 0 && (
-                <p className="mt-2 text-sm text-[#555555]">Includes {formatCents(credited)} credited (volunteer/waived)</p>
-            )}
 
             {pending && (
                 <Notice tone="info" title={`A payment of ${formatCents(dues.pendingCheckoutCents)} is already in progress`} className="mt-4">

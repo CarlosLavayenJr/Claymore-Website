@@ -37,9 +37,9 @@ function NameList({ title, people, showBalance, tone }: {
     title: string
     people: DuesSummaryMember[]
     showBalance?: boolean
-    tone: 'blue' | 'pink' | 'grey'
+    tone: 'blue' | 'credit' | 'pink' | 'grey'
 }) {
-    const dot = tone === 'blue' ? 'bg-[#77c3ef]' : tone === 'pink' ? 'bg-[#fd80b5]/50' : 'bg-[#EAEAEA]'
+    const dot = tone === 'blue' ? 'bg-[#77c3ef]' : tone === 'credit' ? 'border border-dashed border-[#77c3ef]' : tone === 'pink' ? 'bg-[#fd80b5]/50' : 'bg-[#EAEAEA]'
     return (
         <div className="min-w-0">
             <h5 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#555555]">
@@ -70,6 +70,8 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
     const credited = Math.min(100 - full, pct(group.paidInFullCreditedCents + group.partlyPaidCreditedCents, group.totalCents))
     const partly = Math.min(100 - full - credited, pct(group.partlyPaidCents, group.totalCents))
     const counts = [
+        group.waived > 0 && `${group.waived} waived`,
+        group.volunteered > 0 && `${group.volunteered} volunteered`,
         group.partlyPaid > 0 && `${group.partlyPaid} partly paid`,
         group.unpaid > 0 && `${group.unpaid} unpaid`,
     ].filter(Boolean)
@@ -111,6 +113,8 @@ function GroupCard({ group }: { group: DuesSummaryGroup }) {
                 </summary>
                 <div className="grid gap-4 border-t border-[#EAEAEA] p-4 sm:grid-cols-3">
                     <NameList title="Paid in full" people={group.members.paid} tone="blue" />
+                    {group.members.waived.length > 0 && <NameList title="Waived" people={group.members.waived} tone="credit" />}
+                    {group.members.volunteered.length > 0 && <NameList title="Volunteered" people={group.members.volunteered} tone="credit" />}
                     <NameList title="Partly paid" people={group.members.partly} showBalance tone="pink" />
                     <NameList title="Unpaid" people={group.members.unpaid} tone="grey" />
                 </div>

@@ -624,10 +624,12 @@ public sealed class JoinRequestTests(PostgresDatabase database) : IClassFixture<
         Assert.Contains("\"paidCents\":12500", detail);
         Assert.Contains("\"balanceCents\":0", detail);
         Assert.Contains("\"creditedCents\":7500", detail);
+        Assert.Contains("\"waivedCents\":2500", detail);
         Assert.Contains("\"method\":\"volunteer\"", detail);
         Assert.Contains("\"method\":\"waived\"", detail);
         var list = await (await Client().SendAsync(Bearer(HttpMethod.Get, "/v1/admin/dues", admin), Ct)).Content.ReadAsStringAsync(Ct);
         Assert.Contains("\"creditedCents\":7500", list);
+        Assert.Contains("\"waivedCents\":2500", list);
     }
 
     private sealed class RecordingPushSender : IPushSender

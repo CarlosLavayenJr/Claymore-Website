@@ -3,9 +3,10 @@ using Npgsql;
 
 /// <param name="PaidCents">Everything that reduces the balance: money and credits.</param>
 /// <param name="CreditedCents">The part of <paramref name="PaidCents"/> that isn't money: volunteered or waived.</param>
+/// <param name="WaivedCents">The waived part of <paramref name="CreditedCents"/> (the rest was volunteered).</param>
 internal sealed record DuesAssessment(
     Guid Id, string PlayerSubject, string Description, int AmountCents, DateOnly? DueDate,
-    long PaidCents, long BalanceCents, long PendingCheckoutCents, long CreditedCents = 0);
+    long PaidCents, long BalanceCents, long PendingCheckoutCents, long CreditedCents = 0, long WaivedCents = 0);
 /// <param name="Method">stripe, cash, venmo, zelle, check, other, volunteer or waived; null for entries made before methods existed.</param>
 /// <param name="Note">The treasurer's note. Admin views only: always null in a player's own history.</param>
 /// <param name="VoidedAt">When an admin undid it; it no longer counts. Admin views only: a player's history leaves voided payments out.</param>
@@ -63,7 +64,9 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
           COALESCE((SELECT sum(amount_cents) FROM dues_checkouts
                     WHERE assessment_id = a.id AND status = 'pending'), 0),
           COALESCE((SELECT sum(amount_cents) FROM dues_payments
-                    WHERE assessment_id = a.id AND voided_at IS NULL AND method IN ('volunteer', 'waived')), 0)
+                    WHERE assessment_id = a.id AND voided_at IS NULL AND method IN ('volunteer', 'waived')), 0),
+          COALESCE((SELECT sum(amount_cents) FROM dues_payments
+                    WHERE assessment_id = a.id AND voided_at IS NULL AND method = 'waived'), 0)
         FROM dues_assessments a
         WHERE a.removed_at IS NULL
         """;
@@ -364,7 +367,7 @@ internal sealed class DuesLedger(NpgsqlDataSource dataSource)
         var paid = reader.GetInt64(5);
         return new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), amount,
             reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4), paid, amount - paid, reader.GetInt64(6),
-            reader.GetInt64(7));
+            reader.GetInt64(7), reader.GetInt64(8));
     }
 }
 

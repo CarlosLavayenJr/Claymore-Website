@@ -944,6 +944,8 @@ class DuesGroupCard extends StatelessWidget {
             for (final (title, items) in [
               ('Unpaid', sorted(group.unpaid)),
               ('Partly paid', sorted(group.partial)),
+              ('Waived', sorted(group.waived)),
+              ('Volunteered', sorted(group.volunteered)),
               ('Paid in full', sorted(group.paid)),
             ])
               if (items.isNotEmpty) ...[
@@ -978,7 +980,12 @@ class DuesProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rest = group.count - group.paid.length - group.partial.length;
+    final rest =
+        group.count -
+        group.paid.length -
+        group.waived.length -
+        group.volunteered.length -
+        group.partial.length;
     return ExcludeSemantics(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(4),
@@ -990,6 +997,11 @@ class DuesProgressBar extends StatelessWidget {
                 Expanded(
                   flex: group.paid.length,
                   child: const ColoredBox(color: Brand.blue),
+                ),
+              if (group.waived.isNotEmpty || group.volunteered.isNotEmpty)
+                Expanded(
+                  flex: group.waived.length + group.volunteered.length,
+                  child: ColoredBox(color: Brand.blue.withValues(alpha: 0.35)),
                 ),
               if (group.partial.isNotEmpty)
                 Expanded(
@@ -1028,7 +1040,8 @@ class _PlayerDuesRow extends StatelessWidget {
       if (dues.paidCents > 0 && owes)
         'Paid ${formatCents(dues.paidCents)} of '
             '${formatCents(dues.amountCents)}',
-      if (dues.creditedCents > 0) '${formatCents(dues.creditedCents)} credited',
+      if (dues.creditedCents > 0)
+        '${formatCents(dues.creditedCents)} ${dues.creditLabel.toLowerCase()}',
       if (dues.hasPendingCheckout)
         'Card checkout ${formatCents(dues.pendingCheckoutCents)} in progress',
     ].join(' · ');
@@ -1068,7 +1081,11 @@ class _PlayerDuesRow extends StatelessWidget {
                     ),
                   ),
                 ] else
-                  const FixtureBadge(label: 'PAID'),
+                  FixtureBadge(
+                    label: dues.settledByCredit
+                        ? dues.creditLabel.toUpperCase()
+                        : 'PAID',
+                  ),
                 const ExcludeSemantics(
                   child: Icon(Icons.chevron_right, color: Brand.secondary),
                 ),

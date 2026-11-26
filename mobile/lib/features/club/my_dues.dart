@@ -100,7 +100,7 @@ class DuesTile extends StatelessWidget {
     final small = textTheme.bodySmall?.copyWith(fontFeatures: tabularFigures);
     final settled = dues.settled;
     final status = settled
-        ? 'Paid in full'
+        ? dues.settledLabel
         : [
             '${formatCents(dues.balanceCents)} due',
             if (dues.dueDate != null)
@@ -128,7 +128,9 @@ class DuesTile extends StatelessWidget {
                         ),
                         if (settled)
                           Text(
-                            'PAID IN FULL',
+                            dues.settledByCredit
+                                ? dues.creditLabel.toUpperCase()
+                                : 'PAID IN FULL',
                             style: textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -146,7 +148,7 @@ class DuesTile extends StatelessWidget {
                     if (!settled && dues.paidCents > 0) ...[
                       const SizedBox(height: 2),
                       Text(
-                        'Paid ${formatCents(dues.paidCents)} of '
+                        'Paid ${formatCents(dues.moneyPaidCents)} of '
                         '${formatCents(dues.amountCents)}',
                         style: small,
                       ),
@@ -154,8 +156,7 @@ class DuesTile extends StatelessWidget {
                     if (dues.creditedCents > 0) ...[
                       const SizedBox(height: 2),
                       Text(
-                        'Includes ${formatCents(dues.creditedCents)} credited '
-                        '(volunteer/waived)',
+                        '${dues.creditLabel} ${formatCents(dues.creditedCents)}',
                         style: small,
                       ),
                     ],

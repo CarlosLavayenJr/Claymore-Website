@@ -69,6 +69,43 @@ export function creditedCentsOf(dues: Pick<DuesAssessment, 'paidCents' | 'credit
     return Math.min(Math.max(0, credited), Math.max(0, dues.paidCents))
 }
 
+/** Waived cents on an assessment, clamped to 0..credited; missing reads as 0. */
+export function waivedCentsOf(dues: Pick<DuesAssessment, 'paidCents' | 'creditedCents' | 'waivedCents'>): number {
+    const waived = typeof dues.waivedCents === 'number' && Number.isFinite(dues.waivedCents) ? dues.waivedCents : 0
+    return Math.min(Math.max(0, waived), creditedCentsOf(dues))
+}
+
+/**
+ * Where one player's dues stand. "Paid in full" means money covered it; an item settled only by
+ * credit is "Waived" or "Volunteered" (or both), so a waiver never reads as a payment.
+ */
+export type DuesStatusKind = 'paid' | 'waived' | 'volunteered' | 'partly' | 'unpaid'
+
+export function duesStatus(dues: Pick<DuesAssessment, 'paidCents' | 'creditedCents' | 'waivedCents' | 'balanceCents'>):
+    { kind: DuesStatusKind; label: string } {
+    const credited = creditedCentsOf(dues)
+    const waived = waivedCentsOf(dues)
+    const volunteered = credited - waived
+    // Older APIs don't split credit: call it waived, which is what most credit is.
+    const creditWord = waived > 0 && volunteered > 0 ? 'waived & volunteered'
+        : volunteered > 0 && dues.waivedCents !== undefined ? 'volunteered' : 'waived'
+    if (dues.balanceCents > 0) {
+        return dues.paidCents > 0 ? { kind: 'partly', label: 'Balance due' } : { kind: 'unpaid', label: 'Balance due' }
+    }
+    const money = Math.max(0, dues.paidCents) - credited
+    if (money > 0) return { kind: 'paid', label: credited > 0 ? `Paid · rest ${creditWord}` : 'Paid in full' }
+    const kind = creditWord === 'volunteered' ? 'volunteered' : 'waived'
+    return { kind, label: creditWord[0].toUpperCase() + creditWord.slice(1) }
+}
+
+/** "Waived", "Volunteered" or "Credited" for the credit column of one player's dues. */
+export function creditLabel(dues: Pick<DuesAssessment, 'paidCents' | 'creditedCents' | 'waivedCents'>): string {
+    const credited = creditedCentsOf(dues)
+    const waived = waivedCentsOf(dues)
+    if (dues.waivedCents === undefined || waived === credited) return 'Waived'
+    return waived === 0 ? 'Volunteered' : 'Credited'
+}
+
 const METHOD_LABELS: Record<string, string> = {
     stripe: 'Card (Stripe)',
     ...Object.fromEntries(MANUAL_PAYMENT_METHODS.map(m => [m.value, m.label])),
@@ -378,7 +415,12 @@ export type DuesSummaryGroup = {
     /** The amount every item in the group charges, or null when the amounts differ. */
     amountCents: number | null
     count: number
+    /** Settled with money (some credit allowed). */
     paidInFull: number
+    /** Settled by credit alone: waived (or waived and volunteered). */
+    waived: number
+    /** Settled by volunteering alone. */
+    volunteered: number
     partlyPaid: number
     unpaid: number
     /** Sum of all amounts charged. */
@@ -400,10 +442,13 @@ export type DuesSummaryGroup = {
     partlyPaidCents: number
     /** Credit on partly paid items (for the progress bar). */
     partlyPaidCreditedCents: number
-    members: { paid: DuesSummaryMember[]; partly: DuesSummaryMember[]; unpaid: DuesSummaryMember[] }
+    members: {
+        paid: DuesSummaryMember[]; waived: DuesSummaryMember[]; volunteered: DuesSummaryMember[]
+        partly: DuesSummaryMember[]; unpaid: DuesSummaryMember[]
+    }
 }
 
-type SummaryAssessment = Pick<DuesAssessment, 'description' | 'amountCents' | 'paidCents' | 'creditedCents' | 'balanceCents' | 'pendingCheckoutCents'> & {
+type SummaryAssessment = Pick<DuesAssessment, 'description' | 'amountCents' | 'paidCents' | 'creditedCents' | 'waivedCents' | 'balanceCents' | 'pendingCheckoutCents'> & {
     playerSubject: string
 }
 
@@ -445,6 +490,8 @@ export function summarizeDues(
             amountCents: amounts.size === 1 ? items[0].amountCents : null,
             count: items.length,
             paidInFull: 0,
+            waived: 0,
+            volunteered: 0,
             partlyPaid: 0,
             unpaid: 0,
             totalCents: 0,
@@ -456,7 +503,7 @@ export function summarizeDues(
             paidInFullCreditedCents: 0,
             partlyPaidCents: 0,
             partlyPaidCreditedCents: 0,
-            members: { paid: [], partly: [], unpaid: [] },
+            members: { paid: [], waived: [], volunteered: [], partly: [], unpaid: [] },
         }
         for (const a of items) {
             const paid = Math.max(0, a.paidCents)
@@ -470,13 +517,22 @@ export function summarizeDues(
             s.pendingCheckoutCents += Math.max(0, a.pendingCheckoutCents)
             // Status uses the balance, so credit counts toward being paid.
             if (a.balanceCents <= 0) {
-                s.paidInFull++
                 // For the bar: credit first, then money up to the amount (an overpayment is money).
                 const cap = Math.max(0, a.amountCents)
                 const creditPart = Math.min(credited, cap)
                 s.paidInFullCreditedCents += creditPart
                 s.paidInFullCents += Math.min(money, cap - creditPart)
-                s.members.paid.push(member)
+                const kind = duesStatus(a).kind
+                if (kind === 'waived') {
+                    s.waived++
+                    s.members.waived.push(member)
+                } else if (kind === 'volunteered') {
+                    s.volunteered++
+                    s.members.volunteered.push(member)
+                } else {
+                    s.paidInFull++
+                    s.members.paid.push(member)
+                }
             } else if (paid > 0) {
                 s.partlyPaid++
                 s.partlyPaidCents += money
@@ -488,6 +544,8 @@ export function summarizeDues(
             }
         }
         s.members.paid.sort(byLabel)
+        s.members.waived.sort(byLabel)
+        s.members.volunteered.sort(byLabel)
         s.members.partly.sort(byLabel)
         s.members.unpaid.sort(byLabel)
         return s
