@@ -117,6 +117,19 @@ test('parses the record-payment form', () => {
     assert.equal(parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '1', method: 'cash', note: 'n'.repeat(500) })).ok, true)
 })
 
+test('waiving with no amount waives everything still owed', () => {
+    const all = parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '', recordable: '125.00', method: 'waived', note: 'Injury' }))
+    assert.deepEqual(all.ok && all.value.payment, { id: ID, amountCents: 12500, method: 'waived', note: 'Injury' })
+
+    const part = parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '25', recordable: '125.00', method: 'waived', note: 'Injury' }))
+    assert.equal(part.ok && part.value.payment.amountCents, 2500)
+
+    const nothingLeft = parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '', recordable: '0.00', method: 'waived', note: 'Injury' }))
+    assert.deepEqual(nothingLeft.ok ? null : nothingLeft.message, 'Nothing is left to waive.')
+    assert.equal(parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '', recordable: '125.00', method: 'cash' })).ok, false)
+    assert.equal(parseRecordPaymentForm(form({ id: ID, assessmentId: 'a-1', amount: '', recordable: '125.00', method: 'waived' })).ok, false)
+})
+
 test('maps dues write results: API sentences shown, ambiguous failures keep the idempotency id', () => {
     assert.deepEqual(duesWriteOutcome({ ok: true, status: 201, data: null }, 'assign'), { kind: 'ok' })
     assert.deepEqual(duesWriteOutcome(fail(401), 'payment'), { kind: 'sign-in' })
