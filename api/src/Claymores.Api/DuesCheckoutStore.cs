@@ -93,6 +93,16 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
             : null;
     }
 
+    /// <summary>The pending checkout of <paramref name="assessmentId"/>, or null (there is at most one).</summary>
+    public async Task<CheckoutRecord?> FindPendingAsync(Guid assessmentId, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT id FROM dues_checkouts WHERE assessment_id = @assessment AND status = 'pending'
+            """);
+        cmd.Parameters.AddWithValue("assessment", assessmentId);
+        return await cmd.ExecuteScalarAsync(ct) is Guid id ? await FindAsync(assessmentId, id, ct) : null;
+    }
+
     /// <summary>Pending checkouts without a Stripe session that are older than <paramref name="age"/>.</summary>
     public async Task<List<CheckoutRecord>> ListUnboundAsync(TimeSpan age, CancellationToken ct)
     {
@@ -120,6 +130,21 @@ internal sealed class DuesCheckoutStore(NpgsqlDataSource dataSource)
         await using var cmd = dataSource.CreateCommand("""
             UPDATE dues_checkouts SET status = 'expired', released_by = @by, released_at = now()
             WHERE id = @id AND status = 'pending' AND stripe_session_id IS NULL
+            """);
+        cmd.Parameters.AddWithValue("id", checkoutId);
+        cmd.Parameters.AddWithValue("by", releasedBy);
+        return await cmd.ExecuteNonQueryAsync(ct) == 1;
+    }
+
+    /// <summary>
+    /// Clears a pending Stripe <em>test</em> checkout after the API went live: test sessions never
+    /// move money and can't be expired with a live key.
+    /// </summary>
+    public async Task<bool> ReleaseTestAsync(Guid checkoutId, string releasedBy, CancellationToken ct)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            UPDATE dues_checkouts SET status = 'expired', released_by = @by, released_at = now()
+            WHERE id = @id AND status = 'pending' AND COALESCE(stripe_mode, 'test') = 'test'
             """);
         cmd.Parameters.AddWithValue("id", checkoutId);
         cmd.Parameters.AddWithValue("by", releasedBy);

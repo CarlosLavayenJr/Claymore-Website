@@ -48,6 +48,8 @@ const notices: Record<string, string> = {
     payment_undone: 'Payment undone. It’s crossed out in the history and the balance is back up.',
     payment_undone_card: 'Payment undone in the club’s records. Refund the card payment in the Stripe dashboard to give the money back.',
     note_saved: 'Note saved.',
+    checkout_cancelled: 'Card checkout cancelled. You can waive or record the balance now.',
+    checkout_paid: 'The player had already paid by card, so that payment is now recorded.',
     link_created: 'New invite link ready. Copy it below and post it in the group chat.',
     link_revoked: 'Invite link turned off. Anyone who already joined keeps their access.',
     name_saved: 'Name saved.',
@@ -66,6 +68,9 @@ const errors: Record<string, string> = {
     undo_reason: 'Say why the payment is being undone.',
     payment_invalid: 'Notes are at most 500 characters, and volunteer or waived credits need one.',
     payment_undone: 'That payment was already undone, so it can’t change.',
+    checkout_too_recent: 'That checkout started less than an hour ago. Try again later.',
+    checkout_processing: 'Stripe is still processing that card payment. Try again in a few minutes.',
+    checkout_not_pending: 'There’s no card checkout in progress anymore. Refresh to see the balance.',
     name_invalid: 'Enter both a first and a last name (80 characters at most).',
 }
 
@@ -238,7 +243,7 @@ const TABS: { id: Tab; label: string }[] = [
     { id: 'dues', label: 'Dues' },
 ]
 const PEOPLE_RESULTS = ['approved', 'denied', 'invited', 'removed', 'link_created', 'link_revoked', 'name_saved', 'name_invalid', 'not_pending', 'member_saved', 'forbidden', 'conflict']
-const DUES_RESULTS = ['dues_removed', 'payment_undone', 'payment_undone_card', 'note_saved', 'undo_reason', 'payment_invalid']
+const DUES_RESULTS = ['dues_removed', 'payment_undone', 'payment_undone_card', 'note_saved', 'undo_reason', 'payment_invalid', 'checkout_cancelled', 'checkout_paid', 'checkout_too_recent', 'checkout_processing', 'checkout_not_pending']
 
 /** Which tab to show: ?tab=, else the tab a save just came back from, else Matches. */
 function tabFor(params: Record<string, string | string[] | undefined>): Tab {

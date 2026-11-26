@@ -471,6 +471,65 @@ public sealed class CheckoutTests(PostgresDatabase database) : IClassFixture<Pos
         await UrlAsync(await CheckoutAsync(token, dues, new { amountCents = 1000 }));
     }
 
+    private Task<HttpResponseMessage> CancelAsync(string token, Guid dues)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/dues/{dues}/checkout/cancel");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return Client().SendAsync(request, Ct);
+    }
+
+    [Fact]
+    public async Task Cancel_expires_an_abandoned_checkout_so_the_balance_can_be_waived()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminAsync("cancel-admin");
+        var token = await SignInAsync("cancel-player");
+        var dues = await AssignDuesAsync("sub-cancel-player", 12500);
+
+        await UrlAsync(await CheckoutAsync(token, dues, new { amountCents = 12500 }));
+        var attempt = await AttemptAsync(dues);
+        var session = _stripe.SessionFor(attempt)!;
+
+        // Players can't cancel.
+        Assert.Equal(HttpStatusCode.Forbidden, (await CancelAsync(token, dues)).StatusCode);
+
+        var cancelled = await CancelAsync(admin, dues);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+        Assert.Equal("""{"status":"cancelled"}""", await cancelled.Content.ReadAsStringAsync(Ct));
+        Assert.Contains(session, _stripe.Expires);
+        Assert.Equal("expired", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", attempt));
+
+        // Nothing pending now: a second cancel is a conflict, and the whole balance can be waived.
+        Assert.Equal(HttpStatusCode.Conflict, (await CancelAsync(admin, dues)).StatusCode);
+        var waive = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/dues/{dues}/payments")
+        {
+            Content = JsonContent.Create(new { id = Guid.NewGuid(), amountCents = 12500, method = "waived", note = "Injury" })
+        };
+        waive.Headers.Authorization = new AuthenticationHeaderValue("Bearer", admin);
+        var waived = await Client().SendAsync(waive, Ct);
+        Assert.True(waived.IsSuccessStatusCode, await waived.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Cancel_records_the_payment_when_the_player_already_paid()
+    {
+        database.SkipIfUnavailable();
+        var admin = await AdminAsync("cancel-admin2");
+        var token = await SignInAsync("cancel-paid");
+        var dues = await AssignDuesAsync("sub-cancel-paid", 12500);
+
+        await UrlAsync(await CheckoutAsync(token, dues, new { amountCents = 5000 }));
+        var attempt = await AttemptAsync(dues);
+        _stripe.Pay(_stripe.SessionFor(attempt)!);
+
+        var response = await CancelAsync(admin, dues);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("""{"status":"paid","amountCents":5000}""", await response.Content.ReadAsStringAsync(Ct));
+        Assert.Equal("paid", await ScalarAsync<string>("SELECT status FROM dues_checkouts WHERE id = @id", attempt));
+        Assert.Equal(5000L, await ScalarAsync<long>(
+            "SELECT COALESCE(sum(amount_cents), 0) FROM dues_payments WHERE assessment_id = @id AND voided_at IS NULL", dues));
+    }
+
     [Fact]
     public async Task Release_binds_an_open_session_and_releases_an_expired_one()
     {
@@ -648,6 +707,24 @@ public sealed class LiveCheckoutTests(PostgresDatabase database) : IClassFixture
         Assert.Equal("Claymores RFC dues", create["line_items[0][price_data][product_data][name]"]);
         Assert.Equal("https://api.example.test/auth/account?checkout=returned", create["success_url"]);
         Assert.StartsWith("claymores-dues-live-account-", Assert.Single(fake.IdempotencyKeys));
+    }
+
+    [Fact]
+    public async Task Cancel_clears_a_leftover_sandbox_checkout_after_going_live()
+    {
+        database.SkipIfUnavailable();
+        var (checkout, data) = await CreateAsync();
+        await using var _ = data;
+        var attempt = await SeedAsync(data, "test", "cs_test_left" + Guid.NewGuid().ToString("N"), 2500);
+        await using var find = data.CreateCommand("SELECT assessment_id FROM dues_checkouts WHERE id = @id");
+        find.Parameters.AddWithValue("id", attempt);
+        var dues = (Guid)(await find.ExecuteScalarAsync(Ct))!;
+
+        var outcome = await checkout.CancelAsync(dues, "treasurer@example.com", Ct);
+        Assert.Equal(CancelResult.Cancelled, outcome.Result);
+        await using var status = data.CreateCommand("SELECT status FROM dues_checkouts WHERE id = @id");
+        status.Parameters.AddWithValue("id", attempt);
+        Assert.Equal("expired", await status.ExecuteScalarAsync(Ct));
     }
 }
 
