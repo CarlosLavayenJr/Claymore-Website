@@ -161,12 +161,6 @@ services:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
 
-databases:
-  - name: claymores-db
-    databaseName: claymores
-    region: virginia
-    plan: basic-256mb
-    ipAllowList: []
   # Match reminders (push), hourly: 21, 14, 7, 5 and 2 days out, the day before and match day,
   # each sent once after 10 AM Orlando time (see MatchReminders). Needs Push__FirebaseServiceAccount.
   - type: cron
@@ -196,3 +190,10 @@ databases:
         value: scraper
       - key: Push__FirebaseServiceAccount
         sync: false
+
+databases:
+  - name: claymores-db
+    databaseName: claymores
+    region: virginia
+    plan: basic-256mb
+    ipAllowList: []
