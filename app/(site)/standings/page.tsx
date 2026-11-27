@@ -7,7 +7,7 @@ import {
 import JsonLd from '@/components/json-ld'
 import Breadcrumbs from '@/components/breadcrumbs'
 import LeagueTable from '@/components/league-table'
-import { breadcrumbSchema, seasonYearForUrl } from '@/lib/seo'
+import { breadcrumbSchema, displaySeason, seasonYearForUrl } from '@/lib/seo'
 import { ogImage } from '@/lib/og'
 
 export const revalidate = 3600
@@ -94,7 +94,7 @@ export default async function StandingsIndexPage() {
                                 <p className="text-xs uppercase tracking-widest text-[#fd80b5] font-semibold mb-1">
                                     {s.divisionName ?? 'Florida Rugby Union'}
                                 </p>
-                                <p className="text-2xl font-claymore text-[#111111]">{s.seasonLabel}</p>
+                                <p className="text-2xl font-claymore text-[#111111]">{displaySeason(s.seasonLabel)}</p>
                                 <p className="text-xs text-[#555555] mt-2">
                                     {s.teamCount} {s.teamCount === 1 ? 'team' : 'teams'}
                                     {s.claymoresPosition != null && (

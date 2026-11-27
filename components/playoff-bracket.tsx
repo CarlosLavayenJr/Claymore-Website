@@ -9,6 +9,7 @@ import {
     type SanityTeam,
 } from '@/sanity/lib/queries'
 import { resolveTeam, type ResolvedTeam } from '@/lib/teams'
+import { displaySeason } from '@/lib/seo'
 
 const getAllTeams = cache(async (): Promise<SanityTeam[]> => {
     return getTeams()
@@ -81,7 +82,7 @@ export default async function PlayoffBracket({
         >
             <header className="bg-[#fd80b5] text-white px-4 py-3 flex items-baseline justify-between gap-3">
                 <h2 id="playoff-bracket-heading" className="font-claymore text-lg leading-tight">
-                    Playoffs {label}
+                    Playoffs {displaySeason(label)}
                 </h2>
                 <span className="text-[10px] uppercase tracking-widest text-white/80">
                     Bracket

@@ -9,6 +9,7 @@ import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
 import { findTeamLogo } from '@/lib/team-logo'
 import { upcomingPracticeInstances, type PracticeInstance } from '@/lib/practices'
+import { formatTime } from '@/lib/time-format'
 
 function isClaymores(name: string) {
     return name.includes('Claymores') || name.includes('IR/Claymores')
@@ -85,7 +86,9 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                                                         <span className="truncate">{opponent}</span>
                                                         {!clubEvent && <MatchTypeBadge matchType={m.matchType} size="compact" />}
                                                     </p>
-                                                    <p className="text-xs text-[#555555] mt-0.5">{clubEvent ? 'Club event' : isHome ? 'Home' : 'Away'}</p>
+                                                    <p className="text-xs text-[#555555] mt-0.5">
+                                                        {[clubEvent ? 'Club event' : isHome ? 'Home' : 'Away', m.kickoffTime ?? 'Kickoff TBA', m.venue].filter(Boolean).join(' · ')}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
@@ -113,7 +116,7 @@ export default function FixturesSchedule({ matches, teams, practices }: {
                                             <div>
                                                 <p className="text-sm font-semibold text-[#111111]">{p.title}</p>
                                                 <p className="text-xs text-[#fd80b5] uppercase tracking-widest font-semibold mt-0.5">
-                                                    Practice{p.time ? ` · ${p.time}` : ''}
+                                                    Practice{p.time ? ` · ${formatTime(p.time)}` : ''}
                                                 </p>
                                             </div>
                                         </div>

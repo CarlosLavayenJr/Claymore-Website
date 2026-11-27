@@ -58,7 +58,7 @@ void main() {
     await tester.tap(find.text('31–5'));
     await tester.pumpAndSettle();
     expect(find.text('MATCH DETAILS'), findsOneWidget);
-    expect(find.text('Season 2025'), findsOneWidget);
+    expect(find.text('Season 2024-25'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('31–5'), findsOneWidget);

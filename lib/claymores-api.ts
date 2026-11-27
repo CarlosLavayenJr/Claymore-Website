@@ -1,4 +1,5 @@
 import 'server-only'
+import { formatTime } from '@/lib/time-format'
 
 import { cache } from 'react'
 import { ApiUnavailableError, fetchApiJson, sportsDataSource, withSanityFallback } from '@/lib/claymores/data-source'
@@ -88,11 +89,13 @@ function mapFixture(fixture: ApiFixture): SanityMatch {
     })
 }
 
-export const getMatches = cache(async (): Promise<SanityMatch[]> => read(
+const withKickoff = (m: SanityMatch): SanityMatch => ({ ...m, kickoffTime: formatTime(m.kickoffTime) })
+
+export const getMatches = cache(async (): Promise<SanityMatch[]> => (await read(
     'fixtures',
     async () => (await apiGet<ApiFixture[]>('/v1/fixtures', sportsCacheTags.fixtures)).map(mapFixture),
     () => client.fetch(matchesQuery),
-))
+)).map(withKickoff))
 
 export const getMatchForSlug = cache(async (slug: string): Promise<SanityMatch | null> => {
     const match = (await getMatches()).find(candidate => matchSlug(candidate) === slug)
@@ -107,7 +110,7 @@ export const getMatchForSlug = cache(async (slug: string): Promise<SanityMatch |
                 sportsCacheTags.fixtures,
                 true,
             )
-            return detail ? mapFixture(detail) : null
+            return detail ? withKickoff(mapFixture(detail)) : null
         },
         async () => match,
     )

@@ -7,6 +7,7 @@ import type { PracticeInstance } from '@/lib/practices'
 import { festivalSlug } from '@/lib/festivals'
 import { clubEventName, isClubEvent, matchSlug } from '@/lib/seo'
 import MatchTypeBadge from '@/components/match-type-badge'
+import { formatTime } from '@/lib/time-format'
 
 // ── Team / match helpers ────────────────────────────────────────────────────
 
@@ -111,6 +112,11 @@ export function AddressLink({ address }: { address: string }) {
     )
 }
 
+/** "1:00 PM · Barnett Park", or "Kickoff TBA" when the source has no time yet. */
+function whenAndWhere(m: SanityMatch): string {
+    return [m.kickoffTime ?? 'Kickoff TBA', m.venue].filter(Boolean).join(' · ')
+}
+
 /** A club event the source lists as Claymores vs Claymores: one crest and the event name. */
 function ClubEventCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
     const name = clubEventName(m)
@@ -132,7 +138,7 @@ function ClubEventCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] }) {
             <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">Club event</p>
                 <p className="text-sm font-semibold text-[#111111] truncate">{name}</p>
-                {m.kickoffTime && <p className="text-xs text-[#555555]">{m.kickoffTime}</p>}
+                <p className="text-xs text-[#555555] truncate">{whenAndWhere(m)}</p>
             </div>
             {result === 'cancelled' && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${RESULT_PILL.cancelled}`}>Cancelled</span>
@@ -183,6 +189,9 @@ export function MatchCard({ m, teams }: { m: SanityMatch; teams: SanityTeam[] })
                     </span>
                     <MatchTypeBadge matchType={m.matchType} size="compact" />
                 </div>
+                {m.status === 'upcoming' && (
+                    <p className="text-xs text-[#555555] text-center truncate w-full">{whenAndWhere(m)}</p>
+                )}
             </div>
 
             <div className="flex flex-col items-center gap-1 w-12 shrink-0">
@@ -217,7 +226,7 @@ export function PracticeCard({ instance }: { instance: PracticeInstance }) {
             <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#fd80b5]">{practice.eventType === 'festival' ? 'Rugby festival' : practice.eventType === 'event' ? 'Club event' : 'Practice'}</p>
                 <p className="text-sm font-semibold text-[#111111] leading-tight">{practice.title}</p>
-                {practice.time && <p className="text-xs text-[#555555] mt-1">{practice.time}</p>}
+                {practice.time && <p className="text-xs text-[#555555] mt-1">{formatTime(practice.time)}</p>}
                 {practice.venue && <p className="text-xs font-semibold text-[#111111] mt-1">{practice.venue}</p>}
                 {practice.address && (href ? <p className="text-xs text-[#77c3ef]">{practice.address}</p> : <AddressLink address={practice.address} />)}
                 {practice.description && (

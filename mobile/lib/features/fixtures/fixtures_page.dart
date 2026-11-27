@@ -7,6 +7,7 @@ import '../../shared/widgets.dart';
 import 'availability.dart';
 import 'club_data_view.dart';
 import 'fixture_card.dart';
+import '../../shared/formats.dart';
 
 class FixturesPage extends StatefulWidget {
   const FixturesPage({super.key});
@@ -58,7 +59,10 @@ class _FixturesPageState extends State<FixturesPage> {
                 items: [
                   const DropdownMenuItem(value: 0, child: Text('All seasons')),
                   for (final year in seasons)
-                    DropdownMenuItem(value: year, child: Text('Season $year')),
+                    DropdownMenuItem(
+                      value: year,
+                      child: Text('Season ${seasonLabel(year)}'),
+                    ),
                 ],
                 onChanged: (value) =>
                     setState(() => season = value == 0 ? null : value),

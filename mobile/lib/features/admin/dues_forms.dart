@@ -173,7 +173,7 @@ class _AssignDuesSheetState extends State<_AssignDuesSheet> {
     final problem = !everyone && player == null
         ? 'Pick a player.'
         : text.isEmpty
-        ? 'Say what it’s for, like “2026–27 season dues”.'
+        ? 'Say what it’s for, like “2026-27 season dues”.'
         : text.length > 120
         ? 'Keep it to 120 characters.'
         : cents == null || cents <= 0
@@ -269,7 +269,7 @@ class _AssignDuesSheetState extends State<_AssignDuesSheet> {
           maxLength: 120,
           decoration: const InputDecoration(
             labelText: 'What it’s for',
-            helperText: 'Include the season, like “2026–27 season dues”.',
+            helperText: 'Include the season, like “2026-27 season dues”.',
             counterText: '',
           ),
         ),
