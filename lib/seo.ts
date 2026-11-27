@@ -271,7 +271,7 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
     const url = abs(`/fixtures/${slug}`)
     const opp = opponentOf(m)
     const dateStr = formatMatchDateLong(m.date)
-    const startDate = m.kickoffTime ? `${m.date}T${parseKickoff(m.kickoffTime)}-04:00` : m.date
+    const startDate = m.kickoffTime ? orlandoDateTime(m.date.slice(0, 10), parseKickoff(m.kickoffTime)) : m.date
 
     const eventStatus =
         m.status === 'cancelled'
@@ -333,8 +333,21 @@ export function sportsEventSchema(m: SanityMatch): Record<string, unknown> {
     }
 }
 
+/**
+ * "2027-01-16" + "13:00:00" -> "2027-01-16T13:00:00-05:00": Orlando local time
+ * with that day's offset (EST -05:00 in winter, EDT -04:00 in summer).
+ */
+export function orlandoDateTime(date: string, time: string): string {
+    // Noon UTC on the day is the same calendar day in New York, and DST never switches at noon.
+    const zone = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'longOffset' })
+        .formatToParts(new Date(`${date}T12:00:00Z`))
+        .find(p => p.type === 'timeZoneName')?.value // "GMT-05:00"
+    const offset = zone?.match(/[+-]\d{2}:\d{2}/)?.[0] ?? '-05:00'
+    return `${date}T${time}${offset}`
+}
+
 // "1:00 PM" -> "13:00:00"
-function parseKickoff(s: string): string {
+export function parseKickoff(s: string): string {
     const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i)
     if (!m) return '12:00:00'
     let hour = parseInt(m[1], 10)

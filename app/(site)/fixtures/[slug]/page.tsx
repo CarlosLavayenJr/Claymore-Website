@@ -1,7 +1,7 @@
 import { getMatches, getMatchForSlug, getTeams } from '@/lib/claymores-api'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { PortableText } from 'next-sanity'
 import { client } from '@/sanity/lib/client'
 import { type SanityMatch, type SanityTeam } from '@/sanity/lib/queries'
@@ -24,7 +24,7 @@ import {
     sportsEventSchema,
 } from '@/lib/seo'
 import FestivalDetails from '@/components/festival-details'
-import { festivalsQuery, festivalSlug } from '@/lib/festivals'
+import { festivalForClubEvent, festivalsQuery, festivalSlug, withoutFestivalDuplicates } from '@/lib/festivals'
 import type { SanityPractice } from '@/sanity/lib/queries'
 import { ogImage } from '@/lib/og'
 import { memberAuthEnabled } from '@/lib/claymores/auth-env'
@@ -39,7 +39,7 @@ interface Params {
 export async function generateStaticParams() {
     const matches: SanityMatch[] = await getMatches()
     const festivals: SanityPractice[] = await client.fetch(festivalsQuery)
-    return [...matches.map((m) => ({ slug: matchSlug(m) })), ...festivals.map(event => ({ slug: festivalSlug(event) }))]
+    return [...withoutFestivalDuplicates(matches, festivals).map((m) => ({ slug: matchSlug(m) })), ...festivals.map(event => ({ slug: festivalSlug(event) }))]
 }
 
 async function getFestival(slug: string): Promise<SanityPractice | null> {
@@ -61,6 +61,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         }
     }
     if (isClubEvent(match)) {
+        const festival = festivalForClubEvent(match, await client.fetch<SanityPractice[]>(festivalsQuery))
+        if (festival) return { alternates: { canonical: `/fixtures/${festivalSlug(festival)}` } }
         const title = `${clubEventName(match)} — ${formatMatchDateLong(match.date)}`
         return {
             title: `${title} | Orlando Rugby`,
@@ -140,6 +142,11 @@ export default async function MatchPage({ params, searchParams }: Params) {
         return <FestivalDetails event={previewEvent} teams={teams} preview={preview} />
     }
 
+    if (isClubEvent(match)) {
+        // A festival day has its own, richer page: send this duplicate there for good.
+        const festival = festivalForClubEvent(match, await client.fetch<SanityPractice[]>(festivalsQuery))
+        if (festival) permanentRedirect(`/fixtures/${festivalSlug(festival)}`)
+    }
     if (isClubEvent(match)) return <ClubEventPage match={match} slug={slug} teams={teams} />
 
     const opp = opponentOf(match)
