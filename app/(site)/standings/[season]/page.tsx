@@ -11,7 +11,9 @@ import MatchTypeBadge from '@/components/match-type-badge'
 import {
     breadcrumbSchema,
     formatMatchDateLong,
+    clubEventName,
     isClaymores,
+    isClubEvent,
     matchSlug,
     seasonLabel,
 } from '@/lib/seo'
@@ -68,8 +70,9 @@ export default async function SeasonPage({ params }: Params) {
         pf = 0,
         pa = 0,
         upcoming = 0
+    // Club events (home and away both Claymores) are not results: keep them out of the record.
     matches.forEach((m) => {
-        if (m.status === 'cancelled') return
+        if (m.status === 'cancelled' || isClubEvent(m)) return
         if (m.status === 'upcoming') {
             upcoming++
             return
@@ -199,6 +202,19 @@ export default async function SeasonPage({ params }: Params) {
             {/* Match list */}
             <div className="border border-[#EAEAEA] rounded-xl overflow-hidden divide-y divide-[#EAEAEA]">
                 {matches.map((m) => {
+                    if (isClubEvent(m)) return (
+                        <div key={m._id} className="relative flex items-center justify-between px-5 py-4 bg-white hover:bg-[#F9F9F9] transition-colors">
+                            <Link href={`/fixtures/${matchSlug(m)}`} className="absolute inset-0" aria-label={`View ${clubEventName(m)}`} />
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-[#EAEAEA] shrink-0" />
+                                <div>
+                                    <p className="text-sm font-semibold text-[#111111]">{clubEventName(m)}</p>
+                                    <p className="text-xs text-[#555555] mt-0.5">{formatMatchDateLong(m.date)}</p>
+                                </div>
+                            </div>
+                            <span className="text-xs uppercase tracking-widest text-[#555555]">Club event</span>
+                        </div>
+                    )
                     const weHome = isClaymores(m.homeTeam)
                     const opp = weHome ? m.awayTeam : m.homeTeam
                     const ours = weHome ? m.homeScore : m.awayScore

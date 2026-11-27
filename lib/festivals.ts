@@ -17,10 +17,23 @@ export function festivalSlug(event: Pick<SanityPractice, 'startDate' | 'title'>)
  * a club-event match doc on the same day — there only so members can answer
  * "can you play?" — would list the same day twice. Drop those match docs.
  */
+/**
+ * The festival a club-event match doc stands in for: an active festival on the
+ * same day. The match doc stays (members' availability answers hang off it);
+ * only its public page and sitemap entry defer to the festival's.
+ */
+export function festivalForClubEvent<E extends Pick<SanityPractice, 'eventType' | 'startDate' | 'active'>>(
+    match: { date: string; homeTeam: string; awayTeam: string },
+    events: E[],
+): E | undefined {
+    if (!isClubEvent(match)) return undefined
+    const day = match.date.slice(0, 10)
+    return events.find(e => e.eventType === 'festival' && e.active && e.startDate === day)
+}
+
 export function withoutFestivalDuplicates<M extends { date: string; homeTeam: string; awayTeam: string }>(
     matches: M[],
     events: Pick<SanityPractice, 'eventType' | 'startDate' | 'active'>[],
 ): M[] {
-    const festivalDays = new Set(events.filter(e => e.eventType === 'festival' && e.active).map(e => e.startDate))
-    return matches.filter(m => !(isClubEvent(m) && festivalDays.has(m.date.slice(0, 10))))
+    return matches.filter(m => !festivalForClubEvent(m, events))
 }
