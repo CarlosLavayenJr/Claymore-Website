@@ -199,9 +199,9 @@ void main() {
       expect((row.decoration! as BoxDecoration).color, Brand.pinkTint);
       expect(find.text('PLAYOFFS'), findsNothing);
 
-      await tester.tap(find.text('Season 2026-2027'));
+      await tester.tap(find.text('Season 2026-27'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Season 2025-2026').last);
+      await tester.tap(find.text('Season 2025-26').last);
       await tester.pumpAndSettle();
       expect(find.text('MEN DIVISION 3 · 2025-2026'), findsOneWidget);
       expect(find.text('+225'), findsOneWidget);
@@ -218,14 +218,14 @@ void main() {
       );
       expect(find.text('PLAYOFFS'), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.text('Season 2025-2026'),
+        find.text('Season 2025-26'),
         -300,
         scrollable: page,
       );
 
-      await tester.tap(find.text('Season 2025-2026'));
+      await tester.tap(find.text('Season 2025-26'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Season 2024-2025').last);
+      await tester.tap(find.text('Season 2024-25').last);
       await tester.pumpAndSettle();
       expect(find.text('Standings TBD.'), findsOneWidget);
     });

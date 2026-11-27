@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../teams.dart';
+import '../../shared/formats.dart';
 
 class Fixture {
   Fixture(Map<String, dynamic> json)
@@ -15,7 +16,7 @@ class Fixture {
       awayScore = (json['awayScore'] as num?)?.toInt(),
       status = json['status'] as String? ?? '',
       venue = json['venue'] as String? ?? '',
-      kickoff = json['kickoffTime'] as String? ?? '',
+      kickoff = formatTime(json['kickoffTime'] as String? ?? ''),
       matchType = json['matchType'] as String? ?? '',
       note = json['note'] as String? ?? '',
       competition = (json['competition'] as String?)?.trim() ?? '',
@@ -71,7 +72,7 @@ class Fixture {
 class Practice {
   Practice(Map<String, dynamic>? json)
     : weekday = _field(json, 'weekday', 'Thursday'),
-      time = _field(json, 'time', '8–10pm'),
+      time = formatTime(_field(json, 'time', '8–10pm')),
       venue = _field(json, 'venueName', 'Barnett Park'),
       address = _field(
         json,

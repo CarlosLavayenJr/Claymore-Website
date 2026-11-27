@@ -6,6 +6,7 @@ import '../../data/standings_repository.dart';
 import '../../shared/team_link.dart';
 import '../../shared/team_logo.dart';
 import '../../shared/widgets.dart';
+import '../../shared/formats.dart';
 
 class StandingsPage extends StatefulWidget {
   const StandingsPage({super.key});
@@ -166,7 +167,10 @@ class _SeasonPicker extends StatelessWidget {
         hint: const Text('Season'),
         items: [
           for (final label in labels)
-            DropdownMenuItem(value: label, child: Text('Season $label')),
+            DropdownMenuItem(
+              value: label,
+              child: Text('Season ${seasonLabelFromRange(label)}'),
+            ),
         ],
         onChanged: onChanged,
       );

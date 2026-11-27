@@ -80,6 +80,12 @@ export function seasonLabel(season: number): string {
     return `${season - 1}-${String(season).slice(-2)}`
 }
 
+/** A standings doc's "2026-2027" (or "2027") shown the same way as seasonLabel: "2026-27". */
+export function displaySeason(label: string): string {
+    const year = Number(seasonYearForUrl(label))
+    return Number.isFinite(year) && year > 1900 ? seasonLabel(year) : label
+}
+
 // Convert a full Sanity season label like "2025-2026" to the closing year
 // ("2026") used as the URL segment for /standings/[season].
 export function seasonYearForUrl(label: string): string {

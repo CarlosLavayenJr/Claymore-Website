@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { getPracticeScheduleDocument } from '@/lib/claymores-api'
 import type { SanityPracticeSchedule } from '@/sanity/lib/queries'
+import { formatTime } from '@/lib/time-format'
 
 export interface PracticeSchedule {
     seasonLabel: string
@@ -22,7 +23,7 @@ export interface PracticeSchedule {
 const DEFAULT: PracticeSchedule = {
     seasonLabel: 'Regular Season',
     weekday: 'Thursday',
-    time: '8–10pm',
+    time: '8:00 PM – 10:00 PM',
     venueName: 'Barnett Park',
     venueAddress: '4801 W Colonial Dr, Orlando, FL 32808',
     venueStreet: '4801 W Colonial Dr',
@@ -39,7 +40,7 @@ function merge(doc: SanityPracticeSchedule | null | undefined): PracticeSchedule
     return {
         seasonLabel: doc.seasonLabel || DEFAULT.seasonLabel,
         weekday: doc.weekday || DEFAULT.weekday,
-        time: doc.time || DEFAULT.time,
+        time: formatTime(doc.time) || DEFAULT.time,
         venueName: doc.venueName || DEFAULT.venueName,
         venueAddress: doc.venueAddress || DEFAULT.venueAddress,
         venueStreet: doc.venueStreet || DEFAULT.venueStreet,

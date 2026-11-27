@@ -7,6 +7,7 @@ import '../admin/admin_page.dart';
 import 'availability.dart';
 import 'fixture_card.dart';
 import 'lineup.dart';
+import '../../shared/formats.dart';
 
 /// `/match/:id`. Uses the fixture passed by the card, or finds it in the
 /// loaded schedule when opened directly (web reload, deep link).
@@ -93,7 +94,8 @@ class _DetailsState extends State<_Details> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (fixture.season != null) Text('Season ${fixture.season}'),
+                  if (fixture.season != null)
+                    Text('Season ${seasonLabel(fixture.season!)}'),
                   if (fixture.status == 'upcoming')
                     Text(
                       fixture.kickoff.isEmpty
