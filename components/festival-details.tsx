@@ -4,6 +4,7 @@ import type { SanityPractice, SanityTeam } from '@/sanity/lib/queries'
 import { resolveTeam } from '@/lib/teams'
 import { festivalSlug } from '@/lib/festivals'
 import { formatMatchDateLong } from '@/lib/seo'
+import { formatTime } from '@/lib/time-format'
 
 function MapLink({ address }: { address: string }) {
     return <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noopener noreferrer" className="text-sm text-[#555555] hover:text-[#111111] underline decoration-[#77c3ef] underline-offset-4">{address}</a>
@@ -36,7 +37,7 @@ export default function FestivalDetails({ event, teams, preview = false }: { eve
                     <div>
                         <dt className="text-xs uppercase tracking-wider font-semibold text-[#555555] mb-1">Date</dt>
                         <dd className="text-sm text-[#111111]">{formatMatchDateLong(event.startDate)}</dd>
-                        {event.time && <dd className="text-sm text-[#555555] mt-1">{event.time}</dd>}
+                        {event.time && <dd className="text-sm text-[#555555] mt-1">{formatTime(event.time)}</dd>}
                     </div>
                     {(event.venue || event.address) && <div>
                         <dt className="text-xs uppercase tracking-wider font-semibold text-[#555555] mb-1">Venue</dt>

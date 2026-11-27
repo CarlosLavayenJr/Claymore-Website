@@ -52,7 +52,29 @@ class FixtureCard extends StatelessWidget {
                       horizontal: 10,
                       vertical: 8,
                     ),
-                    child: FixtureMatchup(fixture: fixture),
+                    child: Column(
+                      children: [
+                        FixtureMatchup(fixture: fixture),
+                        if (fixture.status == 'upcoming') ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            [
+                              fixture.kickoff.isEmpty
+                                  ? 'Kickoff TBA'
+                                  : fixture.kickoff,
+                              if (fixture.venue.isNotEmpty) fixture.venue,
+                            ].join(' · '),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Brand.secondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),

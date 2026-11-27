@@ -8,7 +8,7 @@ import {
     type SanityTeam,
 } from '@/sanity/lib/queries'
 import { resolveTeam, type ResolvedTeam } from '@/lib/teams'
-import { seasonYearForUrl } from '@/lib/seo'
+import { displaySeason, seasonYearForUrl } from '@/lib/seo'
 
 export const getCurrentStandings = cache(async (): Promise<SanityLeagueStandings | null> => {
     return getLeagueStandings()
@@ -94,7 +94,7 @@ function FullTable({ doc, resolved, className }: InnerProps) {
         >
             <header className="bg-[#fd80b5] text-white px-4 py-3">
                 <h2 id="league-table-heading" className="font-claymore text-lg leading-tight">
-                    {doc.divisionName ?? 'League Standings'} {doc.seasonLabel}
+                    {doc.divisionName ?? 'League Standings'} {displaySeason(doc.seasonLabel)}
                 </h2>
             </header>
 
@@ -203,7 +203,7 @@ function CompactTable({ doc, resolved, className }: InnerProps) {
                 <h2 id="league-table-heading-compact" className="font-claymore text-base leading-tight truncate">
                     {doc.divisionName ?? 'Standings'}
                 </h2>
-                <span className="text-[10px] uppercase tracking-widest opacity-80">{doc.seasonLabel}</span>
+                <span className="text-[10px] uppercase tracking-widest opacity-80">{displaySeason(doc.seasonLabel)}</span>
             </header>
 
             <div className="flex-1 min-h-0 overflow-y-auto">

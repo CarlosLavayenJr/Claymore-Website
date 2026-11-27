@@ -10,6 +10,7 @@ import { expandPractices, type PracticeInstance } from '@/lib/practices'
 import { ScheduleFilter, useScheduleFilter } from '@/components/schedule-filter'
 import { MatchCard, PracticeCard, isClaymores } from '@/components/event-cards'
 import { clubEventName, isClubEvent } from '@/lib/seo'
+import { formatTime } from '@/lib/time-format'
 
 interface UpcomingEventsProps {
     matches: SanityMatch[]
@@ -87,7 +88,7 @@ export default function UpcomingEvents({
                 date: p.date,
                 key: p.key,
                 label: p.practice.title,
-                time: p.practice.time,
+                time: formatTime(p.practice.time),
                 instance: p,
             })),
         ].sort((a, b) => a.date.localeCompare(b.date))

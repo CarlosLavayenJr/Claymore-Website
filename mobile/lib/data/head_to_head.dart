@@ -1,5 +1,6 @@
 import 'models/club.dart';
 import 'teams.dart';
+import '../shared/formats.dart' as formats;
 
 /// One fixture against an opponent, from the Claymores' point of view.
 class HeadToHeadMatch {
@@ -34,8 +35,7 @@ class HeadToHeadMatch {
 
   /// "2025-26", the website's season label, or null without a season.
   String? get seasonLabel => switch (fixture.season) {
-    final season? =>
-      '${season - 1}-${(season % 100).toString().padLeft(2, '0')}',
+    final season? => formats.seasonLabel(season),
     null => null,
   };
 

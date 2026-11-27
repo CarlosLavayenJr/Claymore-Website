@@ -1,7 +1,7 @@
 import { getMatches } from '@/lib/claymores-api'
 import { type SanityMatch } from '@/sanity/lib/queries'
 import { brandedImageResponse, OG_CONTENT_TYPE, OG_SIZE } from '@/lib/og'
-import { isClaymores, isClubEvent, matchOutcome } from '@/lib/seo'
+import { isClaymores, isClubEvent, matchOutcome, seasonLabel } from '@/lib/seo'
 
 export const alt = 'Claymores Season Standings'
 export const size = OG_SIZE
@@ -29,10 +29,10 @@ export default async function Image({ params }: { params: Promise<{ season: stri
     }
 
     return brandedImageResponse({
-        eyebrow: `Season ${season}`,
+        eyebrow: `Season ${seasonLabel(season)}`,
         title: `${w}-${l}${d ? `-${d}` : ''}`,
         subtitle: `${seasonMatches.length} matches · ${pf} for · ${pa} against`,
-        badge: `${season}`,
+        badge: seasonLabel(season),
         accent: '#77c3ef',
     })
 }
