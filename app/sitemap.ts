@@ -10,7 +10,7 @@ import {
     type SanityPost,
     type SanityTeam,
 } from '@/sanity/lib/queries'
-import { festivalsQuery, festivalSlug } from '@/lib/festivals'
+import { festivalsQuery, festivalSlug, withoutFestivalDuplicates } from '@/lib/festivals'
 import type { SanityPractice } from '@/sanity/lib/queries'
 import { matchSlug } from '@/lib/seo'
 import { CITIES } from '@/lib/cities'
@@ -57,7 +57,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
     }))
 
-    const matchEntries: MetadataRoute.Sitemap = matches.map((m) => ({
+    const matchEntries: MetadataRoute.Sitemap = withoutFestivalDuplicates(matches, festivals).map((m) => ({
         url: `${baseUrl}/fixtures/${matchSlug(m)}`,
         lastModified: m._updatedAt ? new Date(m._updatedAt) : new Date(m.date),
         changeFrequency: m.status === 'upcoming' ? 'weekly' : 'monthly',
