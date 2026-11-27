@@ -94,7 +94,7 @@ services:
     runtime: docker
     region: virginia
     plan: starter
-    schedule: "0 3 * * 1"
+    schedule: "0 3 * * *" # daily (10–11 PM Eastern), so league changes show up by morning
     dockerfilePath: ./api/Dockerfile
     dockerContext: ./api
     dockerCommand: dotnet Claymores.Api.dll --scrape-fixtures
