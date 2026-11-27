@@ -197,6 +197,8 @@ export default function MatchResultsTable({ matches, teams, divisionsBySeason = 
 
     const filtered = useMemo(() => {
         return matches.filter((m) => {
+            // Club events (Claymores vs Claymores) aren't results; they live on /fixtures.
+            if (isClubEvent(m)) return false
             if (selectedSeason !== 'all' && m.season.toString() !== selectedSeason) return false
             if (selectedMatchType !== 'all' && (m.matchType ?? 'league') !== selectedMatchType) return false
             if (selectedOpponent !== 'all') {
